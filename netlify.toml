@@ -1,0 +1,12 @@
+[build]
+  command = "npx expo export --platform web"
+  publish = "dist"
+
+[build.environment]
+  # Update this if Render assigns a different service URL than expected.
+  EXPO_PUBLIC_API_URL = "https://lifeos-server.onrender.com"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
