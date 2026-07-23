@@ -451,6 +451,9 @@ export default function TodayScreen() {
                 color: theme.colors.moduleTasks,
                 onPress: () => router.push({ pathname: '/tasks/new', params: { recurring: '1' } }),
               },
+              { label: 'Journal Entry', icon: 'book-outline', color: theme.colors.moduleJournal, onPress: () => router.push('/journal/new') },
+              { label: 'Expense', icon: 'cash-outline', color: theme.colors.primary, onPress: () => router.push('/finance/new') },
+              { label: 'Food Log', icon: 'restaurant-outline', color: theme.colors.moduleTasks, onPress: () => router.push('/food/new') },
             ] as const
           ).map((item) => (
             <Pressable

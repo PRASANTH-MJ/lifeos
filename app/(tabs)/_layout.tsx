@@ -52,6 +52,14 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="analytics"
+        options={{
+          title: 'Insights',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="more"
         options={{
           title: 'More',
@@ -68,7 +76,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="food" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="mind-training" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="workout" options={{ headerShown: false, href: null }} />
-      <Tabs.Screen name="analytics" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="timer" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="shopping" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="settings" options={{ headerShown: false, href: null }} />
