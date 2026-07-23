@@ -4,16 +4,18 @@ import { Alert, Text, View } from 'react-native';
 
 import { Button, LoadingState, ScreenContainer, TextField } from '@/components';
 import { formatDisplayDate } from '@/lib/date';
-import { formatCurrency, useTransactionDetail } from '@/modules/finance';
+import { formatCurrency, useAccounts, useFinanceCategories, useTransactions } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 export default function TransactionDetailScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const transactionId = Number(id);
-  const { transaction, loading, updateTransaction, deleteTransaction } = useTransactionDetail(transactionId);
+  const { transactions, loading, editTransaction, removeTransaction } = useTransactions();
+  const { accounts } = useAccounts();
+  const { categories } = useFinanceCategories();
 
+  const transaction = transactions.find((t) => t.id === id);
   const [note, setNote] = useState('');
 
   useEffect(() => {
@@ -29,20 +31,24 @@ export default function TransactionDetailScreen() {
   }
 
   const onDelete = () => {
-    Alert.alert('Delete transaction?', 'This cannot be undone.', [
+    Alert.alert('Delete transaction?', 'This cannot be undone, and will reverse its effect on the account balance.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          await deleteTransaction();
+          await removeTransaction(transaction.id);
           router.back();
         },
       },
     ]);
   };
 
+  const account = accounts.find((a) => a.id === transaction.account_id);
+  const toAccount = transaction.to_account_id ? accounts.find((a) => a.id === transaction.to_account_id) : null;
+  const category = transaction.category_id ? categories.find((c) => c.id === transaction.category_id) : null;
   const isIncome = transaction.type === 'income';
+  const isTransfer = transaction.type === 'transfer';
 
   return (
     <ScreenContainer>
@@ -54,19 +60,20 @@ export default function TransactionDetailScreen() {
               fontSize: theme.typography.size['3xl'],
               fontWeight: theme.typography.weight.bold,
             }}>
-            {isIncome ? '+' : '-'}
-            {formatCurrency(transaction.amount)}
+            {isIncome ? '+' : isTransfer ? '' : '-'}
+            {formatCurrency(transaction.amount, account?.currency)}
           </Text>
           <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.base }}>
-            {transaction.category} · {formatDisplayDate(transaction.date)}
+            {isTransfer ? `${account?.name ?? 'Account'} → ${toAccount?.name ?? 'Account'}` : `${category?.name ?? 'Uncategorized'} · ${account?.name ?? ''}`}
           </Text>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>{formatDisplayDate(transaction.date)}</Text>
         </View>
 
         <TextField
           label="Note"
           value={note}
           onChangeText={setNote}
-          onBlur={() => note !== (transaction.note ?? '') && updateTransaction({ note: note.trim() || null })}
+          onBlur={() => note !== (transaction.note ?? '') && editTransaction(transaction.id, { note: note.trim() || null })}
           placeholder="Add a note"
         />
 

@@ -1,32 +1,56 @@
-export type TransactionType = 'expense' | 'income';
+export type AccountType = 'general' | 'cash' | 'investment' | 'credit';
 
-export type FinanceTransaction = {
-  id: number;
+export type Account = {
+  id: string;
+  user_id: number;
+  name: string;
+  type: AccountType;
+  currency: string;
+  current_balance: number;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CategoryType = 'income' | 'expense';
+
+export type Category = {
+  id: string;
+  name: string;
+  type: CategoryType;
+  icon: string;
+  color: string;
+};
+
+export type TransactionType = 'income' | 'expense' | 'transfer';
+
+export type Transaction = {
+  id: string;
+  user_id: number;
+  account_id: string;
+  category_id: string | null;
   type: TransactionType;
   amount: number;
-  category: string;
-  note: string | null;
   date: string;
+  note: string | null;
+  to_account_id: string | null;
   created_at: string;
 };
 
-export const EXPENSE_CATEGORIES = ['Food', 'Transport', 'Housing', 'Shopping', 'Health', 'Entertainment', 'Other'];
-export const INCOME_CATEGORIES = ['Salary', 'Freelance', 'Gift', 'Other'];
+export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
+  general: 'General',
+  cash: 'Cash',
+  investment: 'Investment',
+  credit: 'Credit',
+};
 
-export function categoriesFor(type: TransactionType): string[] {
-  return type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+export function formatCurrency(amount: number, currency = 'USD'): string {
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
 }
 
-// Hardcoded to USD for now — no currency setting yet, see README.
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(amount);
-}
-
-// Whole-dollar variant for tight spaces (stat tiles) — exact cents aren't
+// Whole-unit variant for tight spaces (stat tiles) — exact cents aren't
 // useful in a summary tile, and dropping them keeps the string short enough
 // to avoid relying on autosize-to-fit, which react-native-web doesn't support.
-export function formatCurrencyCompact(amount: number): string {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(
-    amount
-  );
+export function formatCurrencyCompact(amount: number, currency = 'USD'): string {
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
 }

@@ -10,6 +10,7 @@ type SavedAccount = { token: string; user: AuthUser };
 
 type AuthContextValue = {
   user: AuthUser | null;
+  token: string | null;
   accounts: AuthUser[];
   loading: boolean;
   error: string | null;
@@ -156,12 +157,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const beginAddAccount = () => setAddingAccount(true);
   const cancelAddAccount = () => setAddingAccount(false);
 
-  const user = savedAccounts.find((a) => a.user.id === activeId)?.user ?? null;
+  const activeAccount = savedAccounts.find((a) => a.user.id === activeId);
+  const user = activeAccount?.user ?? null;
+  const token = activeAccount?.token ?? null;
   const accounts = savedAccounts.map((a) => a.user);
 
   return (
     <AuthContext.Provider
-      value={{ user, accounts, loading, error, addingAccount, signIn, signUp, switchAccount, removeAccount, beginAddAccount, cancelAddAccount }}>
+      value={{ user, token, accounts, loading, error, addingAccount, signIn, signUp, switchAccount, removeAccount, beginAddAccount, cancelAddAccount }}>
       {children}
     </AuthContext.Provider>
   );

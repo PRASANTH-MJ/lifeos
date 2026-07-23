@@ -24,11 +24,10 @@ export function StatCard({ label, value, color }: Props) {
       <Text
         style={{
           color: color ?? theme.colors.textPrimary,
-          fontSize: theme.typography.size['2xl'],
+          fontSize: theme.typography.size.xl,
           fontWeight: theme.typography.weight.bold,
         }}
-        numberOfLines={1}
-        adjustsFontSizeToFit>
+        numberOfLines={1}>
         {value}
       </Text>
       <View>

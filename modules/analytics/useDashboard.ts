@@ -14,13 +14,11 @@ export type DashboardData = {
   tasksSeries: Series;
   moodSeries: Series;
   wellnessSeries: Series;
-  spendSeries: Series;
   caloriesSeries: Series;
   activeHabitsCount: number;
   tasksCompletedTotal: number;
   avgMood: number | null;
   wellnessMinutesTotal: number;
-  spendTotal: number;
   avgCaloriesPerDay: number;
   overdueTasksCount: number;
   habitStatusBreakdown: { done: number; fail: number; skip: number };
@@ -49,7 +47,6 @@ export function useAnalyticsDashboard() {
       moodRows,
       meditationRows,
       breathingRows,
-      spendRows,
       calorieRows,
       activeHabitsRow,
       overdueTasksRow,
@@ -79,10 +76,6 @@ export function useAnalyticsDashboard() {
         db.getAllAsync<{ date: string; seconds: number }>(
           `SELECT substr(completed_at, 1, 10) as date, SUM(duration_seconds) as seconds FROM breathing_logs
            WHERE substr(completed_at, 1, 10) >= ? GROUP BY date`,
-          [start]
-        ),
-        db.getAllAsync<{ date: string; total: number }>(
-          "SELECT date, SUM(amount) as total FROM finance_transactions WHERE type = 'expense' AND date >= ? GROUP BY date",
           [start]
         ),
         db.getAllAsync<{ date: string; total: number }>(
@@ -125,14 +118,12 @@ export function useAnalyticsDashboard() {
     for (const row of meditationRows) wellnessByDate[row.date] = (wellnessByDate[row.date] ?? 0) + row.seconds / 60;
     for (const row of breathingRows) wellnessByDate[row.date] = (wellnessByDate[row.date] ?? 0) + row.seconds / 60;
 
-    const spendByDate = Object.fromEntries(spendRows.map((row) => [row.date, row.total]));
     const caloriesByDate = Object.fromEntries(calorieRows.map((row) => [row.date, row.total]));
 
     const habitsSeries = buildDailySeries(DAYS, habitsByDate);
     const tasksSeries = buildDailySeries(DAYS, tasksByDate);
     const moodSeries = buildDailySeries(DAYS, moodByDate);
     const wellnessSeries = buildDailySeries(DAYS, wellnessByDate);
-    const spendSeries = buildDailySeries(DAYS, spendByDate);
     const caloriesSeries = buildDailySeries(DAYS, caloriesByDate);
 
     const moodEntries = Object.values(moodTotalsByDate);
@@ -161,13 +152,11 @@ export function useAnalyticsDashboard() {
       tasksSeries,
       moodSeries,
       wellnessSeries,
-      spendSeries,
       caloriesSeries,
       activeHabitsCount: activeHabitsRow?.count ?? 0,
       tasksCompletedTotal: taskRows.reduce((sum, row) => sum + row.count, 0),
       avgMood,
       wellnessMinutesTotal: Math.round(wellnessSeries.reduce((sum, point) => sum + point.value, 0)),
-      spendTotal: spendRows.reduce((sum, row) => sum + row.total, 0),
       avgCaloriesPerDay: Math.round(caloriesSeries.reduce((sum, point) => sum + point.value, 0) / DAYS),
       overdueTasksCount: overdueTasksRow?.count ?? 0,
       habitStatusBreakdown,

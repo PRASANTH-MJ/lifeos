@@ -2,7 +2,7 @@ import { Text, View } from 'react-native';
 
 import { Card, DonutChart, Legend, LoadingState, ScreenContainer, StatCard, TrendChart } from '@/components';
 import { nearestMoodLabel, useAnalyticsDashboard } from '@/modules/analytics';
-import { formatCurrency, formatCurrencyCompact, useFinanceBudgets, useFinanceMonth, useFinanceWeekSpend } from '@/modules/finance';
+import { formatCurrency, formatCurrencyCompact, useFinanceBudgets, useFinanceDailySpend, useFinanceSummary, useFinanceWeekSpend } from '@/modules/finance';
 import { todayKey } from '@/lib/date';
 import { useAppTheme } from '@/theme';
 
@@ -13,10 +13,11 @@ export default function AnalyticsScreen() {
   const { data, loading } = useAnalyticsDashboard();
 
   const today = todayKey();
-  const [todayYear, todayMonthNum] = today.split('-').map(Number);
-  const currentMonthIndex = todayMonthNum - 1;
-  const { totals: currentMonthTotals } = useFinanceMonth(todayYear, currentMonthIndex);
+  const monthPrefix = today.slice(0, 7);
+  const daysInMonth = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0).getDate();
+  const { summary: currentMonthSummary } = useFinanceSummary(`${monthPrefix}-01`, `${monthPrefix}-${String(daysInMonth).padStart(2, '0')}`);
   const { weekSpend } = useFinanceWeekSpend();
+  const { series: spendSeries, total: spendTotal } = useFinanceDailySpend(14);
   const { budgets } = useFinanceBudgets();
 
   if (loading || !data) {
@@ -52,7 +53,7 @@ export default function AnalyticsScreen() {
           <StatCard label="Workouts" value={String(data.workoutsCompletedTotal)} color={theme.colors.moduleTasks} />
         </View>
         <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-          <StatCard label="Spend" value={formatCurrencyCompact(data.spendTotal)} color={theme.colors.danger} />
+          <StatCard label="Spend" value={formatCurrencyCompact(spendTotal)} color={theme.colors.danger} />
           <StatCard label="Avg cal/day" value={String(data.avgCaloriesPerDay)} color={theme.colors.primary} />
         </View>
 
@@ -118,13 +119,13 @@ export default function AnalyticsScreen() {
               <FinanceSituationRow label="This week" spend={weekSpend} budget={budgets.weeklyBudget} />
             ) : null}
             {budgets.monthlyBudget != null ? (
-              <FinanceSituationRow label="This month" spend={currentMonthTotals.expense} budget={budgets.monthlyBudget} />
+              <FinanceSituationRow label="This month" spend={currentMonthSummary?.expense ?? 0} budget={budgets.monthlyBudget} />
             ) : null}
           </Card>
         ) : null}
 
         <Card>
-          <TrendChart label="Spending / day" data={data.spendSeries} color={theme.colors.danger} formatValue={(v) => formatCurrency(v)} />
+          <TrendChart label="Spending / day" data={spendSeries} color={theme.colors.danger} formatValue={(v) => formatCurrency(v)} />
         </Card>
 
         {data.mealBreakdown.length > 0 ? (
