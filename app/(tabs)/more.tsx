@@ -17,6 +17,7 @@ type ModuleLink = {
     | '/mind-training'
     | '/workout'
     | '/timer'
+    | '/shopping'
     | '/settings';
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
@@ -108,6 +109,14 @@ export default function MoreScreen() {
       subtitle: 'Stopwatch or countdown, standalone or per habit',
       color: theme.colors.primary,
       mutedColor: theme.colors.primaryMuted,
+    },
+    {
+      href: '/shopping',
+      icon: 'cart',
+      title: 'Shopping List',
+      subtitle: 'Quick items to pick up, checked off as you go',
+      color: theme.colors.moduleTasks,
+      mutedColor: theme.colors.moduleTasksMuted,
     },
     {
       href: '/settings',

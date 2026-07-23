@@ -1,4 +1,6 @@
-import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { Pressable, Text, View } from 'react-native';
 
 import { Button, Card, Chip, LoadingState, ScreenContainer } from '@/components';
 import { useAuth } from '@/modules/auth';
@@ -7,8 +9,9 @@ import { useAppTheme } from '@/theme';
 
 export default function SettingsScreen() {
   const theme = useAppTheme();
+  const router = useRouter();
   const { settings, setTimeFormat } = useSettings();
-  const { user, signOut } = useAuth();
+  const { user, accounts, switchAccount, removeAccount, beginAddAccount } = useAuth();
 
   if (!settings) {
     return (
@@ -17,6 +20,11 @@ export default function SettingsScreen() {
       </ScreenContainer>
     );
   }
+
+  const onAddAccount = () => {
+    beginAddAccount();
+    router.push('/login');
+  };
 
   return (
     <ScreenContainer>
@@ -27,11 +35,37 @@ export default function SettingsScreen() {
 
         {user ? (
           <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              {user.username}
+            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+              Accounts
             </Text>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{user.email}</Text>
-            <Button label="Log out" variant="danger" onPress={signOut} />
+            {accounts.map((account) => {
+              const active = account.id === user.id;
+              return (
+                <Pressable
+                  key={account.id}
+                  onPress={() => !active && switchAccount(account.id)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, paddingVertical: theme.spacing.xs }}>
+                  <Ionicons
+                    name={active ? 'radio-button-on' : 'radio-button-off'}
+                    size={20}
+                    color={active ? theme.colors.primary : theme.colors.textTertiary}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+                      {account.username}
+                    </Text>
+                    <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{account.email}</Text>
+                  </View>
+                  {accounts.length > 1 ? (
+                    <Pressable onPress={() => removeAccount(account.id)} hitSlop={8}>
+                      <Ionicons name="close-circle-outline" size={20} color={theme.colors.textTertiary} />
+                    </Pressable>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+            <Button label="Add another account" variant="secondary" onPress={onAddAccount} />
+            <Button label="Log out" variant="danger" onPress={() => removeAccount(user.id)} />
           </Card>
         ) : null}
 

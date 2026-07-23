@@ -8,7 +8,7 @@ import { useAppTheme } from '@/theme';
 
 export default function LoginScreen() {
   const theme = useAppTheme();
-  const { signIn } = useAuth();
+  const { signIn, addingAccount, cancelAddAccount } = useAuth();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -31,9 +31,11 @@ export default function LoginScreen() {
       <View style={{ gap: theme.spacing.xl, marginTop: theme.spacing['4xl'] }}>
         <View>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>
-            Welcome back
+            {addingAccount ? 'Add an account' : 'Welcome back'}
           </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Log in to LifeOS</Text>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
+            {addingAccount ? 'Log in with another account to switch between them.' : 'Log in to LifeOS'}
+          </Text>
         </View>
 
         <TextField
@@ -53,6 +55,12 @@ export default function LoginScreen() {
         <Link href="/signup" style={{ textAlign: 'center' }}>
           <Text style={{ color: theme.colors.primary, fontSize: theme.typography.size.sm }}>Don&apos;t have an account? Sign up</Text>
         </Link>
+
+        {addingAccount ? (
+          <Text onPress={cancelAddAccount} style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm, textAlign: 'center' }}>
+            Cancel
+          </Text>
+        ) : null}
       </View>
     </ScreenContainer>
   );

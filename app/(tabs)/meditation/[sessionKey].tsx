@@ -4,8 +4,8 @@ import { useAudioPlayer } from 'expo-audio';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, EmptyState, ScreenContainer } from '@/components';
-import { findSession, useMeditationLogs } from '@/modules/meditation';
+import { Card, Chip, EmptyState, ScreenContainer } from '@/components';
+import { MEDITATION_TRACKS, findSession, findTrack, useMeditationLogs } from '@/modules/meditation';
 import { useAppTheme } from '@/theme';
 
 const MIN_LOGGABLE_SECONDS = 5;
@@ -17,7 +17,9 @@ export default function MeditationPlayerScreen() {
   const session = findSession(sessionKey);
   const { logSession } = useMeditationLogs();
 
-  const player = useAudioPlayer(session?.audioSource ?? null);
+  const [trackKey, setTrackKey] = useState(session?.defaultTrackKey ?? MEDITATION_TRACKS[0].key);
+  const track = findTrack(trackKey);
+  const player = useAudioPlayer(track.audioSource);
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -29,6 +31,15 @@ export default function MeditationPlayerScreen() {
       player.pause();
     };
   }, [player]);
+
+  const onSelectTrack = (key: string) => {
+    setTrackKey(key);
+    if (running) {
+      player.pause();
+      setRunning(false);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -108,6 +119,24 @@ export default function MeditationPlayerScreen() {
             {session.title}
           </Text>
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>{session.description}</Text>
+        </View>
+
+        <View style={{ gap: theme.spacing.sm }}>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium, textAlign: 'center' }}>
+            Music
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: theme.spacing.sm }}>
+            {MEDITATION_TRACKS.map((option) => (
+              <Chip
+                key={option.key}
+                label={option.label}
+                selected={trackKey === option.key}
+                onPress={() => onSelectTrack(option.key)}
+                color={theme.colors.moduleJournal}
+                mutedColor={theme.colors.moduleJournalMuted}
+              />
+            ))}
+          </View>
         </View>
 
         <Text

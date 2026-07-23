@@ -70,6 +70,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="workout" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="analytics" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="timer" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="shopping" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="settings" options={{ headerShown: false, href: null }} />
     </Tabs>
   );

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, Text, View } from 'react-native';
+import { ImageBackground, Pressable, Text, View } from 'react-native';
 
 import { Card, ScreenContainer } from '@/components';
-import { useAffirmations } from '@/modules/affirmations';
+import { backgroundFor, useAffirmations } from '@/modules/affirmations';
 import { useAppTheme } from '@/theme';
 
 export default function AllAffirmationsScreen() {
@@ -13,7 +13,12 @@ export default function AllAffirmationsScreen() {
     <ScreenContainer>
       <View style={{ gap: theme.spacing.sm }}>
         {affirmations.map((affirmation) => (
-          <Card key={affirmation.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+          <Card key={affirmation.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, padding: theme.spacing.sm }}>
+            <ImageBackground
+              source={backgroundFor(affirmation.id)}
+              imageStyle={{ borderRadius: theme.radius.sm }}
+              style={{ width: 36, height: 36, borderRadius: theme.radius.sm, overflow: 'hidden' }}
+            />
             <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.sm }}>{affirmation.text}</Text>
             <Pressable onPress={() => toggleFavorite(affirmation)} hitSlop={8}>
               <Ionicons

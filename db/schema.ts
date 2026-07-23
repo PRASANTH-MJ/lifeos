@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 7;
+const DATABASE_VERSION = 9;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -405,7 +405,42 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 7;
   }
 
-  // Future modules land here as `if (currentDbVersion === 7) { ... currentDbVersion = 8; }`
+  if (currentDbVersion === 7) {
+    await db.execAsync(`
+      CREATE TABLE shopping_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        quantity TEXT,
+        checked INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_shopping_items_checked ON shopping_items(checked);
+    `);
+
+    currentDbVersion = 8;
+  }
+
+  if (currentDbVersion === 8) {
+    // Single upserted row, same pattern as workout_preferences/app_settings —
+    // null budget fields mean "not tracking a budget for that period".
+    await db.execAsync(`
+      CREATE TABLE finance_budgets (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        weekly_budget REAL,
+        monthly_budget REAL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    await db.runAsync('INSERT INTO finance_budgets (id, weekly_budget, monthly_budget, updated_at) VALUES (1, NULL, NULL, ?)', [
+      new Date().toISOString(),
+    ]);
+
+    currentDbVersion = 9;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 9) { ... currentDbVersion = 10; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

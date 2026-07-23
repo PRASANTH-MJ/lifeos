@@ -22,6 +22,11 @@ export type DashboardData = {
   wellnessMinutesTotal: number;
   spendTotal: number;
   avgCaloriesPerDay: number;
+  overdueTasksCount: number;
+  habitStatusBreakdown: { done: number; fail: number; skip: number };
+  moodBreakdown: { label: string; count: number }[];
+  mealBreakdown: { meal: string; calories: number }[];
+  workoutsCompletedTotal: number;
 };
 
 /**
@@ -38,8 +43,20 @@ export function useAnalyticsDashboard() {
     setLoading(true);
     const start = addDays(todayKey(), -(DAYS - 1));
 
-    const [habitRows, taskRows, moodRows, meditationRows, breathingRows, spendRows, calorieRows, activeHabitsRow] =
-      await Promise.all([
+    const [
+      habitRows,
+      taskRows,
+      moodRows,
+      meditationRows,
+      breathingRows,
+      spendRows,
+      calorieRows,
+      activeHabitsRow,
+      overdueTasksRow,
+      habitStatusRows,
+      mealRows,
+      workoutsRow,
+    ] = await Promise.all([
         db.getAllAsync<{ date: string; count: number }>(
           "SELECT date, COUNT(*) as count FROM habit_logs WHERE status = 'done' AND date >= ? GROUP BY date",
           [start]
@@ -73,6 +90,19 @@ export function useAnalyticsDashboard() {
           [start]
         ),
         db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM habits WHERE archived = 0'),
+        db.getFirstAsync<{ count: number }>(
+          `SELECT COUNT(*) as count FROM tasks
+           WHERE archived = 0 AND is_recurring = 0 AND completed_at IS NULL AND due_date IS NOT NULL AND due_date < ?`,
+          [todayKey()]
+        ),
+        db.getAllAsync<{ status: string; count: number }>(
+          'SELECT status, COUNT(*) as count FROM habit_logs WHERE date >= ? GROUP BY status',
+          [start]
+        ),
+        db.getAllAsync<{ meal: string; total: number }>('SELECT meal, SUM(calories) as total FROM food_logs WHERE date >= ? GROUP BY meal', [
+          start,
+        ]),
+        db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM workout_logs WHERE substr(completed_at, 1, 10) >= ?', [start]),
       ]);
 
     const habitsByDate = Object.fromEntries(habitRows.map((row) => [row.date, row.count]));
@@ -111,6 +141,21 @@ export function useAnalyticsDashboard() {
         ? moodEntries.reduce((sum, entry) => sum + entry.sum, 0) / moodEntries.reduce((sum, entry) => sum + entry.count, 0)
         : null;
 
+    const moodCounts: Record<string, number> = {};
+    for (const row of moodRows) {
+      moodCounts[row.mood] = (moodCounts[row.mood] ?? 0) + 1;
+    }
+    const moodBreakdown = MOODS.map((mood) => ({ label: mood.label, count: moodCounts[mood.key] ?? 0 })).filter((m) => m.count > 0);
+
+    const habitStatusBreakdown = { done: 0, fail: 0, skip: 0 };
+    for (const row of habitStatusRows) {
+      if (row.status === 'done' || row.status === 'fail' || row.status === 'skip') {
+        habitStatusBreakdown[row.status] = row.count;
+      }
+    }
+
+    const mealBreakdown = mealRows.map((row) => ({ meal: row.meal, calories: row.total })).sort((a, b) => b.calories - a.calories);
+
     setData({
       habitsSeries,
       tasksSeries,
@@ -124,6 +169,11 @@ export function useAnalyticsDashboard() {
       wellnessMinutesTotal: Math.round(wellnessSeries.reduce((sum, point) => sum + point.value, 0)),
       spendTotal: spendRows.reduce((sum, row) => sum + row.total, 0),
       avgCaloriesPerDay: Math.round(caloriesSeries.reduce((sum, point) => sum + point.value, 0) / DAYS),
+      overdueTasksCount: overdueTasksRow?.count ?? 0,
+      habitStatusBreakdown,
+      moodBreakdown,
+      mealBreakdown,
+      workoutsCompletedTotal: workoutsRow?.count ?? 0,
     });
     setLoading(false);
   }, [db]);

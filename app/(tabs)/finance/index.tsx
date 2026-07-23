@@ -1,22 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { Card, EmptyState, ScreenContainer, StatCard } from '@/components';
 import { formatDisplayDate, monthLabel, todayKey } from '@/lib/date';
-import { formatCurrency, formatCurrencyCompact, useFinanceMonth } from '@/modules/finance';
+import { formatCurrency, formatCurrencyCompact, useFinanceBudgets, useFinanceMonth, useFinanceWeekSpend } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 export default function FinanceScreen() {
   const theme = useAppTheme();
   const today = todayKey();
-  const [cursor, setCursor] = useState(() => {
-    const [year, month] = today.split('-').map(Number);
-    return { year, month: month - 1 };
-  });
+  const [todayYear, todayMonthNum] = today.split('-').map(Number);
+  const currentMonthIndex = todayMonthNum - 1;
+  const [cursor, setCursor] = useState({ year: todayYear, month: currentMonthIndex });
 
   const { transactions, loading, totals, categoryBreakdown } = useFinanceMonth(cursor.year, cursor.month);
+  const { totals: currentMonthTotals } = useFinanceMonth(todayYear, currentMonthIndex);
+  const { weekSpend } = useFinanceWeekSpend();
+  const { budgets, setBudgets } = useFinanceBudgets();
 
   const onChangeMonth = (delta: number) => {
     setCursor((prev) => {
@@ -56,6 +58,21 @@ export default function FinanceScreen() {
           <StatCard label="Expenses" value={formatCurrencyCompact(totals.expense)} color={theme.colors.danger} />
           <StatCard label="Net" value={formatCurrencyCompact(totals.net)} color={totals.net >= 0 ? theme.colors.success : theme.colors.danger} />
         </View>
+
+        {budgets ? (
+          <Card style={{ gap: theme.spacing.lg }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Budgets
+            </Text>
+            <BudgetRow label="This week" spend={weekSpend} budget={budgets.weeklyBudget} onSetBudget={(v) => setBudgets({ weeklyBudget: v })} />
+            <BudgetRow
+              label="This month"
+              spend={currentMonthTotals.expense}
+              budget={budgets.monthlyBudget}
+              onSetBudget={(v) => setBudgets({ monthlyBudget: v })}
+            />
+          </Card>
+        ) : null}
 
         {categoryBreakdown.length > 0 ? (
           <View style={{ gap: theme.spacing.sm }}>
@@ -119,5 +136,55 @@ export default function FinanceScreen() {
         </View>
       </View>
     </ScreenContainer>
+  );
+}
+
+function BudgetRow({
+  label,
+  spend,
+  budget,
+  onSetBudget,
+}: {
+  label: string;
+  spend: number;
+  budget: number | null;
+  onSetBudget: (value: number | null) => void;
+}) {
+  const theme = useAppTheme();
+  const [text, setText] = useState(budget != null ? String(budget) : '');
+  const over = budget != null && spend > budget;
+  const progress = budget ? Math.min(spend / budget, 1) : 0;
+
+  const commit = () => {
+    const parsed = Number(text);
+    onSetBudget(text.trim() && !Number.isNaN(parsed) ? parsed : null);
+  };
+
+  return (
+    <View style={{ gap: theme.spacing.xs }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{label}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Text style={{ color: over ? theme.colors.danger : theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+            {formatCurrency(spend)}
+          </Text>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>/</Text>
+          <TextInput
+            value={text}
+            onChangeText={setText}
+            onBlur={commit}
+            placeholder="no budget"
+            placeholderTextColor={theme.colors.textTertiary}
+            keyboardType="decimal-pad"
+            style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, minWidth: 60, padding: 0 }}
+          />
+        </View>
+      </View>
+      {budget ? (
+        <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
+          <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: over ? theme.colors.danger : theme.colors.success }} />
+        </View>
+      ) : null}
+    </View>
   );
 }

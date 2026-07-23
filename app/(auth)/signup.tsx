@@ -8,7 +8,7 @@ import { useAppTheme } from '@/theme';
 
 export default function SignupScreen() {
   const theme = useAppTheme();
-  const { signUp } = useAuth();
+  const { signUp, addingAccount, cancelAddAccount } = useAuth();
 
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -63,6 +63,12 @@ export default function SignupScreen() {
         <Link href="/login" style={{ textAlign: 'center' }}>
           <Text style={{ color: theme.colors.primary, fontSize: theme.typography.size.sm }}>Already have an account? Log in</Text>
         </Link>
+
+        {addingAccount ? (
+          <Text onPress={cancelAddAccount} style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm, textAlign: 'center' }}>
+            Cancel
+          </Text>
+        ) : null}
       </View>
     </ScreenContainer>
   );
