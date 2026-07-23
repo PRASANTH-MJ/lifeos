@@ -3,8 +3,7 @@
   publish = "dist"
 
 [build.environment]
-  # Update this if Render assigns a different service URL than expected.
-  EXPO_PUBLIC_API_URL = "https://lifeos-server.onrender.com"
+  EXPO_PUBLIC_API_URL = "https://lifeos-server-4dce.onrender.com"
 
 [[redirects]]
   from = "/*"
