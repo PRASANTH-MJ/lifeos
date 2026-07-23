@@ -1,0 +1,21 @@
+{
+  "name": "lifeos-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  },
+  "allowScripts": {
+    "better-sqlite3@11.10.0": true
+  }
+}

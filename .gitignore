@@ -32,6 +32,10 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+
+# server-side database (server/README.md has setup instructions)
+server/data.sqlite*
 
 # typescript
 *.tsbuildinfo
