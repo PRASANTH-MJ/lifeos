@@ -52,14 +52,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="analytics"
-        options={{
-          title: 'Insights',
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart" color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
         name="more"
         options={{
           title: 'More',
@@ -68,6 +60,7 @@ export default function TabsLayout() {
       />
       {/* Reachable via the "More" hub, not shown as their own tab bar buttons — */}
       {/* href: null keeps the route (and its Stack) registered without a tab icon. */}
+      <Tabs.Screen name="analytics" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="calendar" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="meditation" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="breathing" options={{ headerShown: false, href: null }} />

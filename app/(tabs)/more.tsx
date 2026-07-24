@@ -5,7 +5,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Card, ScreenContainer } from '@/components';
 import { useAppTheme } from '@/theme';
 
-type ModuleHref = '/calendar' | '/meditation' | '/breathing' | '/affirmations' | '/finance' | '/food' | '/mind-training' | '/workout' | '/timer' | '/shopping' | '/settings';
+type ModuleHref = '/calendar' | '/meditation' | '/breathing' | '/affirmations' | '/finance' | '/food' | '/mind-training' | '/workout' | '/timer' | '/shopping' | '/settings' | '/analytics';
 
 type ModuleLink = {
   href: ModuleHref;
@@ -86,6 +86,14 @@ export default function MoreScreen() {
     {
       title: 'Tools & Management',
       modules: [
+        {
+          href: '/analytics',
+          icon: 'stats-chart',
+          title: 'Insights',
+          subtitle: 'Cross-module analytics: habits, tasks, mood, finance',
+          color: theme.colors.primary,
+          mutedColor: theme.colors.primaryMuted,
+        },
         {
           href: '/calendar',
           icon: 'calendar',
