@@ -37,11 +37,16 @@
           "icon": "./assets/icon.png",
           "color": "#6C63FF"
         }
-      ],
-      "expo-secure-store"
+      ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2f279934-133d-47fc-af3a-a8f928b4e541"
+      }
     }
   }
 }

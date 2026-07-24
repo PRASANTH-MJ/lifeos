@@ -5,7 +5,6 @@ import { ActivityIndicator, useColorScheme, View } from 'react-native';
 import { SQLiteProvider } from 'expo-sqlite';
 
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db';
-import { AuthProvider, useAuth } from '@/modules/auth';
 import { configureNotificationHandler } from '@/notifications';
 import { ThemeProvider } from '@/theme';
 
@@ -17,9 +16,7 @@ export default function RootLayout() {
     <Suspense fallback={<LoadingScreen />}>
       <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded} useSuspense>
         <ThemeProvider>
-          <AuthProvider>
-            <RootNavigation />
-          </AuthProvider>
+          <RootNavigation />
         </ThemeProvider>
       </SQLiteProvider>
     </Suspense>
@@ -28,25 +25,15 @@ export default function RootLayout() {
 
 function RootNavigation() {
   const colorScheme = useColorScheme();
-  const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (!loading) SplashScreen.hideAsync();
-  }, [loading]);
-
-  if (loading) {
-    return <LoadingScreen />;
-  }
+    SplashScreen.hideAsync();
+  }, []);
 
   return (
     <RouterThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={!!user}>
-          <Stack.Screen name="(tabs)" />
-        </Stack.Protected>
-        <Stack.Protected guard={!user}>
-          <Stack.Screen name="(auth)" />
-        </Stack.Protected>
+        <Stack.Screen name="(tabs)" />
       </Stack>
     </RouterThemeProvider>
   );

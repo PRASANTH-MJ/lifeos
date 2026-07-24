@@ -4,18 +4,18 @@ A single Expo (iOS + Android + web) app unifying habits, tasks, calendar,
 meditation, breathing, mind training, workouts, affirmations, finance,
 journaling, food tracking, and a cross-module analytics dashboard. **All**
 application data (habits, tasks, journal, finance, everything) stays fully
-local-first in on-device SQLite. The one exception is signing in itself —
-that uses **Supabase Auth** directly (email + password), so there's no
-separate backend server to run or host at all. Supabase only ever sees an
-email/password/session — never any habit, task, journal, or finance data.
+local-first in on-device SQLite. There is no login, no account, and no
+backend server of any kind — the app opens straight to Today. Data lives
+only on the one device it was entered on; nothing is shared or backed up
+anywhere.
 
-This app was simplified to this shape for its V1 (friends-and-family) release
-after briefly running its own Express + JWT backend with a hand-migrated
-Finance module in Supabase — that added a real server to host (on Render) for
-no benefit at this scale, so it was removed. See "Architecture" below for
-the current shape, and the historical phase notes further down for how each
-feature module was originally built (those are all still accurate — this
-simplification only touched auth and Finance's storage location).
+This app briefly had a custom Express + JWT backend, then Supabase Auth,
+before settling on no login at all — the simplest possible shape for a V1
+(friends-and-family) release where nobody needs their data to follow them
+across devices. See "Architecture" below for the current shape, and the
+historical phase notes further down for how each feature module was
+originally built (those are all still accurate — none of this touched
+anything but auth and Finance's storage location).
 
 This repo now implements **all 12 modules from the original spec** (Phases
 1–4), a **Phase 5** upgrade to Habits and Tasks (a shared category system;
@@ -35,17 +35,10 @@ scope" for what was never attempted.
 
 ## Stack
 
-- Expo SDK 57, TypeScript strict, `expo-router` (file-based routing), with
-  `Stack.Protected` gating `(tabs)` vs. `(auth)` based on sign-in state
+- Expo SDK 57, TypeScript strict, `expo-router` (file-based routing) — a
+  single `(tabs)` group, no auth gate, no other top-level route group
 - `expo-sqlite` (async API) for **all** application data — no in-memory-only
-  state, no server, nothing leaves the device except the sign-in itself
-- `@supabase/supabase-js` — the one cloud dependency, used only for
-  `supabase.auth.*` (email+password sign in/up/out, session persistence,
-  auto-refresh). The app never queries a Supabase database table directly.
-- `expo-secure-store` — now used as the storage adapter Supabase's client
-  persists its session into (Keychain/Keystore on native; falls back to
-  `localStorage` on web, which has no real SecureStore implementation at all
-  — see Authentication section)
+  state, no server, no cloud dependency of any kind
 - `react-native-svg` for the Habit/Task detail Statistics tab's donut and bar
   charts — the app's first real vector-drawing dependency (everything before
   it was `View`-based, like `<HeatmapCalendar />`/`<TrendChart />`)
@@ -65,23 +58,8 @@ npm run ios      # or npm run android
 npm run typecheck
 ```
 
-The app requires signing in (real account via Supabase Auth, not a device
-PIN — see Authentication below). Set these two env vars before running it
-(e.g. in a `.env` file, or per-profile in `eas.json`/`netlify.toml`):
-
-```
-EXPO_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=<your project's anon/public key>
-```
-
-Both come from the Supabase dashboard → Settings → API. The anon key is
-meant to be public/shipped in an app — never put the `service_role` key
-here or anywhere client-side.
-
-In Supabase's dashboard, under Authentication → Providers → Email, turn
-**off** "Confirm email" so `supabase.auth.signUp()` immediately returns a
-usable session (matches this app's "sign up and you're in" flow) — leaving
-it on means a new account can't sign in until it clicks a confirmation link.
+Nothing else to configure — no accounts, no env vars, no backend. Opening
+the app lands straight on Today.
 
 ## Verified
 
@@ -195,9 +173,8 @@ anyone else scripting this app's web target, not an app defect.
 
 ```
 app/                     expo-router routes only
-  _layout.tsx            SQLiteProvider + ThemeProvider + AuthProvider +
-                          Stack.Protected((tabs) vs (auth)) + notification handler
-  (auth)/                 login, signup — reachable only when signed out
+  _layout.tsx            SQLiteProvider + ThemeProvider + notification handler,
+                          renders (tabs) directly — no auth gate
   (tabs)/
     _layout.tsx           bottom tabs: Today, Habits, Tasks, Journal, More
     index.tsx             "Today" — week strip + search + month-calendar modal +
@@ -234,11 +211,6 @@ components/               shared design-system primitives (Button, Card, TextFie
                           HeatmapCalendar, DonutChart (react-native-svg), RangeChip,
                           Legend, ScreenContainer)
 modules/
-  auth/                   AuthContext/useAuth (Supabase Auth: signIn/signUp/signOut,
-                          session restore via onAuthStateChange), supabaseClient
-                          (the one Supabase dependency in the app — auth only),
-                          secureStorage (session storage adapter: SecureStore native,
-                          localStorage on web)
   categories/             shared category system (icon+color, user-creatable),
                           useCategories, CategoryPicker (used by Habits & Tasks)
   habits/                 types (4 tracking types × 4 frequencies), streak/longest-streak/
@@ -393,12 +365,9 @@ the start), so going from 3 to 4 frequency options overflowed the screen
 width instead of wrapping to a second line. Fixed.
 
 **Phase 6 — real accounts, Today upgrades, Habit/Task detail redesign:**
-requested after Phase 5 shipped. Three independent pieces:
-- **Authentication** — you explicitly chose "real accounts with a backend"
-  over a device-only PIN/biometric lock, so a small separate Express server
-  (`server/`) now owns signup/login; the app itself still has zero backend
-  dependency for its actual data (habits/tasks/journal/etc. never leave the
-  device). See the Authentication section below.
+requested after Phase 5 shipped. Three independent pieces (the accounts
+system was later removed entirely — see "Authentication" below — but the
+Today/detail-screen upgrades from this phase are all still current):
 - **Today screen** — a search box and a full month-calendar modal
   (`<CalendarMonthGrid />`, already built for the Calendar tab, reused rather
   than duplicated) sit above the existing week strip; picking any date from
@@ -456,28 +425,15 @@ all.
 
 ## What's built vs. stubbed
 
-### Authentication — built
-- **Supabase Auth**, used directly from the client (`@supabase/supabase-js`)
-  — no custom backend. Email + password only: `supabase.auth.signUp()`,
-  `signInWithPassword()`, `signOut()`. Supabase's own `auth.users` table is
-  the only place an account record lives; this app never creates its own
-  users table.
-- Client: `modules/auth` — `AuthProvider`/`useAuth()` wraps
-  `supabase.auth.getSession()` + `onAuthStateChange()` for session restore
-  and auto-login on relaunch, a `login`/`signup` screen pair under
-  `app/(auth)/`, session persistence via `expo-secure-store` (native) /
-  `localStorage` (web) as Supabase's storage adapter.
-- Route gating: `app/_layout.tsx` wraps `(tabs)` and `(auth)` in
-  `<Stack.Protected guard={...}>` blocks so a signed-out user can only reach
-  Login/Signup and a signed-in user can only reach the app.
-- Not built: password reset/forgot-password, OAuth/social login, changing
-  your password or email from Settings, multi-account switching (dropped in
-  the V1 simplification — one signed-in account per device now), syncing any
-  actual app data (habits/tasks/finance/etc.) to Supabase — the account is
-  purely a sign-in gate, everything else stays on-device. Requires "Confirm
-  email" turned off in Supabase's Auth settings for signup to log straight
-  in (see Getting Started) — with it on, a new account needs to click an
-  emailed confirmation link before it can sign in.
+### Authentication — removed
+This app went through three shapes over its life: a custom Express + JWT
+backend, then Supabase Auth used directly from the client, then — once it
+was clear a friends-and-family V1 gets no real benefit from an account
+system when every device's data is already local-only and separate — no
+login at all. `app/_layout.tsx` renders `(tabs)` directly; there's no
+`(auth)` route group, no account concept, no sign-in screen anywhere in
+the app. Reintroducing accounts later (e.g. alongside real cloud sync in a
+V2) would mean building this back, not just flipping a flag.
 
 ### Categories (shared) — built
 - SQLite table: `categories` (name, icon, color, `applies_to`), seeded once
@@ -774,8 +730,6 @@ each module section calls out individually, collected in one place:
   one-time tasks, not recurring ones
 - Settings has one preference (time format) — no currency setting yet, even
   though the table it lives in was designed to hold more
-- No password reset, email verification, or OAuth/social login — signup +
-  login by email-or-username + password is the whole auth surface
 - Toggling a task between single/recurring from the Edit tab doesn't persist
   (`updateTask()` never writes `is_recurring`) — pre-existing since Phase 5,
   not introduced or fixed by the Phase 6 detail-screen rebuild
@@ -785,9 +739,10 @@ each module section calls out individually, collected in one place:
   and purely cosmetic (no reward beyond the badge itself)
 
 ## Explicitly out of scope
-Cloud sync of app data, social/sharing, wearable integration. Real accounts
-exist purely as a sign-in gate via Supabase Auth — no habit/task/journal/
-finance/etc. data is ever sent to or stored in Supabase. A V2 goal is
-syncing SQLite to Supabase for real cross-device data; V1 deliberately keeps
-that out of scope in exchange for the simplest possible architecture (no
-backend to host, nothing that can drift out of sync).
+Accounts/login, cloud sync of app data, social/sharing, wearable integration.
+There is no backend of any kind — every device's data is independent and
+local-only. A V2 goal is real accounts plus syncing SQLite to a shared
+backend for cross-device data; V1 deliberately keeps that out of scope in
+exchange for the simplest possible architecture (nothing to host, nothing
+that can drift out of sync, nothing that can lock someone out of their own
+data).
