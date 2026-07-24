@@ -3,7 +3,9 @@
   publish = "dist"
 
 [build.environment]
-  EXPO_PUBLIC_API_URL = "https://lifeos-server-4dce.onrender.com"
+  EXPO_PUBLIC_SUPABASE_URL = "https://zxubehnlmlwfkmkvsdps.supabase.co"
+  # Set EXPO_PUBLIC_SUPABASE_ANON_KEY in Netlify's own dashboard (Site configuration ->
+  # Environment variables) instead of committing it here.
 
 [[redirects]]
   from = "/*"

@@ -1,170 +1,70 @@
+import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
-import { fetchMe, login as apiLogin, signup as apiSignup, type AuthUser } from './api';
-import { deleteSecureItem, getSecureItem, setSecureItem } from './secureStorage';
+import { supabase } from './supabaseClient';
 
-const ACCOUNTS_KEY = 'lifeos_auth_accounts';
-const ACTIVE_ID_KEY = 'lifeos_active_user_id';
-
-type SavedAccount = { token: string; user: AuthUser };
+export type AuthUser = { id: string; email: string };
 
 type AuthContextValue = {
   user: AuthUser | null;
-  token: string | null;
-  accounts: AuthUser[];
   loading: boolean;
   error: string | null;
-  addingAccount: boolean;
-  signIn: (identifier: string, password: string) => Promise<void>;
-  signUp: (email: string, username: string, password: string) => Promise<void>;
-  switchAccount: (userId: number) => Promise<void>;
-  removeAccount: (userId: number) => Promise<void>;
-  beginAddAccount: () => void;
-  cancelAddAccount: () => void;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function loadAccounts(): Promise<SavedAccount[]> {
-  const raw = await getSecureItem(ACCOUNTS_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-async function saveAccounts(accounts: SavedAccount[]): Promise<void> {
-  if (accounts.length === 0) {
-    await deleteSecureItem(ACCOUNTS_KEY);
-    return;
-  }
-  await setSecureItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+function toAuthUser(user: User | null | undefined): AuthUser | null {
+  if (!user) return null;
+  return { id: user.id, email: user.email ?? '' };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
-  const [activeId, setActiveId] = useState<number | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [addingAccount, setAddingAccount] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const stored = await loadAccounts();
-      const storedActiveId = await getSecureItem(ACTIVE_ID_KEY);
-      const preferredId = storedActiveId ? Number(storedActiveId) : stored[0]?.user.id ?? null;
-      const preferred = stored.find((a) => a.user.id === preferredId) ?? stored[0];
-
-      if (!preferred) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const { user: refreshed } = await fetchMe(preferred.token);
-        const refreshedAccounts = stored.map((a) => (a.user.id === refreshed.id ? { ...a, user: refreshed } : a));
-        setSavedAccounts(refreshedAccounts);
-        setActiveId(refreshed.id);
-        await saveAccounts(refreshedAccounts);
-        await setSecureItem(ACTIVE_ID_KEY, String(refreshed.id));
-      } catch {
-        // That account's token is dead — drop it and fall back to another saved one, if any.
-        const remaining = stored.filter((a) => a.user.id !== preferred.user.id);
-        setSavedAccounts(remaining);
-        await saveAccounts(remaining);
-        if (remaining[0]) {
-          setActiveId(remaining[0].user.id);
-          await setSecureItem(ACTIVE_ID_KEY, String(remaining[0].user.id));
-        } else {
-          setActiveId(null);
-          await deleteSecureItem(ACTIVE_ID_KEY);
-        }
-      }
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
       setLoading(false);
-    })();
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const upsertAndActivate = async (token: string, user: AuthUser) => {
-    setSavedAccounts((prev) => {
-      const next = [...prev.filter((a) => a.user.id !== user.id), { token, user }];
-      saveAccounts(next);
-      return next;
-    });
-    setActiveId(user.id);
-    await setSecureItem(ACTIVE_ID_KEY, String(user.id));
-    setAddingAccount(false);
-  };
-
-  const signIn = async (identifier: string, password: string) => {
+  const signIn = async (email: string, password: string) => {
     setError(null);
-    try {
-      const { token, user: signedInUser } = await apiLogin(identifier, password);
-      await upsertAndActivate(token, signedInUser);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to sign in.';
-      setError(message);
-      throw e;
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) {
+      setError(signInError.message);
+      throw signInError;
     }
   };
 
-  const signUp = async (email: string, username: string, password: string) => {
+  const signUp = async (email: string, password: string) => {
     setError(null);
-    try {
-      const { token, user: newUser } = await apiSignup(email, username, password);
-      await upsertAndActivate(token, newUser);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to sign up.';
-      setError(message);
-      throw e;
+    const { error: signUpError } = await supabase.auth.signUp({ email, password });
+    if (signUpError) {
+      setError(signUpError.message);
+      throw signUpError;
     }
   };
 
-  const switchAccount = async (userId: number) => {
-    const account = savedAccounts.find((a) => a.user.id === userId);
-    if (!account) return;
-    setActiveId(userId);
-    await setSecureItem(ACTIVE_ID_KEY, String(userId));
-    // Best-effort refresh in the background — don't block the switch on it.
-    fetchMe(account.token)
-      .then(({ user: refreshed }) => {
-        setSavedAccounts((prev) => {
-          const next = prev.map((a) => (a.user.id === refreshed.id ? { ...a, user: refreshed } : a));
-          saveAccounts(next);
-          return next;
-        });
-      })
-      .catch(() => {});
+  const signOut = async () => {
+    await supabase.auth.signOut();
   };
-
-  const removeAccount = async (userId: number) => {
-    const next = savedAccounts.filter((a) => a.user.id !== userId);
-    setSavedAccounts(next);
-    await saveAccounts(next);
-    if (activeId === userId) {
-      const fallback = next[0] ?? null;
-      setActiveId(fallback?.user.id ?? null);
-      if (fallback) {
-        await setSecureItem(ACTIVE_ID_KEY, String(fallback.user.id));
-      } else {
-        await deleteSecureItem(ACTIVE_ID_KEY);
-      }
-    }
-  };
-
-  const beginAddAccount = () => setAddingAccount(true);
-  const cancelAddAccount = () => setAddingAccount(false);
-
-  const activeAccount = savedAccounts.find((a) => a.user.id === activeId);
-  const user = activeAccount?.user ?? null;
-  const token = activeAccount?.token ?? null;
-  const accounts = savedAccounts.map((a) => a.user);
 
   return (
-    <AuthContext.Provider
-      value={{ user, token, accounts, loading, error, addingAccount, signIn, signUp, switchAccount, removeAccount, beginAddAccount, cancelAddAccount }}>
+    <AuthContext.Provider value={{ user: toAuthUser(session?.user), loading, error, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

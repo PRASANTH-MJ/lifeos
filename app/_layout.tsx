@@ -28,7 +28,7 @@ export default function RootLayout() {
 
 function RootNavigation() {
   const colorScheme = useColorScheme();
-  const { user, loading, addingAccount } = useAuth();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync();
@@ -41,10 +41,10 @@ function RootNavigation() {
   return (
     <RouterThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={!!user && !addingAccount}>
+        <Stack.Protected guard={!!user}>
           <Stack.Screen name="(tabs)" />
         </Stack.Protected>
-        <Stack.Protected guard={!user || addingAccount}>
+        <Stack.Protected guard={!user}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
       </Stack>

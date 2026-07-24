@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 9;
+const DATABASE_VERSION = 10;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -48,6 +48,22 @@ const SEED_AFFIRMATIONS = [
   'My best today doesn’t have to look like my best yesterday.',
   'I am open to good things happening.',
   'I am enough, exactly as I am right now.',
+];
+
+// Seeded once, in the v10 migration below — same starter set Finance used
+// when it briefly lived in Supabase; local-only now, so no user_id needed.
+const SEED_FINANCE_CATEGORIES: { name: string; type: 'income' | 'expense'; icon: string; color: string }[] = [
+  { name: 'Groceries', type: 'expense', icon: 'cart', color: '#34C759' },
+  { name: 'Transport', type: 'expense', icon: 'car', color: '#3D8BFF' },
+  { name: 'Housing', type: 'expense', icon: 'home', color: '#FF9500' },
+  { name: 'Shopping', type: 'expense', icon: 'bag', color: '#FF2D55' },
+  { name: 'Health', type: 'expense', icon: 'medkit', color: '#00BCD4' },
+  { name: 'Entertainment', type: 'expense', icon: 'game-controller', color: '#AF52DE' },
+  { name: 'Other', type: 'expense', icon: 'ellipsis-horizontal', color: '#8E8E93' },
+  { name: 'Salary', type: 'income', icon: 'cash', color: '#34C759' },
+  { name: 'Freelance', type: 'income', icon: 'briefcase', color: '#3D8BFF' },
+  { name: 'Investment', type: 'income', icon: 'trending-up', color: '#F5A623' },
+  { name: 'Other', type: 'income', icon: 'ellipsis-horizontal', color: '#8E8E93' },
 ];
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase) {
@@ -440,7 +456,106 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 9;
   }
 
-  // Future modules land here as `if (currentDbVersion === 9) { ... currentDbVersion = 10; }`
+  if (currentDbVersion === 9) {
+    // Finance moves back to local SQLite (it briefly lived in Supabase this
+    // session) — same accounts/categories/transactions model, same balance
+    // recalculation logic, just running as SQLite triggers instead of a
+    // Postgres one. `finance_transactions` here replaces the old unused v2
+    // table of the same name (flat expense/income rows, no accounts) — that
+    // table was already dead code, superseded before anyone relied on it.
+    await db.execAsync('PRAGMA foreign_keys = OFF');
+    await db.execAsync(`
+      DROP TABLE IF EXISTS finance_transactions;
+
+      CREATE TABLE finance_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('general', 'cash', 'investment', 'credit')),
+        currency TEXT NOT NULL DEFAULT 'USD',
+        current_balance REAL NOT NULL DEFAULT 0,
+        is_archived INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE finance_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+        icon TEXT NOT NULL DEFAULT 'pricetag',
+        color TEXT NOT NULL DEFAULT '#6C63FF'
+      );
+
+      CREATE TABLE finance_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL REFERENCES finance_accounts(id) ON DELETE CASCADE,
+        category_id INTEGER REFERENCES finance_categories(id) ON DELETE SET NULL,
+        type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
+        amount REAL NOT NULL CHECK (amount > 0),
+        date TEXT NOT NULL,
+        note TEXT,
+        to_account_id INTEGER REFERENCES finance_accounts(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL,
+        CHECK (
+          (type = 'transfer' AND to_account_id IS NOT NULL AND to_account_id <> account_id AND category_id IS NULL)
+          OR (type <> 'transfer' AND to_account_id IS NULL)
+        )
+      );
+      CREATE INDEX idx_finance_transactions_account_id ON finance_transactions(account_id);
+      CREATE INDEX idx_finance_transactions_date ON finance_transactions(date);
+
+      CREATE TRIGGER trg_finance_tx_insert AFTER INSERT ON finance_transactions BEGIN
+        UPDATE finance_accounts
+          SET current_balance = current_balance + (CASE WHEN NEW.type = 'income' THEN NEW.amount ELSE -NEW.amount END),
+              updated_at = datetime('now')
+          WHERE id = NEW.account_id;
+        UPDATE finance_accounts
+          SET current_balance = current_balance + NEW.amount, updated_at = datetime('now')
+          WHERE NEW.type = 'transfer' AND id = NEW.to_account_id;
+      END;
+
+      CREATE TRIGGER trg_finance_tx_delete AFTER DELETE ON finance_transactions BEGIN
+        UPDATE finance_accounts
+          SET current_balance = current_balance - (CASE WHEN OLD.type = 'income' THEN OLD.amount ELSE -OLD.amount END),
+              updated_at = datetime('now')
+          WHERE id = OLD.account_id;
+        UPDATE finance_accounts
+          SET current_balance = current_balance - OLD.amount, updated_at = datetime('now')
+          WHERE OLD.type = 'transfer' AND id = OLD.to_account_id;
+      END;
+
+      CREATE TRIGGER trg_finance_tx_update AFTER UPDATE ON finance_transactions BEGIN
+        UPDATE finance_accounts
+          SET current_balance = current_balance - (CASE WHEN OLD.type = 'income' THEN OLD.amount ELSE -OLD.amount END),
+              updated_at = datetime('now')
+          WHERE id = OLD.account_id;
+        UPDATE finance_accounts
+          SET current_balance = current_balance - OLD.amount, updated_at = datetime('now')
+          WHERE OLD.type = 'transfer' AND id = OLD.to_account_id;
+        UPDATE finance_accounts
+          SET current_balance = current_balance + (CASE WHEN NEW.type = 'income' THEN NEW.amount ELSE -NEW.amount END),
+              updated_at = datetime('now')
+          WHERE id = NEW.account_id;
+        UPDATE finance_accounts
+          SET current_balance = current_balance + NEW.amount, updated_at = datetime('now')
+          WHERE NEW.type = 'transfer' AND id = NEW.to_account_id;
+      END;
+    `);
+    await db.execAsync('PRAGMA foreign_keys = ON');
+
+    for (const category of SEED_FINANCE_CATEGORIES) {
+      await db.runAsync('INSERT INTO finance_categories (name, type, icon, color) VALUES (?, ?, ?, ?)', [
+        category.name,
+        category.type,
+        category.icon,
+        category.color,
+      ]);
+    }
+
+    currentDbVersion = 10;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 10) { ... currentDbVersion = 11; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

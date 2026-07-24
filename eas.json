@@ -10,13 +10,15 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://lifeos-server-4dce.onrender.com"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://zxubehnlmlwfkmkvsdps.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_ANON_PUBLIC_KEY"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://lifeos-server-4dce.onrender.com"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://zxubehnlmlwfkmkvsdps.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_ANON_PUBLIC_KEY"
       }
     }
   },

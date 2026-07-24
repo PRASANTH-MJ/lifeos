@@ -1,2 +1,2 @@
-export { AuthProvider, useAuth } from './AuthContext';
-export type { AuthUser } from './api';
+export { AuthProvider, useAuth, type AuthUser } from './AuthContext';
+export { supabase } from './supabaseClient';

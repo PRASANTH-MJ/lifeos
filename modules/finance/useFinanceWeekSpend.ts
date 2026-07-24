@@ -1,22 +1,23 @@
 import { useFocusEffect } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 
 import { addDays, todayKey, weekdayOf } from '@/lib/date';
-import { useAuth } from '@/modules/auth';
-import { fetchSummary } from './api';
 
 export function useFinanceWeekSpend() {
-  const { token } = useAuth();
+  const db = useSQLiteContext();
   const [weekSpend, setWeekSpend] = useState(0);
 
   const refresh = useCallback(async () => {
-    if (!token) return;
     const today = todayKey();
     const weekStart = addDays(today, -weekdayOf(today));
     const weekEnd = addDays(weekStart, 6);
-    const summary = await fetchSummary(token, { start: weekStart, end: weekEnd });
-    setWeekSpend(summary.expense);
-  }, [token]);
+    const row = await db.getFirstAsync<{ total: number | null }>(
+      "SELECT SUM(amount) as total FROM finance_transactions WHERE type = 'expense' AND date >= ? AND date <= ?",
+      [weekStart, weekEnd]
+    );
+    setWeekSpend(row?.total ?? 0);
+  }, [db]);
 
   useFocusEffect(
     useCallback(() => {

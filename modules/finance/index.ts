@@ -13,7 +13,7 @@ export {
   type AccountType,
   type Category,
   type CategoryType,
+  type FinanceSummary,
   type Transaction,
   type TransactionType,
 } from './types';
-export type { FinanceSummary } from './api';

@@ -1,11 +1,21 @@
 # LifeOS
 
-A single Expo (iOS + Android) app unifying habits, tasks, calendar, meditation,
-breathing, mind training, workouts, affirmations, finance, journaling, food
-tracking, and a cross-module analytics dashboard. All personal data (habits,
-tasks, journal, everything) stays fully local-first in on-device SQLite — the
-only server-side piece is a small auth backend for real accounts (see
-**Phase 6** below), which never sees or stores any of that data.
+A single Expo (iOS + Android + web) app unifying habits, tasks, calendar,
+meditation, breathing, mind training, workouts, affirmations, finance,
+journaling, food tracking, and a cross-module analytics dashboard. **All**
+application data (habits, tasks, journal, finance, everything) stays fully
+local-first in on-device SQLite. The one exception is signing in itself —
+that uses **Supabase Auth** directly (email + password), so there's no
+separate backend server to run or host at all. Supabase only ever sees an
+email/password/session — never any habit, task, journal, or finance data.
+
+This app was simplified to this shape for its V1 (friends-and-family) release
+after briefly running its own Express + JWT backend with a hand-migrated
+Finance module in Supabase — that added a real server to host (on Render) for
+no benefit at this scale, so it was removed. See "Architecture" below for
+the current shape, and the historical phase notes further down for how each
+feature module was originally built (those are all still accurate — this
+simplification only touched auth and Finance's storage location).
 
 This repo now implements **all 12 modules from the original spec** (Phases
 1–4), a **Phase 5** upgrade to Habits and Tasks (a shared category system;
@@ -27,10 +37,15 @@ scope" for what was never attempted.
 
 - Expo SDK 57, TypeScript strict, `expo-router` (file-based routing), with
   `Stack.Protected` gating `(tabs)` vs. `(auth)` based on sign-in state
-- `expo-sqlite` (async API) for all local data — no in-memory-only state
-- `expo-secure-store` for the auth token (Keychain/Keystore on native; falls
-  back to `localStorage` on web, which has no real SecureStore implementation
-  at all — see Authentication section)
+- `expo-sqlite` (async API) for **all** application data — no in-memory-only
+  state, no server, nothing leaves the device except the sign-in itself
+- `@supabase/supabase-js` — the one cloud dependency, used only for
+  `supabase.auth.*` (email+password sign in/up/out, session persistence,
+  auto-refresh). The app never queries a Supabase database table directly.
+- `expo-secure-store` — now used as the storage adapter Supabase's client
+  persists its session into (Keychain/Keystore on native; falls back to
+  `localStorage` on web, which has no real SecureStore implementation at all
+  — see Authentication section)
 - `react-native-svg` for the Habit/Task detail Statistics tab's donut and bar
   charts — the app's first real vector-drawing dependency (everything before
   it was `View`-based, like `<HeatmapCalendar />`/`<TrendChart />`)
@@ -41,8 +56,6 @@ scope" for what was never attempted.
   audio (no streaming, fully offline)
 - React Context per module for state — no global store
 - One shared design system (`theme/`) — colors, spacing, type scale, dark mode
-- `server/` — a small separate Express + `better-sqlite3` + `bcryptjs` +
-  `jsonwebtoken` backend, solely for signup/login (see `server/README.md`)
 
 ## Getting started
 
@@ -52,18 +65,23 @@ npm run ios      # or npm run android
 npm run typecheck
 ```
 
-The app now requires signing in (real account, not a device PIN — see
-Authentication below), so also run the auth backend alongside it:
+The app requires signing in (real account via Supabase Auth, not a device
+PIN — see Authentication below). Set these two env vars before running it
+(e.g. in a `.env` file, or per-profile in `eas.json`/`netlify.toml`):
 
-```bash
-cd server
-npm install
-npm start                     # http://localhost:4000
+```
+EXPO_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=<your project's anon/public key>
 ```
 
-The app talks to `http://localhost:4000` by default; point it elsewhere via
-the `EXPO_PUBLIC_API_URL` env var if the server is hosted somewhere other
-than your machine (see `server/README.md` for deploying it).
+Both come from the Supabase dashboard → Settings → API. The anon key is
+meant to be public/shipped in an app — never put the `service_role` key
+here or anywhere client-side.
+
+In Supabase's dashboard, under Authentication → Providers → Email, turn
+**off** "Confirm email" so `supabase.auth.signUp()` immediately returns a
+usable session (matches this app's "sign up and you're in" flow) — leaving
+it on means a new account can't sign in until it clicks a confirmation link.
 
 ## Verified
 
@@ -216,9 +234,11 @@ components/               shared design-system primitives (Button, Card, TextFie
                           HeatmapCalendar, DonutChart (react-native-svg), RangeChip,
                           Legend, ScreenContainer)
 modules/
-  auth/                   AuthContext/useAuth (email-or-username + password against
-                          server/), secureStorage (SecureStore, localStorage on web),
-                          api client — the only module that talks to a network server
+  auth/                   AuthContext/useAuth (Supabase Auth: signIn/signUp/signOut,
+                          session restore via onAuthStateChange), supabaseClient
+                          (the one Supabase dependency in the app — auth only),
+                          secureStorage (session storage adapter: SecureStore native,
+                          localStorage on web)
   categories/             shared category system (icon+color, user-creatable),
                           useCategories, CategoryPicker (used by Habits & Tasks)
   habits/                 types (4 tracking types × 4 frequencies), streak/longest-streak/
@@ -247,8 +267,13 @@ modules/
   breathing/              pattern catalog, useBreathingCycle, useBreathingLogs,
                           BreathingCircle (Animated API)
   affirmations/           useAffirmations (day-seeded pick, favorites, custom)
-  finance/                types, useFinanceMonth (totals + category breakdown),
-                          useTransactionDetail
+  finance/                types, accounts/categories/transactions/budgets all local
+                          SQLite (finance_accounts/finance_categories/
+                          finance_transactions/finance_budgets) with a balance-
+                          recalculation trigger on finance_transactions (income/
+                          expense/transfer) — useAccounts, useTransactions,
+                          useFinanceSummary, useFinanceCategories, useFinanceBudgets,
+                          useFinanceWeekSpend, useFinanceDailySpend
   food/                   types, useFoodDay (grouped-by-meal + daily totals)
   mind-training/          exercise catalog, useMindTrainingLogs/useBestScores,
                           games/ReactionGame, games/SequenceGame, games/GoNoGoGame
@@ -259,8 +284,6 @@ modules/
 notifications/            handler config, permission request, scheduleDailyReminder(),
                           scheduleOneTimeNotification() (DATE trigger — task reminders/alarms)
 assets/audio/             3 generated placeholder ambient WAV loops (see Meditation)
-server/                   separate Node project — Express auth API (see server/README.md);
-                          not part of the Expo app's bundle, run independently
 ```
 
 **Why this Phase 1 grouping (Habits + Tasks + Journal):** they share the same
@@ -434,22 +457,27 @@ all.
 ## What's built vs. stubbed
 
 ### Authentication — built
-- Separate server (`server/`): `users` table (email, username, bcrypt
-  password hash), JWT-based sessions (30-day expiry). Signup/login accept
-  either email or username as one `identifier` field.
-- Client: `modules/auth` — `AuthProvider`/`useAuth()`, a `login`/`signup`
-  screen pair under `app/(auth)/`, session-token persistence via
-  `expo-secure-store` (native) / `localStorage` (web — see Verified section
-  for why), and restoring a session on relaunch via `GET /auth/me`.
+- **Supabase Auth**, used directly from the client (`@supabase/supabase-js`)
+  — no custom backend. Email + password only: `supabase.auth.signUp()`,
+  `signInWithPassword()`, `signOut()`. Supabase's own `auth.users` table is
+  the only place an account record lives; this app never creates its own
+  users table.
+- Client: `modules/auth` — `AuthProvider`/`useAuth()` wraps
+  `supabase.auth.getSession()` + `onAuthStateChange()` for session restore
+  and auto-login on relaunch, a `login`/`signup` screen pair under
+  `app/(auth)/`, session persistence via `expo-secure-store` (native) /
+  `localStorage` (web) as Supabase's storage adapter.
 - Route gating: `app/_layout.tsx` wraps `(tabs)` and `(auth)` in
   `<Stack.Protected guard={...}>` blocks so a signed-out user can only reach
-  Login/Signup and a signed-in user can only reach the app — enforced by
-  Expo Router itself, not an ad-hoc conditional (see Verified section for
-  the bug this replaced).
-- Not built: password reset/forgot-password, email verification, OAuth/social
-  login, changing your password or email from Settings, syncing any actual
-  app data (habits/tasks/etc.) to the server — the account is purely a
-  sign-in gate, everything else stays on-device exactly as before.
+  Login/Signup and a signed-in user can only reach the app.
+- Not built: password reset/forgot-password, OAuth/social login, changing
+  your password or email from Settings, multi-account switching (dropped in
+  the V1 simplification — one signed-in account per device now), syncing any
+  actual app data (habits/tasks/finance/etc.) to Supabase — the account is
+  purely a sign-in gate, everything else stays on-device. Requires "Confirm
+  email" turned off in Supabase's Auth settings for signup to log straight
+  in (see Getting Started) — with it on, a new account needs to click an
+  emailed confirmation link before it can sign in.
 
 ### Categories (shared) — built
 - SQLite table: `categories` (name, icon, color, `applies_to`), seeded once
@@ -625,16 +653,22 @@ all.
   (only favorite-toggle and add-new)
 
 ### Finance Tracking — built
-- SQLite table: `finance_transactions`; expense/income categories are a
-  static list in code (`EXPENSE_CATEGORIES`/`INCOME_CATEGORIES`), matching the
-  same "content vs. user data" split as Meditation's session catalog — no
-  user-managed categories table for Phase 3
-- Screens: month view (prev/next arrows) with income/expense/net `<StatCard />`
-  row, expense breakdown by category, transaction list; new-transaction form
-  (type toggle, category chips scoped to that type, quick date chips); detail
-  screen with inline note edit + delete
-- Known simplification: currency is hardcoded to USD
-  (`modules/finance/types.ts` → `formatCurrency`) — no currency setting yet
+- SQLite tables: `finance_accounts` (cash/general/investment/credit, a
+  `current_balance` never written directly by application code),
+  `finance_categories` (11 seeded income/expense categories), `finance_transactions`
+  (income/expense/transfer, transfers move money between two of the user's
+  own accounts), and `finance_budgets` (weekly/monthly limits, one row).
+  A SQLite trigger on `finance_transactions` (insert/update/delete) keeps
+  `current_balance` correctly in sync automatically — application code never
+  computes a new balance by hand.
+- Screens: Accounts Dashboard (net worth, budget progress bars, accounts
+  grouped by type, recent transactions), Add Account, Transaction Form
+  (Income/Expense/Transfer toggle, account/category pickers, quick date
+  chips), transaction detail (note edit + delete), Analytics (month nav,
+  income/expense/net `<StatCard />` row, `<DonutChart />` by category).
+- Known simplification: currency is set per-account but there's no live
+  exchange-rate conversion — net worth simply sums raw balances across
+  accounts regardless of currency.
 - Reusable piece produced: `<StatCard />` (see Shared shell)
 
 ### Food Tracker — built
@@ -752,7 +786,8 @@ each module section calls out individually, collected in one place:
 
 ## Explicitly out of scope
 Cloud sync of app data, social/sharing, wearable integration. Real accounts
-now exist (Phase 6) purely as a sign-in gate — no habit/task/journal/etc.
-data is ever sent to or stored on the server, and the data layer still avoids
-anything that would make bolting on real sync later hard (e.g. no
-client-only auto-increment assumptions baked into UI).
+exist purely as a sign-in gate via Supabase Auth — no habit/task/journal/
+finance/etc. data is ever sent to or stored in Supabase. A V2 goal is
+syncing SQLite to Supabase for real cross-device data; V1 deliberately keeps
+that out of scope in exchange for the simplest possible architecture (no
+backend to host, nothing that can drift out of sync).

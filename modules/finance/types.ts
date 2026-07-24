@@ -2,7 +2,6 @@ export type AccountType = 'general' | 'cash' | 'investment' | 'credit';
 
 export type Account = {
   id: string;
-  user_id: number;
   name: string;
   type: AccountType;
   currency: string;
@@ -26,7 +25,6 @@ export type TransactionType = 'income' | 'expense' | 'transfer';
 
 export type Transaction = {
   id: string;
-  user_id: number;
   account_id: string;
   category_id: string | null;
   type: TransactionType;
@@ -35,6 +33,13 @@ export type Transaction = {
   note: string | null;
   to_account_id: string | null;
   created_at: string;
+};
+
+export type FinanceSummary = {
+  netWorth: number;
+  income: number;
+  expense: number;
+  expenseByCategory: { name: string; color: string; icon: string; total: number }[];
 };
 
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
