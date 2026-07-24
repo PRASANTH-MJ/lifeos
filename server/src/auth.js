@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 
-import { db } from './db.js';
+import { findUserByEmail, findUserById, findUserByUsername, insertUser, usersConfigured } from './db.js';
 import { JWT_SECRET } from './config.js';
 
 const router = Router();
@@ -11,6 +11,13 @@ const TOKEN_TTL = '30d';
 function toPublicUser(row) {
   return { id: row.id, email: row.email, username: row.username, createdAt: row.created_at };
 }
+
+router.use((req, res, next) => {
+  if (!usersConfigured()) {
+    return res.status(503).json({ error: 'Accounts are not configured on this server yet (missing Supabase credentials).' });
+  }
+  next();
+});
 
 router.post('/signup', async (req, res) => {
   const { email, username, password } = req.body ?? {};
@@ -25,20 +32,26 @@ router.post('/signup', async (req, res) => {
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedUsername = username.trim().toLowerCase();
 
-  const existing = db
-    .prepare('SELECT id FROM users WHERE email = ? OR username = ?')
-    .get(normalizedEmail, normalizedUsername);
-  if (existing) {
+  const [byEmail, byUsername] = await Promise.all([
+    findUserByEmail(normalizedEmail),
+    findUserByUsername(normalizedUsername),
+  ]);
+  if (byEmail || byUsername) {
     return res.status(409).json({ error: 'An account with that email or username already exists.' });
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const createdAt = new Date().toISOString();
-  const result = db
-    .prepare('INSERT INTO users (email, username, password_hash, created_at) VALUES (?, ?, ?, ?)')
-    .run(normalizedEmail, normalizedUsername, passwordHash, createdAt);
 
-  const user = { id: result.lastInsertRowid, email: normalizedEmail, username: normalizedUsername, created_at: createdAt };
+  let user;
+  try {
+    user = await insertUser({ email: normalizedEmail, username: normalizedUsername, passwordHash });
+  } catch (err) {
+    if (err?.code === '23505') {
+      return res.status(409).json({ error: 'An account with that email or username already exists.' });
+    }
+    throw err;
+  }
+
   const token = jwt.sign({ sub: user.id }, JWT_SECRET, { expiresIn: TOKEN_TTL });
   res.status(201).json({ token, user: toPublicUser(user) });
 });
@@ -50,7 +63,11 @@ router.post('/login', async (req, res) => {
   }
 
   const normalized = identifier.trim().toLowerCase();
-  const user = db.prepare('SELECT * FROM users WHERE email = ? OR username = ?').get(normalized, normalized);
+  const [byEmail, byUsername] = await Promise.all([
+    findUserByEmail(normalized),
+    findUserByUsername(normalized),
+  ]);
+  const user = byEmail ?? byUsername;
   if (!user) {
     return res.status(401).json({ error: 'Invalid credentials.' });
   }
@@ -64,14 +81,14 @@ router.post('/login', async (req, res) => {
   res.json({ token, user: toPublicUser(user) });
 });
 
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   const authHeader = req.headers.authorization ?? '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null;
   if (!token) return res.status(401).json({ error: 'Missing token.' });
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(payload.sub);
+    const user = await findUserById(payload.sub);
     if (!user) return res.status(401).json({ error: 'User no longer exists.' });
     res.json({ user: toPublicUser(user) });
   } catch {

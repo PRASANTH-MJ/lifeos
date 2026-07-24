@@ -1,19 +1,33 @@
-import Database from 'better-sqlite3';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { supabase } from './supabase.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, '..', 'data.sqlite');
+export function usersConfigured() {
+  return !!supabase;
+}
 
-export const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
+export async function findUserByEmail(email) {
+  const { data, error } = await supabase.from('users').select('*').eq('email', email).maybeSingle();
+  if (error) throw error;
+  return data;
+}
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT NOT NULL UNIQUE,
-    username TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
-`);
+export async function findUserByUsername(username) {
+  const { data, error } = await supabase.from('users').select('*').eq('username', username).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function findUserById(id) {
+  const { data, error } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function insertUser({ email, username, passwordHash }) {
+  const { data, error } = await supabase
+    .from('users')
+    .insert({ email, username, password_hash: passwordHash })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
