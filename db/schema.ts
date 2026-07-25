@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 12;
+const DATABASE_VERSION = 13;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -600,7 +600,20 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 12;
   }
 
-  // Future modules land here as `if (currentDbVersion === 12) { ... currentDbVersion = 13; }`
+  if (currentDbVersion === 12) {
+    // A user-provided affirmation image comes with its own fixed caption baked
+    // in ("Be Good to Yourself"), so it's paired with a matching new
+    // affirmation row (by exact text, in backgrounds.ts) rather than dropped
+    // into the generic rotating-background pool.
+    await db.runAsync(
+      "INSERT INTO affirmations (text, is_favorite, is_custom, created_at) VALUES ('Be Good to Yourself', 0, 1, ?)",
+      [new Date().toISOString()]
+    );
+
+    currentDbVersion = 13;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 13) { ... currentDbVersion = 14; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

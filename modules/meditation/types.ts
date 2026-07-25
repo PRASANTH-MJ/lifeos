@@ -20,16 +20,15 @@ export type MeditationTrack = {
   audioSource: number | string;
 };
 
-// Placeholder ambient tones (bundled locally per the offline-first decision) —
-// swap `audioSource` for licensed guided-voice/music content later; nothing
-// else about the player or the schema needs to change to do that.
+// Real bundled ambient/music tracks (replaced the earlier generated
+// placeholder tones) — bundled locally, fully offline, same as before.
 export const MEDITATION_TRACKS: MeditationTrack[] = [
-  { key: 'calm', label: 'Calm Pad', audioSource: require('../../assets/audio/calm-pad.wav') },
-  { key: 'deep', label: 'Deep Pad', audioSource: require('../../assets/audio/deep-pad.wav') },
-  { key: 'bright', label: 'Bright Pad', audioSource: require('../../assets/audio/bright-pad.wav') },
-  { key: 'warm-drone', label: 'Warm Drone', audioSource: require('../../assets/audio/warm-drone.wav') },
-  { key: 'crystal-chimes', label: 'Crystal Chimes', audioSource: require('../../assets/audio/crystal-chimes.wav') },
-  { key: 'forest-hum', label: 'Forest Hum', audioSource: require('../../assets/audio/forest-hum.wav') },
+  { key: 'moonstone', label: 'Moonstone', audioSource: require('../../assets/audio/moonstone.mp3') },
+  { key: 'ocean-wave', label: 'Ocean Wave', audioSource: require('../../assets/audio/ocean-wave.mp3') },
+  { key: 'bright-halo', label: 'Bright Halo', audioSource: require('../../assets/audio/bright-halo.mp3') },
+  { key: 'li-river', label: 'Li River', audioSource: require('../../assets/audio/li-river.mp3') },
+  { key: 'crystal', label: 'Crystal', audioSource: require('../../assets/audio/crystal.mp3') },
+  { key: 'flashes', label: 'Flashes', audioSource: require('../../assets/audio/flashes.mp3') },
 ];
 
 export function findTrack(key: string): MeditationTrack {
@@ -42,21 +41,21 @@ export const MEDITATION_SESSIONS: MeditationSession[] = [
     title: 'Calm Focus',
     description: 'A soft ambient tone to settle a busy mind.',
     durationSeconds: 5 * 60,
-    defaultTrackKey: 'calm',
+    defaultTrackKey: 'moonstone',
   },
   {
     key: 'deep-rest',
     title: 'Deep Rest',
     description: 'A low, grounding tone for winding down before sleep.',
     durationSeconds: 10 * 60,
-    defaultTrackKey: 'deep',
+    defaultTrackKey: 'ocean-wave',
   },
   {
     key: 'morning-clarity',
     title: 'Morning Clarity',
     description: 'A brighter tone to start the day present and awake.',
     durationSeconds: 3 * 60,
-    defaultTrackKey: 'bright',
+    defaultTrackKey: 'bright-halo',
   },
 ];
 

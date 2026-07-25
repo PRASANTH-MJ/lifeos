@@ -15,7 +15,7 @@ export default function AllAffirmationsScreen() {
         {affirmations.map((affirmation) => (
           <Card key={affirmation.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, padding: theme.spacing.sm }}>
             <ImageBackground
-              source={backgroundFor(affirmation.id)}
+              source={backgroundFor(affirmation.id, affirmation.text)}
               imageStyle={{ borderRadius: theme.radius.sm }}
               style={{ width: 36, height: 36, borderRadius: theme.radius.sm, overflow: 'hidden' }}
             />

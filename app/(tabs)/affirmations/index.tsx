@@ -51,7 +51,7 @@ export default function AffirmationsScreen() {
       />
       <View style={{ gap: theme.spacing.xl }}>
         <ImageBackground
-          source={backgroundFor(displayed.id)}
+          source={backgroundFor(displayed.id, displayed.text)}
           imageStyle={{ borderRadius: theme.radius.lg }}
           style={{ borderRadius: theme.radius.lg, overflow: 'hidden' }}>
           <View style={{ backgroundColor: 'rgba(0,0,0,0.28)', padding: theme.spacing.lg, gap: theme.spacing.lg }}>
@@ -82,7 +82,7 @@ export default function AffirmationsScreen() {
             {favorites.slice(0, 5).map((affirmation) => (
               <Card key={affirmation.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, padding: theme.spacing.sm }}>
                 <ImageBackground
-                  source={backgroundFor(affirmation.id)}
+                  source={backgroundFor(affirmation.id, affirmation.text)}
                   imageStyle={{ borderRadius: theme.radius.sm }}
                   style={{ width: 36, height: 36, borderRadius: theme.radius.sm, overflow: 'hidden' }}
                 />
