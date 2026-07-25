@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 16;
+const DATABASE_VERSION = 17;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -752,7 +752,31 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 16;
   }
 
-  // Future modules land here as `if (currentDbVersion === 16) { ... currentDbVersion = 17; }`
+  if (currentDbVersion === 16) {
+    // Named, multi-period budgets (Weekly/Monthly/Yearly/One-time), separate from the older
+    // single weekly/monthly figure in `finance_budgets` — that simple pair stays as the Finance
+    // home screen's quick-glance card; this table backs a full Budgets screen with several
+    // budgets per period, each optionally scoped to one category, with a pacing forecast.
+    await db.execAsync(`
+      CREATE TABLE finance_budget_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        period TEXT NOT NULL CHECK (period IN ('weekly', 'monthly', 'yearly', 'one_time')),
+        amount REAL NOT NULL CHECK (amount > 0),
+        category_id INTEGER REFERENCES finance_categories(id) ON DELETE SET NULL,
+        start_date TEXT,
+        end_date TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        CHECK (period <> 'one_time' OR (start_date IS NOT NULL AND end_date IS NOT NULL))
+      );
+      CREATE INDEX idx_finance_budget_plans_period ON finance_budget_plans(period);
+    `);
+
+    currentDbVersion = 17;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 17) { ... currentDbVersion = 18; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

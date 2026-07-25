@@ -119,6 +119,43 @@ export type PlannedPayment = {
 
 export type Label = { id: string; name: string; color: string };
 
+export type BudgetPeriod = 'weekly' | 'monthly' | 'yearly' | 'one_time';
+
+export const BUDGET_PERIOD_LABELS: Record<BudgetPeriod, string> = {
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+  one_time: 'One-Time',
+};
+
+export type BudgetStatus = 'on_track' | 'trending_over' | 'over_budget';
+
+export const BUDGET_STATUS_LABELS: Record<BudgetStatus, string> = {
+  on_track: 'On Track',
+  trending_over: 'Trending Over',
+  over_budget: 'Over Budget',
+};
+
+export type BudgetPlan = {
+  id: string;
+  name: string;
+  period: BudgetPeriod;
+  amount: number;
+  category_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type BudgetPlanProgress = BudgetPlan & {
+  spent: number;
+  daysElapsed: number;
+  daysInPeriod: number;
+  forecastSpend: number;
+  status: BudgetStatus;
+};
+
 export function formatCurrency(amount: number, currency = 'USD'): string {
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
 }

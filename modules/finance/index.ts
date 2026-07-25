@@ -14,8 +14,12 @@ export { useFinanceDebts, useDebtPayments } from './useFinanceDebts';
 export { useFinancePlannedPayments, advanceByFrequency } from './useFinancePlannedPayments';
 export { syncPlannedPaymentNotification, cancelPlannedPaymentNotification, plannedPaymentReminderId } from './schedulePlannedPaymentNotifications';
 export { useFinanceLabels, useTransactionLabels } from './useFinanceLabels';
+export { useFinanceBudgetPlans } from './useFinanceBudgetPlans';
+export { useFinanceRecords, type RecordEntry, type RecordGroup } from './useFinanceRecords';
 export {
   ACCOUNT_TYPE_LABELS,
+  BUDGET_PERIOD_LABELS,
+  BUDGET_STATUS_LABELS,
   FREQUENCY_LABELS,
   PRIORITY_COLORS,
   PRIORITY_LABELS,
@@ -23,6 +27,10 @@ export {
   formatCurrencyCompact,
   type Account,
   type AccountType,
+  type BudgetPeriod,
+  type BudgetPlan,
+  type BudgetPlanProgress,
+  type BudgetStatus,
   type Category,
   type CategoryType,
   type Debt,

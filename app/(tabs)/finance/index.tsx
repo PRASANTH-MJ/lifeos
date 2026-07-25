@@ -159,10 +159,13 @@ export default function FinanceScreen() {
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
           {[
+            { href: '/finance/records' as const, icon: 'list-outline' as const, label: 'Records' },
+            { href: '/finance/budgets' as const, icon: 'bar-chart-outline' as const, label: 'Budgets' },
             { href: '/finance/goals' as const, icon: 'flag-outline' as const, label: 'Goals' },
             { href: '/finance/debts' as const, icon: 'hand-left-outline' as const, label: 'Debts' },
             { href: '/finance/planned' as const, icon: 'time-outline' as const, label: 'Planned payments' },
             { href: '/finance/labels' as const, icon: 'pricetag-outline' as const, label: 'Labels' },
+            { href: '/shopping' as const, icon: 'cart-outline' as const, label: 'Shopping list' },
           ].map((item) => (
             <Link key={item.href} href={item.href} asChild>
               <Pressable

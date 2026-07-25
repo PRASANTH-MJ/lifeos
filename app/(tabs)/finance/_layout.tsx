@@ -17,6 +17,9 @@ export default function FinanceLayout() {
       <Stack.Screen name="planned/index" options={{ title: 'Planned payments' }} />
       <Stack.Screen name="planned/new" options={{ title: 'New Planned Payment', presentation: 'modal' }} />
       <Stack.Screen name="labels/index" options={{ title: 'Labels' }} />
+      <Stack.Screen name="budgets/index" options={{ title: 'Budgets' }} />
+      <Stack.Screen name="budgets/new" options={{ title: 'New Budget', presentation: 'modal' }} />
+      <Stack.Screen name="records/index" options={{ title: 'Records' }} />
     </Stack>
   );
 }
