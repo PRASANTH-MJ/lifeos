@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 13;
+const DATABASE_VERSION = 14;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -613,7 +613,37 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 13;
   }
 
-  // Future modules land here as `if (currentDbVersion === 13) { ... currentDbVersion = 14; }`
+  if (currentDbVersion === 13) {
+    // 13 more user-provided affirmation images, each with its own caption baked
+    // in, paired with a matching new affirmation row (by exact text, in
+    // backgrounds.ts) rather than dropped into the generic background pool.
+    const seededAt = new Date().toISOString();
+    const CUSTOM_AFFIRMATIONS = [
+      'Dream. Believe. Achieve.',
+      'I am a magnet for success & happiness!',
+      'My dream life is already mine.',
+      'Believe in your dreams.',
+      'In a world full of roses, be a sunflower.',
+      'Be kind to yourself.',
+      'Reset, restart, refocus.',
+      'Not yesterday, not tomorrow — now.',
+      'What if it all works out?',
+      'Discipline.',
+      'Dream the impossible dream.',
+      "It's always been you vs. you.",
+      'I attract everything I want.',
+    ];
+    for (const text of CUSTOM_AFFIRMATIONS) {
+      await db.runAsync(
+        'INSERT INTO affirmations (text, is_favorite, is_custom, created_at) VALUES (?, 0, 1, ?)',
+        [text, seededAt]
+      );
+    }
+
+    currentDbVersion = 14;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 14) { ... currentDbVersion = 15; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 
