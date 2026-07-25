@@ -2,7 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { addDays, toDateKey, todayKey } from '@/lib/date';
+import { addDays, dateKeyToTimestamp, toDateKey, todayKey } from '@/lib/date';
 import type { BreathingLog } from './types';
 
 export function useBreathingLogs() {
@@ -24,10 +24,10 @@ export function useBreathingLogs() {
   );
 
   const logSession = useCallback(
-    async (patternKey: string, durationSeconds: number, cycles: number) => {
+    async (patternKey: string, durationSeconds: number, cycles: number, dateKey?: string) => {
       await db.runAsync(
         'INSERT INTO breathing_logs (pattern_key, duration_seconds, cycles, completed_at) VALUES (?, ?, ?, ?)',
-        [patternKey, Math.round(durationSeconds), cycles, new Date().toISOString()]
+        [patternKey, Math.round(durationSeconds), cycles, dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString()]
       );
       await refresh();
     },

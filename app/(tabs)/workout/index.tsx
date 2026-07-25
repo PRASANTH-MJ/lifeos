@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, Chip, LoadingState, ScreenContainer } from '@/components';
-import { dayOfYear } from '@/lib/date';
+import { Card, Chip, LoadingState, LogPastEntryModal, ScreenContainer } from '@/components';
+import { dayOfYear, todayKey } from '@/lib/date';
 import {
   EQUIPMENT_OPTIONS,
   GOALS,
@@ -25,6 +25,15 @@ export default function WorkoutScreen() {
   const { completedThisWeek, logCompletion, refresh: refreshLogs } = useWorkoutLogs();
   const refreshAll = async () => {
     await Promise.all([refreshPreferences(), refreshLogs()]);
+  };
+  const [logModalVisible, setLogModalVisible] = useState(false);
+  const [logWorkoutKey, setLogWorkoutKey] = useState<string | null>(null);
+  const [logDate, setLogDate] = useState(todayKey());
+
+  const onSaveLog = async () => {
+    if (!logWorkoutKey) return;
+    await logCompletion(logWorkoutKey, logDate);
+    setLogModalVisible(false);
   };
 
   const recommended = useMemo(() => {
@@ -145,7 +154,36 @@ export default function WorkoutScreen() {
             <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
           </Card>
         </Pressable>
+
+        <Pressable
+          onPress={() => {
+            setLogWorkoutKey(WORKOUTS[0].key);
+            setLogDate(todayKey());
+            setLogModalVisible(true);
+          }}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Log a past workout
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+          </Card>
+        </Pressable>
       </View>
+
+      <LogPastEntryModal
+        visible={logModalVisible}
+        title="Log a past workout"
+        items={WORKOUTS.map((w) => ({ key: w.key, label: w.title }))}
+        selectedItemKey={logWorkoutKey}
+        onSelectItem={setLogWorkoutKey}
+        date={logDate}
+        onSelectDate={setLogDate}
+        onClose={() => setLogModalVisible(false)}
+        onSave={onSaveLog}
+        moduleColor={theme.colors.moduleTasks}
+        moduleMutedColor={theme.colors.moduleTasksMuted}
+      />
     </ScreenContainer>
   );
 }

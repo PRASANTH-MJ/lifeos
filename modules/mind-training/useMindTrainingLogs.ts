@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
+import { dateKeyToTimestamp } from '@/lib/date';
 import type { MindExercise, MindTrainingLog } from './types';
 
 export function useMindTrainingLogs() {
@@ -25,11 +26,11 @@ export function useMindTrainingLogs() {
   );
 
   const logScore = useCallback(
-    async (exerciseKey: string, score: number) => {
+    async (exerciseKey: string, score: number, dateKey?: string) => {
       await db.runAsync('INSERT INTO mind_training_logs (exercise_key, score, completed_at) VALUES (?, ?, ?)', [
         exerciseKey,
         score,
-        new Date().toISOString(),
+        dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString(),
       ]);
       await refresh();
     },

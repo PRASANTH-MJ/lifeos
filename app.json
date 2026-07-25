@@ -37,6 +37,13 @@
           "icon": "./assets/icon.png",
           "color": "#6C63FF"
         }
+      ],
+      "expo-document-picker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow LifeOS to access your photos to set a profile picture."
+        }
       ]
     ],
     "experiments": {

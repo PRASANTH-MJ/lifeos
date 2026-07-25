@@ -1,16 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, Text, View } from 'react-native';
 
 import { Card, EmptyState, ScreenContainer, StatCard } from '@/components';
-import { addDays, formatDisplayDate, todayKey } from '@/lib/date';
+import { addDays, formatDisplayDate, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
+import { CalendarMonthGrid } from '@/modules/calendar';
 import { MEALS, mealLabel, useFoodDay } from '@/modules/food';
 import { useAppTheme } from '@/theme';
 
 export default function FoodScreen() {
   const theme = useAppTheme();
   const [date, setDate] = useState(todayKey());
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
   const { loading, totals, byMeal, deleteLog, refresh } = useFoodDay(date);
 
   const onDelete = (id: number) => {
@@ -40,9 +43,17 @@ export default function FoodScreen() {
           <Pressable onPress={() => setDate((d) => addDays(d, -1))} hitSlop={8}>
             <Ionicons name="chevron-back" size={22} color={theme.colors.textSecondary} />
           </Pressable>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
-            {formatDisplayDate(date)}
-          </Text>
+          <Pressable
+            onPress={() => {
+              setDateCursor(monthCursorOf(date));
+              setDatePickerVisible(true);
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
+              {formatDisplayDate(date)}
+            </Text>
+            <Ionicons name="calendar-outline" size={16} color={theme.colors.textTertiary} />
+          </Pressable>
           <Pressable onPress={() => setDate((d) => addDays(d, 1))} hitSlop={8}>
             <Ionicons name="chevron-forward" size={22} color={theme.colors.textSecondary} />
           </Pressable>
@@ -86,6 +97,32 @@ export default function FoodScreen() {
           </View>
         )}
       </View>
+
+      <Modal visible={datePickerVisible} animationType="slide" transparent onRequestClose={() => setDatePickerVisible(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay }} onPress={() => setDatePickerVisible(false)} />
+          <View
+            style={{
+              backgroundColor: theme.colors.surface,
+              borderTopLeftRadius: theme.radius.xl,
+              borderTopRightRadius: theme.radius.xl,
+              padding: theme.spacing.xl,
+              gap: theme.spacing.lg,
+            }}>
+            <CalendarMonthGrid
+              year={dateCursor.year}
+              month={dateCursor.month}
+              selectedDate={date}
+              markedDates={new Set([date])}
+              onSelectDate={(dateKey) => {
+                setDate(dateKey);
+                setDatePickerVisible(false);
+              }}
+              onChangeMonth={(delta) => setDateCursor((cursor) => shiftMonth(cursor, delta))}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }

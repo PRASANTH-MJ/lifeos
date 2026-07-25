@@ -10,6 +10,14 @@ export function todayKey(): string {
   return toDateKey(new Date());
 }
 
+/** An ISO timestamp for `dateKey` at local noon — used when backdating a log entry to a
+ * chosen day where only the date (not a specific time) matters; noon avoids any
+ * midnight-boundary timezone edge cases when the date is later re-derived from it. */
+export function dateKeyToTimestamp(dateKey: string): string {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
+}
+
 export function addDays(dateKey: string, amount: number): string {
   const [year, month, day] = dateKey.split('-').map(Number);
   const date = new Date(year, month - 1, day);

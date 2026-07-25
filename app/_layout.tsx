@@ -1,11 +1,12 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as RouterThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { ActivityIndicator, useColorScheme, View } from 'react-native';
 import { SQLiteProvider } from 'expo-sqlite';
 
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db';
 import { configureNotificationHandler } from '@/notifications';
+import { PinLockScreen, useProfile } from '@/modules/profile';
 import { ThemeProvider } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -25,10 +26,20 @@ export default function RootLayout() {
 
 function RootNavigation() {
   const colorScheme = useColorScheme();
+  const { profile, loading, verifyPin } = useProfile();
+  const [unlocked, setUnlocked] = useState(false);
 
   useEffect(() => {
-    SplashScreen.hideAsync();
-  }, []);
+    if (!loading) SplashScreen.hideAsync();
+  }, [loading]);
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (profile?.pinEnabled && !unlocked) {
+    return <PinLockScreen verifyPin={verifyPin} onUnlock={() => setUnlocked(true)} />;
+  }
 
   return (
     <RouterThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

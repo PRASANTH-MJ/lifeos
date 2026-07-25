@@ -1,4 +1,5 @@
 export { useMeditationLogs } from './useMeditationLogs';
+export { useMeditationCustomTrack } from './useMeditationCustomTrack';
 export {
   MEDITATION_SESSIONS,
   MEDITATION_TRACKS,

@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 11;
+const DATABASE_VERSION = 12;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -570,7 +570,37 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 11;
   }
 
-  // Future modules land here as `if (currentDbVersion === 11) { ... currentDbVersion = 12; }`
+  if (currentDbVersion === 11) {
+    // Single upserted rows, same pattern as app_settings/workout_preferences.
+    // user_profile is purely local — name/picture/optional app-lock PIN, not
+    // an account (there is no login system in this app). pin_hash is a
+    // SHA-256 digest (expo-crypto), never the plain PIN.
+    await db.execAsync(`
+      CREATE TABLE user_profile (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        name TEXT,
+        avatar_uri TEXT,
+        pin_hash TEXT,
+        pin_enabled INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE meditation_custom_track (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        uri TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+
+    await db.runAsync('INSERT INTO user_profile (id, name, avatar_uri, pin_hash, pin_enabled, updated_at) VALUES (1, NULL, NULL, NULL, 0, ?)', [
+      new Date().toISOString(),
+    ]);
+
+    currentDbVersion = 12;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 12) { ... currentDbVersion = 13; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

@@ -1,8 +1,11 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 
 import { Button, ScreenContainer, TextField } from '@/components';
+import { formatDisplayDate, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
+import { CalendarMonthGrid } from '@/modules/calendar';
 import { JOURNAL_PROMPTS, MoodPicker, useJournal } from '@/modules/journal';
 import { useAppTheme } from '@/theme';
 
@@ -15,10 +18,13 @@ export default function NewJournalEntryScreen() {
   const [body, setBody] = useState('');
   const [mood, setMood] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [dateKey, setDateKey] = useState(todayKey());
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
 
   const onSave = async () => {
     setSaving(true);
-    await createEntry({ body: body.trim(), mood, prompt });
+    await createEntry({ body: body.trim(), mood, prompt, dateKey });
     setSaving(false);
     router.back();
   };
@@ -26,6 +32,18 @@ export default function NewJournalEntryScreen() {
   return (
     <ScreenContainer>
       <View style={{ gap: theme.spacing.xl }}>
+        <Pressable
+          onPress={() => {
+            setDateCursor(monthCursorOf(dateKey));
+            setDatePickerVisible(true);
+          }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
+          <Ionicons name="calendar-outline" size={16} color={theme.colors.moduleJournal} />
+          <Text style={{ color: theme.colors.moduleJournal, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+            {dateKey === todayKey() ? 'Today' : formatDisplayDate(dateKey)}
+          </Text>
+        </Pressable>
+
         <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.base, fontStyle: 'italic' }}>
           {prompt}
         </Text>
@@ -44,6 +62,32 @@ export default function NewJournalEntryScreen() {
 
         <Button label="Save entry" onPress={onSave} disabled={body.trim().length === 0} loading={saving} />
       </View>
+
+      <Modal visible={datePickerVisible} animationType="slide" transparent onRequestClose={() => setDatePickerVisible(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay }} onPress={() => setDatePickerVisible(false)} />
+          <View
+            style={{
+              backgroundColor: theme.colors.surface,
+              borderTopLeftRadius: theme.radius.xl,
+              borderTopRightRadius: theme.radius.xl,
+              padding: theme.spacing.xl,
+              gap: theme.spacing.lg,
+            }}>
+            <CalendarMonthGrid
+              year={dateCursor.year}
+              month={dateCursor.month}
+              selectedDate={dateKey}
+              markedDates={new Set([dateKey])}
+              onSelectDate={(selected) => {
+                setDateKey(selected);
+                setDatePickerVisible(false);
+              }}
+              onChangeMonth={(delta) => setDateCursor((cursor) => shiftMonth(cursor, delta))}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }

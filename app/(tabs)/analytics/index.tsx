@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Card, DonutChart, Legend, LoadingState, ScreenContainer, StatCard, TrendChart } from '@/components';
+import { Card, Chip, DonutChart, LineChart, Legend, LoadingState, ScreenContainer, StatCard, TrendChart } from '@/components';
 import { nearestMoodLabel, useAnalyticsDashboard } from '@/modules/analytics';
 import { formatCurrency, formatCurrencyCompact, useFinanceBudgets, useFinanceDailySpend, useFinanceSummary, useFinanceWeekSpend } from '@/modules/finance';
 import { todayKey } from '@/lib/date';
@@ -8,16 +9,28 @@ import { useAppTheme } from '@/theme';
 
 const MEAL_LABELS: Record<string, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack' };
 
+const RANGE_OPTIONS = [
+  { key: 'day', label: 'Day', days: 1 },
+  { key: 'week', label: 'Week', days: 7 },
+  { key: 'month', label: 'Month', days: 30 },
+  { key: 'year', label: 'Year', days: 365 },
+] as const;
+type RangeKey = (typeof RANGE_OPTIONS)[number]['key'];
+
 export default function AnalyticsScreen() {
   const theme = useAppTheme();
-  const { data, loading } = useAnalyticsDashboard();
+  const [range, setRange] = useState<RangeKey>('week');
+  const days = RANGE_OPTIONS.find((option) => option.key === range)!.days;
+  const rangeLabel = RANGE_OPTIONS.find((option) => option.key === range)!.label.toLowerCase();
+
+  const { data, loading } = useAnalyticsDashboard(days);
 
   const today = todayKey();
   const monthPrefix = today.slice(0, 7);
   const daysInMonth = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0).getDate();
   const { summary: currentMonthSummary } = useFinanceSummary(`${monthPrefix}-01`, `${monthPrefix}-${String(daysInMonth).padStart(2, '0')}`);
   const { weekSpend } = useFinanceWeekSpend();
-  const { series: spendSeries, total: spendTotal } = useFinanceDailySpend(14);
+  const { series: spendSeries, total: spendTotal } = useFinanceDailySpend(days);
   const { budgets } = useFinanceBudgets();
 
   if (loading || !data) {
@@ -39,7 +52,13 @@ export default function AnalyticsScreen() {
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>
             Insights
           </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Last 14 days, across every module</Text>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Across every module</Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+          {RANGE_OPTIONS.map((option) => (
+            <Chip key={option.key} label={option.label} selected={range === option.key} onPress={() => setRange(option.key)} />
+          ))}
         </View>
 
         <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
@@ -48,26 +67,27 @@ export default function AnalyticsScreen() {
           <StatCard label="Overdue tasks" value={String(data.overdueTasksCount)} color={data.overdueTasksCount > 0 ? theme.colors.danger : theme.colors.success} />
         </View>
         <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
+          <StatCard label="Missed habits" value={String(data.habitStatusBreakdown.fail)} color={data.habitStatusBreakdown.fail > 0 ? theme.colors.danger : theme.colors.success} />
           <StatCard label="Avg mood" value={data.avgMood != null ? nearestMoodLabel(data.avgMood) : '—'} color={theme.colors.moduleJournal} />
           <StatCard label="Wellness min" value={String(data.wellnessMinutesTotal)} color={theme.colors.moduleJournal} />
-          <StatCard label="Workouts" value={String(data.workoutsCompletedTotal)} color={theme.colors.moduleTasks} />
         </View>
         <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
+          <StatCard label="Workouts" value={String(data.workoutsCompletedTotal)} color={theme.colors.moduleTasks} />
+          <StatCard label="Workout min" value={String(data.workoutMinutesTotal)} color={theme.colors.moduleTasks} />
           <StatCard label="Spend" value={formatCurrencyCompact(spendTotal)} color={theme.colors.danger} />
-          <StatCard label="Avg cal/day" value={String(data.avgCaloriesPerDay)} color={theme.colors.primary} />
         </View>
 
         <Card>
-          <TrendChart label="Habit completions / day" data={data.habitsSeries} color={theme.colors.moduleHabits} />
+          <TrendChart label={`Habit completions / day (${rangeLabel})`} data={data.habitsSeries} color={theme.colors.moduleHabits} />
         </Card>
         <Card>
-          <TrendChart label="Tasks completed / day" data={data.tasksSeries} color={theme.colors.moduleTasks} />
+          <TrendChart label={`Tasks completed / day (${rangeLabel})`} data={data.tasksSeries} color={theme.colors.moduleTasks} />
         </Card>
 
         {habitTotal > 0 ? (
           <Card style={{ alignItems: 'center', gap: theme.spacing.md }}>
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold, alignSelf: 'flex-start' }}>
-              Habit check-ins (14 days)
+              Habit check-ins ({rangeLabel})
             </Text>
             <DonutChart
               segments={[
@@ -87,13 +107,13 @@ export default function AnalyticsScreen() {
         ) : null}
 
         <Card>
-          <TrendChart label="Mood (1–5)" data={data.moodSeries} color={theme.colors.moduleJournal} formatValue={(v) => v.toFixed(1)} />
+          <LineChart label="Mood tracker (1–5)" data={data.moodSeries} color={theme.colors.moduleJournal} formatValue={(v) => v.toFixed(1)} />
         </Card>
 
         {moodTotal > 0 ? (
           <Card style={{ gap: theme.spacing.sm }}>
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Mood breakdown (14 days)
+              Mood breakdown ({rangeLabel})
             </Text>
             {data.moodBreakdown.map((mood) => (
               <View key={mood.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -131,7 +151,7 @@ export default function AnalyticsScreen() {
         {data.mealBreakdown.length > 0 ? (
           <Card style={{ gap: theme.spacing.sm }}>
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Calories by meal (14 days)
+              Calories by meal ({rangeLabel})
             </Text>
             {data.mealBreakdown.map((meal) => (
               <View key={meal.meal} style={{ gap: 4 }}>
@@ -153,6 +173,9 @@ export default function AnalyticsScreen() {
 
         <Card>
           <TrendChart label="Calories / day" data={data.caloriesSeries} color={theme.colors.primary} />
+        </Card>
+        <Card>
+          <TrendChart label="Protein (g) / day" data={data.proteinSeries} color={theme.colors.moduleTasks} />
         </Card>
       </View>
     </ScreenContainer>

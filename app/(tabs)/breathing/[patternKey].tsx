@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { Chip, EmptyState, ScreenContainer } from '@/components';
-import { BreathingCircle, BreathingFlower, findPattern, useBreathingCycle, useBreathingLogs } from '@/modules/breathing';
+import { BreathingBar, BreathingCircle, BreathingFlower, BreathingWave, findPattern, useBreathingCycle, useBreathingLogs } from '@/modules/breathing';
 import { useAppTheme } from '@/theme';
 
 const CYCLE_OPTIONS = [4, 8, 12];
@@ -11,6 +11,8 @@ const MIN_LOGGABLE_SECONDS = 5;
 const ANIMATION_STYLES = [
   { key: 'circle', label: 'Circle' },
   { key: 'flower', label: 'Flower' },
+  { key: 'wave', label: 'Wave' },
+  { key: 'bar', label: 'Bar' },
 ] as const;
 type AnimationStyle = (typeof ANIMATION_STYLES)[number]['key'];
 
@@ -90,7 +92,7 @@ export default function BreathingSessionScreen() {
                 />
               ))}
             </View>
-            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
               {ANIMATION_STYLES.map((option) => (
                 <Chip
                   key={option.key}
@@ -120,6 +122,10 @@ export default function BreathingSessionScreen() {
           <>
             {animationStyle === 'flower' ? (
               <BreathingFlower step={cycle.step} secondsLeft={cycle.secondsLeft} color={theme.colors.moduleTasks} />
+            ) : animationStyle === 'wave' ? (
+              <BreathingWave step={cycle.step} secondsLeft={cycle.secondsLeft} color={theme.colors.moduleTasks} />
+            ) : animationStyle === 'bar' ? (
+              <BreathingBar step={cycle.step} secondsLeft={cycle.secondsLeft} color={theme.colors.moduleTasks} />
             ) : (
               <BreathingCircle step={cycle.step} secondsLeft={cycle.secondsLeft} color={theme.colors.moduleTasks} />
             )}

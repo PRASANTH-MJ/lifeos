@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 
 import { useLocalTable } from '@/db';
+import { dateKeyToTimestamp } from '@/lib/date';
 import type { JournalEntry } from './types';
 
 export function useJournal(searchQuery: string) {
@@ -12,14 +13,14 @@ export function useJournal(searchQuery: string) {
   });
 
   const createEntry = useCallback(
-    (values: { body: string; mood: string | null; prompt: string | null }) => {
-      const now = new Date().toISOString();
+    (values: { body: string; mood: string | null; prompt: string | null; dateKey?: string }) => {
+      const timestamp = values.dateKey ? dateKeyToTimestamp(values.dateKey) : new Date().toISOString();
       return table.insert({
         body: values.body,
         mood: values.mood,
         prompt: values.prompt,
-        created_at: now,
-        updated_at: now,
+        created_at: timestamp,
+        updated_at: timestamp,
       } as Partial<JournalEntry>);
     },
     [table]

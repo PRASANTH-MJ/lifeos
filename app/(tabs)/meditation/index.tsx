@@ -1,14 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, ScreenContainer } from '@/components';
-import { MEDITATION_SESSIONS, useMeditationLogs } from '@/modules/meditation';
+import { Card, LogPastEntryModal, ScreenContainer } from '@/components';
+import { todayKey } from '@/lib/date';
+import { MEDITATION_SESSIONS, findSession, useMeditationLogs } from '@/modules/meditation';
 import { useAppTheme } from '@/theme';
 
 export default function MeditationScreen() {
   const theme = useAppTheme();
-  const { totalMinutesThisWeek, refresh } = useMeditationLogs();
+  const { totalMinutesThisWeek, refresh, logSession } = useMeditationLogs();
+  const [logModalVisible, setLogModalVisible] = useState(false);
+  const [logSessionKey, setLogSessionKey] = useState<string | null>(null);
+  const [logDate, setLogDate] = useState(todayKey());
+
+  const onSaveLog = async () => {
+    if (!logSessionKey) return;
+    const session = findSession(logSessionKey);
+    await logSession(logSessionKey, session?.durationSeconds ?? 300, logDate);
+    setLogModalVisible(false);
+  };
 
   return (
     <ScreenContainer onRefresh={refresh}>
@@ -67,7 +79,36 @@ export default function MeditationScreen() {
             </Card>
           </Pressable>
         </Link>
+
+        <Pressable
+          onPress={() => {
+            setLogSessionKey(MEDITATION_SESSIONS[0].key);
+            setLogDate(todayKey());
+            setLogModalVisible(true);
+          }}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Log a past session
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+          </Card>
+        </Pressable>
       </View>
+
+      <LogPastEntryModal
+        visible={logModalVisible}
+        title="Log a past session"
+        items={MEDITATION_SESSIONS.map((s) => ({ key: s.key, label: s.title }))}
+        selectedItemKey={logSessionKey}
+        onSelectItem={setLogSessionKey}
+        date={logDate}
+        onSelectDate={setLogDate}
+        onClose={() => setLogModalVisible(false)}
+        onSave={onSaveLog}
+        moduleColor={theme.colors.moduleJournal}
+        moduleMutedColor={theme.colors.moduleJournalMuted}
+      />
     </ScreenContainer>
   );
 }

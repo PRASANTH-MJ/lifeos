@@ -1,14 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAudioPlayer } from 'expo-audio';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { Card, Chip, EmptyState, ScreenContainer } from '@/components';
-import { MEDITATION_TRACKS, findSession, findTrack, useMeditationLogs } from '@/modules/meditation';
+import { MEDITATION_TRACKS, findSession, findTrack, useMeditationCustomTrack, useMeditationLogs } from '@/modules/meditation';
 import { useAppTheme } from '@/theme';
 
 const MIN_LOGGABLE_SECONDS = 5;
+const DURATION_OPTIONS_MIN = [3, 5, 10, 15, 20, 30];
 
 export default function MeditationPlayerScreen() {
   const theme = useAppTheme();
@@ -16,13 +18,16 @@ export default function MeditationPlayerScreen() {
   const { sessionKey } = useLocalSearchParams<{ sessionKey: string }>();
   const session = findSession(sessionKey);
   const { logSession } = useMeditationLogs();
+  const { customTrack, setCustomTrack } = useMeditationCustomTrack();
 
+  const [durationSeconds, setDurationSeconds] = useState(session?.durationSeconds ?? 5 * 60);
   const [trackKey, setTrackKey] = useState(session?.defaultTrackKey ?? MEDITATION_TRACKS[0].key);
-  const track = findTrack(trackKey);
+  const track = trackKey === 'custom' && customTrack ? customTrack : findTrack(trackKey);
   const player = useAudioPlayer(track.audioSource);
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [importing, setImporting] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -32,12 +37,31 @@ export default function MeditationPlayerScreen() {
     };
   }, [player]);
 
-  const onSelectTrack = (key: string) => {
-    setTrackKey(key);
+  const stopPlaybackForSelection = () => {
     if (running) {
       player.pause();
       setRunning(false);
       if (intervalRef.current) clearInterval(intervalRef.current);
+    }
+  };
+
+  const onSelectTrack = (key: string) => {
+    setTrackKey(key);
+    stopPlaybackForSelection();
+  };
+
+  const onImportMusic = async () => {
+    setImporting(true);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*', copyToCacheDirectory: true });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        await setCustomTrack(asset.uri, asset.name);
+        setTrackKey('custom');
+        stopPlaybackForSelection();
+      }
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -59,7 +83,7 @@ export default function MeditationPlayerScreen() {
     if (intervalRef.current) clearInterval(intervalRef.current);
     setRunning(false);
     player.pause();
-    const secondsToLog = completedFully ? session.durationSeconds : elapsed;
+    const secondsToLog = completedFully ? durationSeconds : elapsed;
     if (secondsToLog >= MIN_LOGGABLE_SECONDS) {
       await logSession(session.key, secondsToLog);
     }
@@ -83,9 +107,9 @@ export default function MeditationPlayerScreen() {
     intervalRef.current = setInterval(() => {
       setElapsed((current) => {
         const next = current + 1;
-        if (next >= session.durationSeconds) {
+        if (next >= durationSeconds) {
           finishSession(true);
-          return session.durationSeconds;
+          return durationSeconds;
         }
         return next;
       });
@@ -98,7 +122,7 @@ export default function MeditationPlayerScreen() {
         <EmptyState
           icon="checkmark-circle"
           title="Session complete"
-          subtitle={`You sat for ${Math.round(session.durationSeconds / 60)} minutes.`}
+          subtitle={`You sat for ${Math.round(durationSeconds / 60)} minutes.`}
           ctaLabel="Done"
           onPressCta={() => router.back()}
         />
@@ -106,10 +130,11 @@ export default function MeditationPlayerScreen() {
     );
   }
 
-  const remaining = session.durationSeconds - elapsed;
+  const remaining = durationSeconds - elapsed;
   const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
   const seconds = String(remaining % 60).padStart(2, '0');
-  const progress = elapsed / session.durationSeconds;
+  const progress = elapsed / durationSeconds;
+  const allTracks = customTrack ? [...MEDITATION_TRACKS, customTrack] : MEDITATION_TRACKS;
 
   return (
     <ScreenContainer scroll={false}>
@@ -121,12 +146,32 @@ export default function MeditationPlayerScreen() {
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>{session.description}</Text>
         </View>
 
+        {elapsed === 0 ? (
+          <View style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium, textAlign: 'center' }}>
+              Duration
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: theme.spacing.sm }}>
+              {DURATION_OPTIONS_MIN.map((minutesOption) => (
+                <Chip
+                  key={minutesOption}
+                  label={`${minutesOption} min`}
+                  selected={durationSeconds === minutesOption * 60}
+                  onPress={() => setDurationSeconds(minutesOption * 60)}
+                  color={theme.colors.moduleJournal}
+                  mutedColor={theme.colors.moduleJournalMuted}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         <View style={{ gap: theme.spacing.sm }}>
           <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium, textAlign: 'center' }}>
             Music
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: theme.spacing.sm }}>
-            {MEDITATION_TRACKS.map((option) => (
+            {allTracks.map((option) => (
               <Chip
                 key={option.key}
                 label={option.label}
@@ -136,6 +181,24 @@ export default function MeditationPlayerScreen() {
                 mutedColor={theme.colors.moduleJournalMuted}
               />
             ))}
+            <Pressable
+              onPress={onImportMusic}
+              disabled={importing}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: theme.spacing.md,
+                paddingVertical: theme.spacing.sm,
+                borderRadius: theme.radius.full,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+              }}>
+              <Ionicons name="add-circle-outline" size={16} color={theme.colors.textSecondary} />
+              <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>
+                {importing ? 'Importing…' : 'Import music'}
+              </Text>
+            </Pressable>
           </View>
         </View>
 

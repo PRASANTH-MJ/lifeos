@@ -4,8 +4,9 @@ import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, buildDailySeries, todayKey } from '@/lib/date';
 import { MOODS } from '@/modules/journal';
+import { WORKOUTS } from '@/modules/workout';
 
-const DAYS = 14;
+const WORKOUT_MINUTES: Record<string, number> = Object.fromEntries(WORKOUTS.map((workout) => [workout.key, workout.minutes]));
 const MOOD_SCORE: Record<string, number> = Object.fromEntries(MOODS.map((mood, index) => [mood.key, MOODS.length - index]));
 
 type Series = { date: string; value: number }[];
@@ -16,31 +17,34 @@ export type DashboardData = {
   moodSeries: Series;
   wellnessSeries: Series;
   caloriesSeries: Series;
+  proteinSeries: Series;
   activeHabitsCount: number;
   tasksCompletedTotal: number;
   avgMood: number | null;
   wellnessMinutesTotal: number;
-  avgCaloriesPerDay: number;
   overdueTasksCount: number;
   habitStatusBreakdown: { done: number; fail: number; skip: number };
   moodBreakdown: { label: string; count: number }[];
   mealBreakdown: { meal: string; calories: number }[];
   workoutsCompletedTotal: number;
+  workoutMinutesTotal: number;
 };
 
 /**
  * Read-only aggregation over every module's own tables — this hook (and the
  * screen that uses it) is the only place in the app that queries across
  * module boundaries. It never writes anything and owns no tables of its own.
+ * `days` sizes the whole window (e.g. 1 for "today", 7 for a week, 30 for a
+ * month, 365 for a year) — every series/stat below is scoped to it.
  */
-export function useAnalyticsDashboard() {
+export function useAnalyticsDashboard(days: number = 14) {
   const db = useSQLiteContext();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const start = addDays(todayKey(), -(DAYS - 1));
+    const start = addDays(todayKey(), -(days - 1));
 
     const [
       habitRows,
@@ -49,11 +53,13 @@ export function useAnalyticsDashboard() {
       meditationRows,
       breathingRows,
       calorieRows,
+      proteinRows,
       activeHabitsRow,
       overdueTasksRow,
       habitStatusRows,
       mealRows,
       workoutsRow,
+      workoutKeyRows,
     ] = await Promise.all([
         db.getAllAsync<{ date: string; count: number }>(
           "SELECT date, COUNT(*) as count FROM habit_logs WHERE status = 'done' AND date >= ? GROUP BY date",
@@ -83,6 +89,10 @@ export function useAnalyticsDashboard() {
           'SELECT date, SUM(calories) as total FROM food_logs WHERE date >= ? GROUP BY date',
           [start]
         ),
+        db.getAllAsync<{ date: string; total: number }>(
+          'SELECT date, SUM(protein_g) as total FROM food_logs WHERE date >= ? GROUP BY date',
+          [start]
+        ),
         db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM habits WHERE archived = 0'),
         db.getFirstAsync<{ count: number }>(
           `SELECT COUNT(*) as count FROM tasks
@@ -97,6 +107,7 @@ export function useAnalyticsDashboard() {
           start,
         ]),
         db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM workout_logs WHERE substr(completed_at, 1, 10) >= ?', [start]),
+        db.getAllAsync<{ workout_key: string }>('SELECT workout_key FROM workout_logs WHERE substr(completed_at, 1, 10) >= ?', [start]),
       ]);
 
     const habitsByDate = Object.fromEntries(habitRows.map((row) => [row.date, row.count]));
@@ -120,12 +131,14 @@ export function useAnalyticsDashboard() {
     for (const row of breathingRows) wellnessByDate[row.date] = (wellnessByDate[row.date] ?? 0) + row.seconds / 60;
 
     const caloriesByDate = Object.fromEntries(calorieRows.map((row) => [row.date, row.total]));
+    const proteinByDate = Object.fromEntries(proteinRows.map((row) => [row.date, row.total]));
 
-    const habitsSeries = buildDailySeries(DAYS, habitsByDate);
-    const tasksSeries = buildDailySeries(DAYS, tasksByDate);
-    const moodSeries = buildDailySeries(DAYS, moodByDate);
-    const wellnessSeries = buildDailySeries(DAYS, wellnessByDate);
-    const caloriesSeries = buildDailySeries(DAYS, caloriesByDate);
+    const habitsSeries = buildDailySeries(days, habitsByDate);
+    const tasksSeries = buildDailySeries(days, tasksByDate);
+    const moodSeries = buildDailySeries(days, moodByDate);
+    const wellnessSeries = buildDailySeries(days, wellnessByDate);
+    const caloriesSeries = buildDailySeries(days, caloriesByDate);
+    const proteinSeries = buildDailySeries(days, proteinByDate);
 
     const moodEntries = Object.values(moodTotalsByDate);
     const avgMood =
@@ -148,25 +161,28 @@ export function useAnalyticsDashboard() {
 
     const mealBreakdown = mealRows.map((row) => ({ meal: row.meal, calories: row.total })).sort((a, b) => b.calories - a.calories);
 
+    const workoutMinutesTotal = workoutKeyRows.reduce((sum, row) => sum + (WORKOUT_MINUTES[row.workout_key] ?? 0), 0);
+
     setData({
       habitsSeries,
       tasksSeries,
       moodSeries,
       wellnessSeries,
       caloriesSeries,
+      proteinSeries,
       activeHabitsCount: activeHabitsRow?.count ?? 0,
       tasksCompletedTotal: taskRows.reduce((sum, row) => sum + row.count, 0),
       avgMood,
       wellnessMinutesTotal: Math.round(wellnessSeries.reduce((sum, point) => sum + point.value, 0)),
-      avgCaloriesPerDay: Math.round(caloriesSeries.reduce((sum, point) => sum + point.value, 0) / DAYS),
       overdueTasksCount: overdueTasksRow?.count ?? 0,
       habitStatusBreakdown,
       moodBreakdown,
       mealBreakdown,
       workoutsCompletedTotal: workoutsRow?.count ?? 0,
+      workoutMinutesTotal,
     });
     setLoading(false);
-  }, [db]);
+  }, [db, days]);
 
   useFocusEffect(
     useCallback(() => {

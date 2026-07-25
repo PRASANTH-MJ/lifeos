@@ -2,7 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { addDays, toDateKey, todayKey } from '@/lib/date';
+import { addDays, dateKeyToTimestamp, toDateKey, todayKey } from '@/lib/date';
 
 type WorkoutLog = { id: number; workout_key: string; completed_at: string };
 
@@ -25,10 +25,10 @@ export function useWorkoutLogs() {
   );
 
   const logCompletion = useCallback(
-    async (workoutKey: string) => {
+    async (workoutKey: string, dateKey?: string) => {
       await db.runAsync('INSERT INTO workout_logs (workout_key, completed_at) VALUES (?, ?)', [
         workoutKey,
-        new Date().toISOString(),
+        dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString(),
       ]);
       await refresh();
     },

@@ -187,8 +187,12 @@ export default function TodayScreen() {
           Today
         </Text>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          {weekDays.map((dateKey) => {
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <Pressable onPress={() => setSelectedDate((d) => addDays(d, -7))} hitSlop={8}>
+            <Ionicons name="chevron-back" size={20} color={theme.colors.textSecondary} />
+          </Pressable>
+          <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
+            {weekDays.map((dateKey) => {
             const isSelected = dateKey === selectedDate;
             const isToday = dateKey === todayKey();
             const [, , day] = dateKey.split('-');
@@ -211,8 +215,12 @@ export default function TodayScreen() {
                   </Text>
                 </View>
               </Pressable>
-            );
-          })}
+              );
+            })}
+          </View>
+          <Pressable onPress={() => setSelectedDate((d) => addDays(d, 7))} hitSlop={8}>
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+          </Pressable>
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>

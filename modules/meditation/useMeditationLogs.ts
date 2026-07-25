@@ -2,7 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { addDays, toDateKey, todayKey } from '@/lib/date';
+import { addDays, dateKeyToTimestamp, toDateKey, todayKey } from '@/lib/date';
 import type { MeditationLog } from './types';
 
 export function useMeditationLogs() {
@@ -26,11 +26,11 @@ export function useMeditationLogs() {
   );
 
   const logSession = useCallback(
-    async (sessionKey: string, durationSeconds: number) => {
+    async (sessionKey: string, durationSeconds: number, dateKey?: string) => {
       await db.runAsync('INSERT INTO meditation_logs (session_key, duration_seconds, completed_at) VALUES (?, ?, ?)', [
         sessionKey,
         Math.round(durationSeconds),
-        new Date().toISOString(),
+        dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString(),
       ]);
       await refresh();
     },

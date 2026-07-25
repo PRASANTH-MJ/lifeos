@@ -16,7 +16,8 @@ export type MeditationLog = {
 export type MeditationTrack = {
   key: string;
   label: string;
-  audioSource: number;
+  /** A bundled asset (require()'d number) or a device file URI for an imported track. */
+  audioSource: number | string;
 };
 
 // Placeholder ambient tones (bundled locally per the offline-first decision) —
