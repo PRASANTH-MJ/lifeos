@@ -5,6 +5,6 @@ export {
   cancelReminder,
   taskReminderId,
   taskAlarmId,
-  HABIT_REMINDER_ID,
-  MEDITATION_NUDGE_ID,
+  habitReminderId,
+  habitAlarmId,
 } from './schedule';

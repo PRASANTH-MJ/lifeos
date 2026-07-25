@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { MEALS, type FoodLog, type Meal } from './types';
@@ -17,9 +18,11 @@ export function useFoodDay(dateKey: string) {
     setLoading(false);
   }, [db, dateKey]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const createLog = useCallback(
     async (values: {

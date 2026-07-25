@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, buildDailySeries, todayKey } from '@/lib/date';
@@ -167,9 +168,11 @@ export function useAnalyticsDashboard() {
     setLoading(false);
   }, [db]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   return { data, loading, refresh };
 }

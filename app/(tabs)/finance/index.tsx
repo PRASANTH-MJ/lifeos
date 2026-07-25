@@ -29,14 +29,21 @@ const TYPE_ICON: Record<AccountType, keyof typeof Ionicons.glyphMap> = {
 export default function FinanceScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { accounts, accountsByType, netWorth, loading } = useAccounts();
-  const { transactions, loading: loadingTransactions } = useTransactions();
-  const { budgets, setBudgets } = useFinanceBudgets();
-  const { weekSpend } = useFinanceWeekSpend();
+  const { accounts, accountsByType, netWorth, loading, refresh } = useAccounts();
+  const { transactions, loading: loadingTransactions, refresh: refreshTransactions } = useTransactions();
+  const { budgets, setBudgets, refresh: refreshBudgets } = useFinanceBudgets();
+  const { weekSpend, refresh: refreshWeekSpend } = useFinanceWeekSpend();
   const today = todayKey();
   const monthPrefix = today.slice(0, 7);
   const daysInMonth = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0).getDate();
-  const { summary: monthSummary } = useFinanceSummary(`${monthPrefix}-01`, `${monthPrefix}-${String(daysInMonth).padStart(2, '0')}`);
+  const { summary: monthSummary, refresh: refreshSummary } = useFinanceSummary(
+    `${monthPrefix}-01`,
+    `${monthPrefix}-${String(daysInMonth).padStart(2, '0')}`
+  );
+
+  const refreshAll = async () => {
+    await Promise.all([refresh(), refreshTransactions(), refreshBudgets(), refreshWeekSpend(), refreshSummary()]);
+  };
 
   if (loading) {
     return (
@@ -47,7 +54,7 @@ export default function FinanceScreen() {
   }
 
   return (
-    <ScreenContainer>
+    <ScreenContainer onRefresh={refreshAll}>
       <Stack.Screen
         options={{
           headerRight: () => (

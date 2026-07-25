@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, toDateKey, todayKey } from '@/lib/date';
@@ -17,9 +18,11 @@ export function useWorkoutLogs() {
     setLoading(false);
   }, [db]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const logCompletion = useCallback(
     async (workoutKey: string) => {
@@ -37,5 +40,5 @@ export function useWorkoutLogs() {
     return logs.filter((log) => toDateKey(new Date(log.completed_at)) >= weekAgo).length;
   }, [logs]);
 
-  return { logs, loading, logCompletion, completedThisWeek };
+  return { logs, loading, logCompletion, completedThisWeek, refresh };
 }

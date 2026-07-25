@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import type { AppSettings, TimeFormat } from './types';
@@ -17,9 +18,11 @@ export function useSettings() {
     setLoading(false);
   }, [db]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const setTimeFormat = useCallback(
     async (timeFormat: TimeFormat) => {

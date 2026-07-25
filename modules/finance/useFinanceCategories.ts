@@ -1,5 +1,6 @@
+import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import type { Category, CategoryType } from './types';
 
@@ -21,9 +22,11 @@ export function useFinanceCategories() {
     setLoading(false);
   }, [db]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   return { categories, loading };
 }

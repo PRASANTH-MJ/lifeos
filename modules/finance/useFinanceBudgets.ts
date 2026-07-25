@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 export type FinanceBudgets = {
@@ -20,9 +21,11 @@ export function useFinanceBudgets() {
     setLoading(false);
   }, [db]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const setBudgets_ = useCallback(
     async (values: Partial<FinanceBudgets>) => {
@@ -37,5 +40,5 @@ export function useFinanceBudgets() {
     [db, budgets, refresh]
   );
 
-  return { budgets, loading, setBudgets: setBudgets_ };
+  return { budgets, loading, setBudgets: setBudgets_, refresh };
 }

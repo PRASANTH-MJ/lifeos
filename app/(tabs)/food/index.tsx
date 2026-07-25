@@ -11,7 +11,7 @@ import { useAppTheme } from '@/theme';
 export default function FoodScreen() {
   const theme = useAppTheme();
   const [date, setDate] = useState(todayKey());
-  const { loading, totals, byMeal, deleteLog } = useFoodDay(date);
+  const { loading, totals, byMeal, deleteLog, refresh } = useFoodDay(date);
 
   const onDelete = (id: number) => {
     Alert.alert('Remove entry?', undefined, [
@@ -23,7 +23,7 @@ export default function FoodScreen() {
   const isEmpty = !loading && MEALS.every((meal) => byMeal[meal].length === 0);
 
   return (
-    <ScreenContainer>
+    <ScreenContainer onRefresh={refresh}>
       <Stack.Screen
         options={{
           headerRight: () => (

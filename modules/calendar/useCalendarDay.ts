@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { isDue, parseTargetDays, type Habit } from '@/modules/habits';
@@ -42,9 +43,11 @@ export function useCalendarDay(dateKey: string) {
     setLoading(false);
   }, [db, dateKey]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const createEvent = useCallback(
     async (values: { title: string; notes?: string; startTime?: string | null; endTime?: string | null }) => {

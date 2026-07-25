@@ -13,7 +13,7 @@ export default function HabitsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const swipeHandlers = useTabSwipeNavigation('/habits');
-  const { habits, loading, toggleToday, upsertLog, clearLog } = useHabits();
+  const { habits, loading, toggleToday, upsertLog, clearLog, refresh } = useHabits();
   const { categories } = useCategories('habit');
   const [sheetHabitId, setSheetHabitId] = useState<number | null>(null);
 
@@ -21,7 +21,7 @@ export default function HabitsScreen() {
 
   return (
     <View style={{ flex: 1 }} {...swipeHandlers}>
-      <ScreenContainer>
+      <ScreenContainer onRefresh={refresh}>
         {!loading && habits.length === 0 ? (
           <EmptyState
             icon="checkmark-done-circle-outline"

@@ -8,10 +8,10 @@ import { useAppTheme } from '@/theme';
 
 export default function MindTrainingScreen() {
   const theme = useAppTheme();
-  const { best, loading } = useBestScores(MIND_EXERCISES);
+  const { best, loading, refresh } = useBestScores(MIND_EXERCISES);
 
   return (
-    <ScreenContainer>
+    <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.md }}>
         {MIND_EXERCISES.map((exercise) => (
           <Link key={exercise.key} href={{ pathname: '/mind-training/[exerciseKey]', params: { exerciseKey: exercise.key } }} asChild>

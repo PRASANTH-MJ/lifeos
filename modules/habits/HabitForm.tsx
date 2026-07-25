@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Switch, Text, View } from 'react-native';
 
-import { Button, Chip, TextField } from '@/components';
+import { Button, Chip, TextField, TimeField } from '@/components';
 import { CategoryPicker, useCategories } from '@/modules/categories';
 import { useAppTheme } from '@/theme';
 import {
@@ -51,6 +51,9 @@ export function HabitForm({ habit, onSave, submitLabel, autoFocusName = false, e
   const [periodTargetCount, setPeriodTargetCount] = useState('3');
   const [periodLengthDays, setPeriodLengthDays] = useState('7');
 
+  const [reminderTime, setReminderTime] = useState<string | null>(null);
+  const [alarmEnabled, setAlarmEnabled] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [prefilled, setPrefilled] = useState(!habit);
 
@@ -73,6 +76,8 @@ export function HabitForm({ habit, onSave, submitLabel, autoFocusName = false, e
       else setTargetDays(days);
       setPeriodTargetCount(String(habit.period_target_count ?? 3));
       setPeriodLengthDays(String(habit.period_length_days ?? 7));
+      setReminderTime(habit.reminder_time);
+      setAlarmEnabled(Boolean(habit.alarm_enabled));
       setPrefilled(true);
     }
   }, [habit, prefilled]);
@@ -116,6 +121,8 @@ export function HabitForm({ habit, onSave, submitLabel, autoFocusName = false, e
       targetDays: frequency === 'weekly' ? targetDays : frequency === 'monthly' ? monthDays : [],
       periodTargetCount: frequency === 'periodic' ? Number(periodTargetCount) || null : null,
       periodLengthDays: frequency === 'periodic' ? Number(periodLengthDays) || null : null,
+      reminderTime,
+      alarmEnabled,
     };
     await onSave(values);
     setSaving(false);
@@ -288,6 +295,24 @@ export function HabitForm({ habit, onSave, submitLabel, autoFocusName = false, e
             </Pressable>
           ))}
         </View>
+      </View>
+
+      <View style={{ gap: theme.spacing.sm }}>
+        <Text style={sectionLabelStyle(theme)}>Reminder</Text>
+        <TimeField label={undefined} value={reminderTime} onChange={setReminderTime} />
+        {reminderTime ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+              <Ionicons name="alarm" size={18} color={theme.colors.textSecondary} />
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>Alarm</Text>
+            </View>
+            <Switch value={alarmEnabled} onValueChange={setAlarmEnabled} />
+          </View>
+        ) : (
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+            Set a time to get a daily reminder (and optionally an alarm) for this habit.
+          </Text>
+        )}
       </View>
 
       <View style={{ gap: theme.spacing.sm }}>

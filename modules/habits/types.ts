@@ -20,6 +20,10 @@ export type Habit = {
   target_days: string;
   period_target_count: number | null;
   period_length_days: number | null;
+  /** "HH:MM", 24-hour — fires a daily reminder at this time regardless of
+   * which days the habit is actually due (a known simplification). */
+  reminder_time: string | null;
+  alarm_enabled: number;
   created_at: string;
   archived: number;
 };

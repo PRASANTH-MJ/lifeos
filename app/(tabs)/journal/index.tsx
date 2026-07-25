@@ -13,7 +13,7 @@ export default function JournalScreen() {
   const router = useRouter();
   const swipeHandlers = useTabSwipeNavigation('/journal');
   const [search, setSearch] = useState('');
-  const { entries, loading } = useJournal(search);
+  const { entries, loading, refresh } = useJournal(search);
 
   const heatmapValues = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -26,7 +26,7 @@ export default function JournalScreen() {
 
   return (
     <View style={{ flex: 1 }} {...swipeHandlers}>
-    <ScreenContainer>
+    <ScreenContainer onRefresh={refresh}>
       <Stack.Screen
         options={{
           headerRight: () => (

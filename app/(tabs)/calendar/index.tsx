@@ -19,7 +19,7 @@ export default function CalendarScreen() {
   });
 
   const markedDates = useMonthMarkers(cursor.year, cursor.month);
-  const { events, tasksDue, habitsDue, loading, toggleHabit, toggleTask } = useCalendarDay(selectedDate);
+  const { events, tasksDue, habitsDue, loading, toggleHabit, toggleTask, refresh } = useCalendarDay(selectedDate);
 
   const onChangeMonth = (delta: number) => {
     setCursor((prev) => {
@@ -31,7 +31,7 @@ export default function CalendarScreen() {
   const isEmpty = !loading && events.length === 0 && tasksDue.length === 0 && habitsDue.length === 0;
 
   return (
-    <ScreenContainer>
+    <ScreenContainer onRefresh={refresh}>
       <Stack.Screen
         options={{
           headerRight: () => (

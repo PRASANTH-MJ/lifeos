@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import type { JournalEntry } from './types';
@@ -15,9 +16,11 @@ export function useJournalDetail(entryId: number) {
     setLoading(false);
   }, [db, entryId]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const updateEntry = useCallback(
     async (values: Partial<Pick<JournalEntry, 'body' | 'mood'>>) => {

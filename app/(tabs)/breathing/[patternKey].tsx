@@ -3,11 +3,16 @@ import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { Chip, EmptyState, ScreenContainer } from '@/components';
-import { BreathingCircle, findPattern, useBreathingCycle, useBreathingLogs } from '@/modules/breathing';
+import { BreathingCircle, BreathingFlower, findPattern, useBreathingCycle, useBreathingLogs } from '@/modules/breathing';
 import { useAppTheme } from '@/theme';
 
 const CYCLE_OPTIONS = [4, 8, 12];
 const MIN_LOGGABLE_SECONDS = 5;
+const ANIMATION_STYLES = [
+  { key: 'circle', label: 'Circle' },
+  { key: 'flower', label: 'Flower' },
+] as const;
+type AnimationStyle = (typeof ANIMATION_STYLES)[number]['key'];
 
 export default function BreathingSessionScreen() {
   const theme = useAppTheme();
@@ -17,6 +22,7 @@ export default function BreathingSessionScreen() {
   const { logSession } = useBreathingLogs();
 
   const [targetCycles, setTargetCycles] = useState(8);
+  const [animationStyle, setAnimationStyle] = useState<AnimationStyle>('circle');
   const [finished, setFinished] = useState<{ cycles: number; totalSeconds: number } | null>(null);
   const [started, setStarted] = useState(false);
 
@@ -84,6 +90,18 @@ export default function BreathingSessionScreen() {
                 />
               ))}
             </View>
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              {ANIMATION_STYLES.map((option) => (
+                <Chip
+                  key={option.key}
+                  label={option.label}
+                  selected={animationStyle === option.key}
+                  onPress={() => setAnimationStyle(option.key)}
+                  color={theme.colors.moduleTasks}
+                  mutedColor={theme.colors.moduleTasksMuted}
+                />
+              ))}
+            </View>
             <Pressable
               onPress={() => {
                 setStarted(true);
@@ -100,7 +118,11 @@ export default function BreathingSessionScreen() {
           </View>
         ) : (
           <>
-            <BreathingCircle step={cycle.step} secondsLeft={cycle.secondsLeft} color={theme.colors.moduleTasks} />
+            {animationStyle === 'flower' ? (
+              <BreathingFlower step={cycle.step} secondsLeft={cycle.secondsLeft} color={theme.colors.moduleTasks} />
+            ) : (
+              <BreathingCircle step={cycle.step} secondsLeft={cycle.secondsLeft} color={theme.colors.moduleTasks} />
+            )}
             <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
               Cycle {Math.min(cycle.cycles + 1, targetCycles)} of {targetCycles}
             </Text>

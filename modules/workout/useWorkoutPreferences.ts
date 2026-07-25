@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import type { Equipment, WorkoutGoal, WorkoutPreferences } from './types';
@@ -23,9 +24,11 @@ export function useWorkoutPreferences() {
     setLoading(false);
   }, [db]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const updatePreferences = useCallback(
     async (next: Partial<WorkoutPreferences>) => {
@@ -47,5 +50,5 @@ export function useWorkoutPreferences() {
     [db, preferences, refresh]
   );
 
-  return { preferences, loading, updatePreferences };
+  return { preferences, loading, updatePreferences, refresh };
 }

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext, type SQLiteBindParams } from 'expo-sqlite';
 
 type Row = { id: number };
@@ -33,9 +34,14 @@ export function useLocalTable<T extends Row>(table: string, options: QueryOption
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, table, where, orderBy, paramsKey]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  // Refetch on every focus (not just mount) — tab screens stay mounted when
+  // you navigate away and back, so a plain mount-only effect would leave a
+  // list showing stale data after adding/editing a record elsewhere.
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const insert = useCallback(
     async (values: Partial<T>) => {

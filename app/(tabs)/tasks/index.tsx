@@ -13,17 +13,26 @@ export default function TasksScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const swipeHandlers = useTabSwipeNavigation('/tasks');
-  const { tasks, loading, subtaskCounts, toggleComplete } = useTasks();
-  const { tasks: recurringTasks, loading: loadingRecurring, upsertCompletion, clearCompletion } = useRecurringTasks();
+  const { tasks, loading, subtaskCounts, toggleComplete, refresh } = useTasks();
+  const {
+    tasks: recurringTasks,
+    loading: loadingRecurring,
+    upsertCompletion,
+    clearCompletion,
+    refresh: refreshRecurring,
+  } = useRecurringTasks();
   const { categories } = useCategories('task');
   const [tab, setTab] = useState<'single' | 'recurring'>('single');
   const [sheetTaskId, setSheetTaskId] = useState<number | null>(null);
 
   const sheetEntry = recurringTasks.find((entry) => entry.task.id === sheetTaskId);
+  const refreshAll = async () => {
+    await Promise.all([refresh(), refreshRecurring()]);
+  };
 
   return (
     <View style={{ flex: 1 }} {...swipeHandlers}>
-    <ScreenContainer>
+    <ScreenContainer onRefresh={refreshAll}>
       <Stack.Screen
         options={{
           headerRight: () => (

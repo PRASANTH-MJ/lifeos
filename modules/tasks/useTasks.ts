@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { useLocalTable } from '@/db';
@@ -38,9 +39,11 @@ export function useTasks() {
     setSubtaskCounts(grouped);
   }, [db]);
 
-  useEffect(() => {
-    refreshSubtaskCounts();
-  }, [refreshSubtaskCounts]);
+  useFocusEffect(
+    useCallback(() => {
+      refreshSubtaskCounts();
+    }, [refreshSubtaskCounts])
+  );
 
   const createTask = useCallback(
     async (values: CreateTaskInput) => {

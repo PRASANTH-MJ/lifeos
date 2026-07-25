@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { computeLongestStreak, computePeriodProgress, computeStreak } from '@/modules/habits';
@@ -28,9 +29,11 @@ export function useTaskDetail(taskId: number) {
     setLoading(false);
   }, [db, taskId]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const updateTask = useCallback(
     async (

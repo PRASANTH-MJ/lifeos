@@ -61,5 +61,10 @@ export function taskAlarmId(taskId: number): string {
   return `task-alarm-${taskId}`;
 }
 
-export const HABIT_REMINDER_ID = 'habit-daily-reminder';
-export const MEDITATION_NUDGE_ID = 'meditation-daily-nudge';
+export function habitReminderId(habitId: number): string {
+  return `habit-reminder-${habitId}`;
+}
+
+export function habitAlarmId(habitId: number): string {
+  return `habit-alarm-${habitId}`;
+}

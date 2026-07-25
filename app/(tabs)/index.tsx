@@ -181,7 +181,7 @@ export default function TodayScreen() {
 
   return (
     <View style={{ flex: 1 }} {...swipeHandlers}>
-    <ScreenContainer>
+    <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.xl }}>
         <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>
           Today

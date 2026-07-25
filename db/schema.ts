@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 10;
+const DATABASE_VERSION = 11;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -555,7 +555,22 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 10;
   }
 
-  // Future modules land here as `if (currentDbVersion === 10) { ... currentDbVersion = 11; }`
+  if (currentDbVersion === 10) {
+    // Plain additive columns (no CHECK constraint), so ADD COLUMN is enough —
+    // no table rebuild needed. Habits gain the same reminder/alarm concept
+    // Tasks already had, just as a daily time-of-day (habits recur, so there's
+    // no single due moment to offset from). Shopping items gain a price so
+    // the list can track a running total.
+    await db.execAsync(`
+      ALTER TABLE habits ADD COLUMN reminder_time TEXT;
+      ALTER TABLE habits ADD COLUMN alarm_enabled INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE shopping_items ADD COLUMN price REAL;
+    `);
+
+    currentDbVersion = 11;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 11) { ... currentDbVersion = 12; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

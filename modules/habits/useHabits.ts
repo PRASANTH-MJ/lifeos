@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { useLocalTable } from '@/db';
 import { todayKey } from '@/lib/date';
+import { syncHabitNotifications } from './scheduleHabitNotifications';
 import { computePeriodProgress, computeStreak } from './streak';
 import {
   parseTargetDays,
@@ -29,6 +31,8 @@ export type CreateHabitInput = {
   targetDays?: number[];
   periodTargetCount?: number | null;
   periodLengthDays?: number | null;
+  reminderTime?: string | null;
+  alarmEnabled?: boolean;
 };
 
 export type LogValues = {
@@ -53,9 +57,11 @@ export function useHabits() {
     setLogsByHabit(grouped);
   }, [db]);
 
-  useEffect(() => {
-    refreshLogs();
-  }, [refreshLogs]);
+  useFocusEffect(
+    useCallback(() => {
+      refreshLogs();
+    }, [refreshLogs])
+  );
 
   const upsertLog = useCallback(
     async (habitId: number, values: LogValues) => {
@@ -104,8 +110,8 @@ export function useHabits() {
   );
 
   const createHabit = useCallback(
-    (values: CreateHabitInput) => {
-      return table.insert({
+    async (values: CreateHabitInput) => {
+      const habitId = await table.insert({
         name: values.name,
         icon: values.icon,
         category_id: values.categoryId,
@@ -120,9 +126,20 @@ export function useHabits() {
         target_days: JSON.stringify(values.targetDays ?? []),
         period_target_count: values.periodTargetCount ?? null,
         period_length_days: values.periodLengthDays ?? null,
+        reminder_time: values.reminderTime ?? null,
+        alarm_enabled: values.alarmEnabled ? 1 : 0,
         created_at: new Date().toISOString(),
         archived: 0,
       } as Partial<Habit>);
+
+      syncHabitNotifications({
+        id: habitId,
+        name: values.name,
+        reminder_time: values.reminderTime ?? null,
+        alarm_enabled: values.alarmEnabled ? 1 : 0,
+      }).catch(() => {});
+
+      return habitId;
     },
     [table]
   );

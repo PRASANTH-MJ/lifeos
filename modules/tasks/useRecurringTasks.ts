@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { todayKey } from '@/lib/date';
@@ -37,9 +38,11 @@ export function useRecurringTasks() {
     setCompletionsByTask(grouped);
   }, [db]);
 
-  useEffect(() => {
-    refreshCompletions();
-  }, [refreshCompletions]);
+  useFocusEffect(
+    useCallback(() => {
+      refreshCompletions();
+    }, [refreshCompletions])
+  );
 
   const upsertCompletion = useCallback(
     async (taskId: number, values: LogValues) => {

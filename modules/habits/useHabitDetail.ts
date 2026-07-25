@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
+import { cancelHabitNotifications, syncHabitNotifications } from './scheduleHabitNotifications';
 import { computeLongestStreak, computePeriodProgress, computeStreak } from './streak';
 import { parseTargetDays, type Habit, type HabitLog, type LogStatus } from './types';
 import type { CreateHabitInput, LogValues } from './useHabits';
@@ -22,9 +24,11 @@ export function useHabitDetail(habitId: number) {
     setLoading(false);
   }, [db, habitId]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const upsertLog = useCallback(
     async (date: string, values: LogValues) => {
@@ -75,11 +79,16 @@ export function useHabitDetail(habitId: number) {
       if (values.targetDays !== undefined) columnMap.target_days = JSON.stringify(values.targetDays);
       if (values.periodTargetCount !== undefined) columnMap.period_target_count = values.periodTargetCount;
       if (values.periodLengthDays !== undefined) columnMap.period_length_days = values.periodLengthDays;
+      if (values.reminderTime !== undefined) columnMap.reminder_time = values.reminderTime;
+      if (values.alarmEnabled !== undefined) columnMap.alarm_enabled = values.alarmEnabled ? 1 : 0;
 
       const keys = Object.keys(columnMap);
       if (keys.length === 0) return;
       const setClause = keys.map((key) => `${key} = ?`).join(', ');
       await db.runAsync(`UPDATE habits SET ${setClause} WHERE id = ?`, [...keys.map((key) => columnMap[key] as never), habitId]);
+      const updated = await db.getFirstAsync<Habit>('SELECT * FROM habits WHERE id = ?', [habitId]);
+      // Best-effort — never block the save on notification scheduling.
+      if (updated) syncHabitNotifications(updated).catch(() => {});
       await refresh();
     },
     [db, habitId, refresh]
@@ -87,10 +96,12 @@ export function useHabitDetail(habitId: number) {
 
   const archiveHabit = useCallback(async () => {
     await db.runAsync('UPDATE habits SET archived = 1 WHERE id = ?', [habitId]);
+    cancelHabitNotifications(habitId).catch(() => {});
   }, [db, habitId]);
 
   const deleteHabit = useCallback(async () => {
     await db.runAsync('DELETE FROM habits WHERE id = ?', [habitId]);
+    cancelHabitNotifications(habitId).catch(() => {});
   }, [db, habitId]);
 
   // "Restart" clears history so streaks/stats start over, without deleting the habit itself.

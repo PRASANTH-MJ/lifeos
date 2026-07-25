@@ -60,7 +60,7 @@ export function TaskForm({
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [important, setImportant] = useState(false);
   const [isRecurring, setIsRecurring] = useState(initialRecurring);
-  const [dueDate, setDueDate] = useState<string | null>(null);
+  const [dueDate, setDueDate] = useState<string | null>(todayKey());
   const [dueTime, setDueTime] = useState<string | null>(null);
   const [reminderOffsetMinutes, setReminderOffsetMinutes] = useState<number | null>(null);
   const [alarmEnabled, setAlarmEnabled] = useState(false);
@@ -82,7 +82,7 @@ export function TaskForm({
       setCategoryId(task.category_id);
       setImportant(Boolean(task.important));
       setIsRecurring(Boolean(task.is_recurring));
-      setDueDate(task.due_date);
+      setDueDate(task.due_date ?? todayKey());
       setDueTime(task.due_time);
       setReminderOffsetMinutes(task.reminder_offset_minutes);
       setAlarmEnabled(Boolean(task.alarm_enabled));
@@ -105,7 +105,7 @@ export function TaskForm({
     return null;
   }
 
-  const canSave = title.trim().length > 0;
+  const canSave = title.trim().length > 0 && (isRecurring || Boolean(dueDate));
 
   const handleSave = async () => {
     setSaving(true);
@@ -159,10 +159,12 @@ export function TaskForm({
         </View>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>Recurring task</Text>
-        <Switch value={isRecurring} onValueChange={setIsRecurring} disabled={lockRecurring} />
-      </View>
+      {!lockRecurring ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>Recurring task</Text>
+          <Switch value={isRecurring} onValueChange={setIsRecurring} />
+        </View>
+      ) : null}
 
       {isRecurring ? (
         <View style={{ gap: theme.spacing.sm }}>
@@ -244,16 +246,11 @@ export function TaskForm({
                 borderColor: dueDate ? theme.colors.moduleTasks : theme.colors.border,
                 backgroundColor: dueDate ? theme.colors.moduleTasksMuted : theme.colors.surface,
               }}>
-              <Ionicons name="calendar-outline" size={18} color={dueDate ? theme.colors.moduleTasks : theme.colors.textTertiary} />
-              <Text style={{ color: dueDate ? theme.colors.moduleTasks : theme.colors.textTertiary, fontSize: theme.typography.size.base }}>
-                {dueDate ? formatDisplayDate(dueDate) : 'No due date'}
+              <Ionicons name="calendar-outline" size={18} color={theme.colors.moduleTasks} />
+              <Text style={{ color: theme.colors.moduleTasks, fontSize: theme.typography.size.base }}>
+                {formatDisplayDate(dueDate ?? todayKey())}
               </Text>
             </Pressable>
-            {dueDate ? (
-              <Pressable onPress={() => setDueDate(null)} hitSlop={8}>
-                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Clear</Text>
-              </Pressable>
-            ) : null}
           </View>
           <TimeField label="Time (optional)" value={dueTime} onChange={setDueTime} />
 

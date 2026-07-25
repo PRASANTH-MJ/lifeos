@@ -8,10 +8,10 @@ import { useAppTheme } from '@/theme';
 
 export default function BreathingScreen() {
   const theme = useAppTheme();
-  const { sessionsThisWeek } = useBreathingLogs();
+  const { sessionsThisWeek, refresh } = useBreathingLogs();
 
   return (
-    <ScreenContainer>
+    <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.xl }}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
           <Ionicons name="pulse" size={22} color={theme.colors.moduleTasks} />

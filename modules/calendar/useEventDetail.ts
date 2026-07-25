@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import type { CalendarEvent } from './types';
@@ -15,9 +16,11 @@ export function useEventDetail(eventId: number) {
     setLoading(false);
   }, [db, eventId]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const updateEvent = useCallback(
     async (values: Partial<Pick<CalendarEvent, 'title' | 'notes' | 'start_time' | 'end_time'>>) => {

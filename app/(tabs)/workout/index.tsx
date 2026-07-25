@@ -21,8 +21,11 @@ import { useAppTheme } from '@/theme';
 export default function WorkoutScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { preferences, loading, updatePreferences } = useWorkoutPreferences();
-  const { completedThisWeek, logCompletion } = useWorkoutLogs();
+  const { preferences, loading, updatePreferences, refresh: refreshPreferences } = useWorkoutPreferences();
+  const { completedThisWeek, logCompletion, refresh: refreshLogs } = useWorkoutLogs();
+  const refreshAll = async () => {
+    await Promise.all([refreshPreferences(), refreshLogs()]);
+  };
 
   const recommended = useMemo(() => {
     if (!preferences) return null;
@@ -45,7 +48,7 @@ export default function WorkoutScreen() {
   }
 
   return (
-    <ScreenContainer>
+    <ScreenContainer onRefresh={refreshAll}>
       <View style={{ gap: theme.spacing.xl }}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
           <Ionicons name="barbell" size={20} color={theme.colors.moduleTasks} />

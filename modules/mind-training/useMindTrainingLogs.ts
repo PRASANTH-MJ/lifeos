@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import type { MindExercise, MindTrainingLog } from './types';
@@ -17,9 +18,11 @@ export function useMindTrainingLogs() {
     setLoading(false);
   }, [db]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const logScore = useCallback(
     async (exerciseKey: string, score: number) => {
@@ -46,13 +49,14 @@ export function useMindTrainingLogs() {
 }
 
 export function useBestScores(exercises: MindExercise[]) {
-  const { logs, loading } = useMindTrainingLogs();
-  return useMemo(() => {
-    const best: Record<string, number | null> = {};
+  const { logs, loading, refresh } = useMindTrainingLogs();
+  const best = useMemo(() => {
+    const result: Record<string, number | null> = {};
     for (const exercise of exercises) {
       const scores = logs.filter((log) => log.exercise_key === exercise.key).map((log) => log.score);
-      best[exercise.key] = scores.length === 0 ? null : exercise.lowerIsBetter ? Math.min(...scores) : Math.max(...scores);
+      result[exercise.key] = scores.length === 0 ? null : exercise.lowerIsBetter ? Math.min(...scores) : Math.max(...scores);
     }
-    return { best, loading };
-  }, [logs, loading, exercises]);
+    return result;
+  }, [logs, exercises]);
+  return { best, loading, refresh };
 }
