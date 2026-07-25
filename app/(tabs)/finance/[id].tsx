@@ -2,9 +2,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 
-import { Button, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Chip, LoadingState, ScreenContainer, TextField } from '@/components';
 import { formatDisplayDate } from '@/lib/date';
-import { formatCurrency, useAccounts, useFinanceCategories, useTransactions } from '@/modules/finance';
+import { formatCurrency, useAccounts, useFinanceCategories, useFinanceLabels, useTransactionLabels, useTransactions } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 export default function TransactionDetailScreen() {
@@ -14,6 +14,8 @@ export default function TransactionDetailScreen() {
   const { transactions, loading, editTransaction, removeTransaction } = useTransactions();
   const { accounts } = useAccounts();
   const { categories } = useFinanceCategories();
+  const { labels } = useFinanceLabels();
+  const { labelIds, setLabelsFor } = useTransactionLabels(id ?? null);
 
   const transaction = transactions.find((t) => t.id === id);
   const [note, setNote] = useState('');
@@ -76,6 +78,27 @@ export default function TransactionDetailScreen() {
           onBlur={() => note !== (transaction.note ?? '') && editTransaction(transaction.id, { note: note.trim() || null })}
           placeholder="Add a note"
         />
+
+        {labels.length > 0 ? (
+          <View style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+              Labels
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+              {labels.map((label) => (
+                <Chip
+                  key={label.id}
+                  label={label.name}
+                  selected={labelIds.includes(label.id)}
+                  onPress={() =>
+                    setLabelsFor(transaction.id, labelIds.includes(label.id) ? labelIds.filter((l) => l !== label.id) : [...labelIds, label.id])
+                  }
+                  color={label.color}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <Button label="Delete transaction" variant="danger" onPress={onDelete} />
       </View>

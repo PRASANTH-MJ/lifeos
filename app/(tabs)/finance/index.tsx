@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Card, EmptyState, LoadingState, ScreenContainer, StatCard } from '@/components';
 import { formatDisplayDate, todayKey } from '@/lib/date';
@@ -156,6 +156,35 @@ export default function FinanceScreen() {
             </Pressable>
           </Link>
         </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
+          {[
+            { href: '/finance/goals' as const, icon: 'flag-outline' as const, label: 'Goals' },
+            { href: '/finance/debts' as const, icon: 'hand-left-outline' as const, label: 'Debts' },
+            { href: '/finance/planned' as const, icon: 'time-outline' as const, label: 'Planned payments' },
+            { href: '/finance/labels' as const, icon: 'pricetag-outline' as const, label: 'Labels' },
+          ].map((item) => (
+            <Link key={item.href} href={item.href} asChild>
+              <Pressable
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingHorizontal: theme.spacing.md,
+                  paddingVertical: theme.spacing.sm,
+                  borderRadius: theme.radius.full,
+                  backgroundColor: theme.colors.surface,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                }}>
+                <Ionicons name={item.icon} size={16} color={theme.colors.textSecondary} />
+                <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                  {item.label}
+                </Text>
+              </Pressable>
+            </Link>
+          ))}
+        </ScrollView>
 
         <View style={{ gap: theme.spacing.sm }}>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>

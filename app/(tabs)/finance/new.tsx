@@ -4,7 +4,7 @@ import { Text, View } from 'react-native';
 
 import { Button, Chip, EmptyState, ScreenContainer, TextField } from '@/components';
 import { addDays, todayKey } from '@/lib/date';
-import { useAccounts, useFinanceCategories, useTransactions, type TransactionType } from '@/modules/finance';
+import { useAccounts, useFinanceCategories, useFinanceLabels, useTransactionLabels, useTransactions, type TransactionType } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 const QUICK_DATES = [
@@ -18,6 +18,8 @@ export default function NewTransactionScreen() {
   const { accounts, loading: loadingAccounts } = useAccounts();
   const { categories } = useFinanceCategories();
   const { addTransaction } = useTransactions();
+  const { labels } = useFinanceLabels();
+  const { setLabelsFor } = useTransactionLabels(null);
 
   const [type, setType] = useState<TransactionType>('expense');
   const [accountId, setAccountId] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export default function NewTransactionScreen() {
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayKey());
   const [note, setNote] = useState('');
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   if (!loadingAccounts && accounts.length === 0) {
@@ -50,7 +53,7 @@ export default function NewTransactionScreen() {
     if (!accountId) return;
     setSaving(true);
     try {
-      await addTransaction({
+      const transactionId = await addTransaction({
         accountId,
         toAccountId: type === 'transfer' ? toAccountId : null,
         categoryId: type === 'transfer' ? null : categoryId,
@@ -59,10 +62,17 @@ export default function NewTransactionScreen() {
         date,
         note: note.trim() || null,
       });
+      if (selectedLabelIds.length > 0) {
+        await setLabelsFor(transactionId, selectedLabelIds);
+      }
       router.back();
     } finally {
       setSaving(false);
     }
+  };
+
+  const toggleLabel = (id: string) => {
+    setSelectedLabelIds((current) => (current.includes(id) ? current.filter((l) => l !== id) : [...current, id]));
   };
 
   return (
@@ -139,6 +149,25 @@ export default function NewTransactionScreen() {
         </View>
 
         <TextField label="Note (optional)" placeholder="Add a note" value={note} onChangeText={setNote} />
+
+        {labels.length > 0 ? (
+          <View style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+              Labels (optional)
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+              {labels.map((label) => (
+                <Chip
+                  key={label.id}
+                  label={label.name}
+                  selected={selectedLabelIds.includes(label.id)}
+                  onPress={() => toggleLabel(label.id)}
+                  color={label.color}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <Button label="Save transaction" onPress={onSave} disabled={!canSave} loading={saving} />
       </View>

@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 15;
+const DATABASE_VERSION = 16;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -664,7 +664,95 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 15;
   }
 
-  // Future modules land here as `if (currentDbVersion === 15) { ... currentDbVersion = 16; }`
+  if (currentDbVersion === 15) {
+    // Four more Finance features, each independent: Goals (savings targets,
+    // tracked separately from the account/transaction ledger — a goal is a
+    // target to save toward, not money that's left an account), Debts
+    // (money lent/borrowed, with partial repayments), Planned payments
+    // (known future income/expense, feeding the Outlook forecast), and
+    // Labels (free-form tags on transactions, independent of category).
+    await db.execAsync(`
+      CREATE TABLE finance_goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        icon TEXT NOT NULL DEFAULT 'flag',
+        color TEXT NOT NULL DEFAULT '#3D8BFF',
+        target_amount REAL NOT NULL CHECK (target_amount > 0),
+        target_date TEXT,
+        current_amount REAL NOT NULL DEFAULT 0,
+        is_closed INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE finance_goal_contributions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        goal_id INTEGER NOT NULL REFERENCES finance_goals(id) ON DELETE CASCADE,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_finance_goal_contributions_goal_id ON finance_goal_contributions(goal_id);
+
+      CREATE TRIGGER trg_finance_goal_contribution_insert AFTER INSERT ON finance_goal_contributions BEGIN
+        UPDATE finance_goals SET current_amount = current_amount + NEW.amount WHERE id = NEW.goal_id;
+      END;
+      CREATE TRIGGER trg_finance_goal_contribution_delete AFTER DELETE ON finance_goal_contributions BEGIN
+        UPDATE finance_goals SET current_amount = current_amount - OLD.amount WHERE id = OLD.goal_id;
+      END;
+
+      CREATE TABLE finance_debts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        person_name TEXT NOT NULL,
+        direction TEXT NOT NULL CHECK (direction IN ('lent', 'borrowed')),
+        amount REAL NOT NULL CHECK (amount > 0),
+        note TEXT,
+        is_closed INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        closed_at TEXT
+      );
+
+      CREATE TABLE finance_debt_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        debt_id INTEGER NOT NULL REFERENCES finance_debts(id) ON DELETE CASCADE,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_finance_debt_payments_debt_id ON finance_debt_payments(debt_id);
+
+      CREATE TABLE finance_planned_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL REFERENCES finance_accounts(id) ON DELETE CASCADE,
+        category_id INTEGER REFERENCES finance_categories(id) ON DELETE SET NULL,
+        type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+        amount REAL NOT NULL CHECK (amount > 0),
+        payee TEXT NOT NULL,
+        frequency TEXT NOT NULL CHECK (frequency IN ('once', 'weekly', 'monthly', 'yearly')),
+        next_date TEXT NOT NULL,
+        notify INTEGER NOT NULL DEFAULT 1,
+        note TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_finance_planned_payments_next_date ON finance_planned_payments(next_date);
+
+      CREATE TABLE finance_labels (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        color TEXT NOT NULL DEFAULT '#8E8E93'
+      );
+
+      CREATE TABLE finance_transaction_labels (
+        transaction_id INTEGER NOT NULL REFERENCES finance_transactions(id) ON DELETE CASCADE,
+        label_id INTEGER NOT NULL REFERENCES finance_labels(id) ON DELETE CASCADE,
+        PRIMARY KEY (transaction_id, label_id)
+      );
+    `);
+
+    currentDbVersion = 16;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 16) { ... currentDbVersion = 17; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

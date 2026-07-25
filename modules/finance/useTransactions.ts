@@ -79,7 +79,7 @@ export function useTransactions(start?: string, end?: string, accountId?: string
       date: string;
       note?: string | null;
     }) => {
-      await db.runAsync(
+      const result = await db.runAsync(
         `INSERT INTO finance_transactions (account_id, category_id, type, amount, date, note, to_account_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -94,6 +94,7 @@ export function useTransactions(start?: string, end?: string, accountId?: string
         ]
       );
       await refresh();
+      return String(result.lastInsertRowId);
     },
     [db, refresh]
   );

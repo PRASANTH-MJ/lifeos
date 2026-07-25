@@ -64,6 +64,61 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   credit: 'Credit',
 };
 
+export type Goal = {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  target_amount: number;
+  target_date: string | null;
+  current_amount: number;
+  is_closed: boolean;
+  created_at: string;
+};
+
+export type GoalContribution = { id: string; goal_id: string; amount: number; date: string; created_at: string };
+
+export type DebtDirection = 'lent' | 'borrowed';
+
+export type Debt = {
+  id: string;
+  person_name: string;
+  direction: DebtDirection;
+  amount: number;
+  note: string | null;
+  is_closed: boolean;
+  created_at: string;
+  closed_at: string | null;
+};
+
+export type DebtPayment = { id: string; debt_id: string; amount: number; date: string; created_at: string };
+
+export type PlannedPaymentFrequency = 'once' | 'weekly' | 'monthly' | 'yearly';
+
+export const FREQUENCY_LABELS: Record<PlannedPaymentFrequency, string> = {
+  once: 'One-time',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+};
+
+export type PlannedPayment = {
+  id: string;
+  account_id: string;
+  category_id: string | null;
+  type: 'income' | 'expense';
+  amount: number;
+  payee: string;
+  frequency: PlannedPaymentFrequency;
+  next_date: string;
+  notify: boolean;
+  note: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type Label = { id: string; name: string; color: string };
+
 export function formatCurrency(amount: number, currency = 'USD'): string {
   return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
 }

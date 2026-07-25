@@ -24,11 +24,12 @@ import {
   useFinanceCashFlow,
   useFinanceCategories,
   useFinanceForecast,
+  useFinancePlannedPayments,
   useFinanceSpendingByPriority,
   useFinanceSummary,
   type SpendingPriority,
 } from '@/modules/finance';
-import { addDays, todayKey } from '@/lib/date';
+import { addDays, formatDisplayDate, todayKey } from '@/lib/date';
 import { useAppTheme } from '@/theme';
 
 const RANGE_OPTIONS = [
@@ -348,6 +349,12 @@ function SpendingSection({ days }: { days: number }) {
 function OutlookSection({ days }: { days: number }) {
   const theme = useAppTheme();
   const { forecast } = useFinanceForecast(days);
+  const { plannedPayments } = useFinancePlannedPayments();
+
+  const rangeEnd = addDays(todayKey(), days - 1);
+  const upcoming = plannedPayments.filter((p) => p.next_date <= rangeEnd).sort((a, b) => a.next_date.localeCompare(b.next_date));
+  const plannedIncome = upcoming.filter((p) => p.type === 'income').reduce((sum, p) => sum + p.amount, 0);
+  const plannedExpense = upcoming.filter((p) => p.type === 'expense').reduce((sum, p) => sum + p.amount, 0);
 
   return (
     <View style={{ gap: theme.spacing.xl }}>
@@ -374,9 +381,49 @@ function OutlookSection({ days }: { days: number }) {
           ]}
         />
         <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-          Based on your income and spending over the selected range, continued forward by the same length of time. LifeOS doesn&apos;t yet track
-          scheduled/recurring bills, so this is a trend projection, not a bill calendar.
+          Based on your income and spending over the selected range, continued forward by the same length of time — a trend projection, not a bill
+          calendar. See below for payments you&apos;ve actually scheduled.
         </Text>
+      </Card>
+
+      <Card style={{ gap: theme.spacing.md }}>
+        <View>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+            Planned Payments
+          </Text>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>What's actually scheduled in this range?</Text>
+        </View>
+        {upcoming.length === 0 ? (
+          <EmptyState icon="time-outline" title="Nothing scheduled in this range" />
+        ) : (
+          <>
+            <View style={{ flexDirection: 'row', gap: theme.spacing.lg }}>
+              <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.sm }}>+{formatCurrencyCompact(plannedIncome)} income</Text>
+              <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.sm }}>-{formatCurrencyCompact(plannedExpense)} expense</Text>
+            </View>
+            <View style={{ gap: theme.spacing.sm }}>
+              {upcoming.map((payment) => (
+                <View key={payment.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View>
+                    <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                      {payment.payee}
+                    </Text>
+                    <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{formatDisplayDate(payment.next_date)}</Text>
+                  </View>
+                  <Text
+                    style={{
+                      color: payment.type === 'income' ? theme.colors.success : theme.colors.danger,
+                      fontSize: theme.typography.size.sm,
+                      fontWeight: theme.typography.weight.semibold,
+                    }}>
+                    {payment.type === 'income' ? '+' : '-'}
+                    {formatCurrencyCompact(payment.amount)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
       </Card>
     </View>
   );
