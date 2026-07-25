@@ -13,12 +13,27 @@ export type Account = {
 
 export type CategoryType = 'income' | 'expense';
 
+export type SpendingPriority = 'must' | 'need' | 'want';
+
 export type Category = {
   id: string;
   name: string;
   type: CategoryType;
   icon: string;
   color: string;
+  priority: SpendingPriority;
+};
+
+export const PRIORITY_LABELS: Record<SpendingPriority, string> = {
+  must: 'Must',
+  need: 'Need',
+  want: 'Want',
+};
+
+export const PRIORITY_COLORS: Record<SpendingPriority, string> = {
+  must: '#FF3B30',
+  need: '#FF9500',
+  want: '#34C759',
 };
 
 export type TransactionType = 'income' | 'expense' | 'transfer';

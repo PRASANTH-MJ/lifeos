@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 14;
+const DATABASE_VERSION = 15;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -643,7 +643,28 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 14;
   }
 
-  // Future modules land here as `if (currentDbVersion === 14) { ... currentDbVersion = 15; }`
+  if (currentDbVersion === 14) {
+    // Finance analytics rework: each expense category gets a Must/Need/Want
+    // priority (for the "nature of spending" breakdown) — plain ADD COLUMN
+    // since it's an unconstrained default, no table rebuild needed.
+    await db.execAsync("ALTER TABLE finance_categories ADD COLUMN priority TEXT NOT NULL DEFAULT 'need'");
+
+    const CATEGORY_PRIORITIES: Record<string, 'must' | 'need' | 'want'> = {
+      Housing: 'must',
+      Health: 'must',
+      Groceries: 'need',
+      Transport: 'need',
+      Shopping: 'want',
+      Entertainment: 'want',
+    };
+    for (const [name, priority] of Object.entries(CATEGORY_PRIORITIES)) {
+      await db.runAsync("UPDATE finance_categories SET priority = ? WHERE name = ? AND type = 'expense'", [priority, name]);
+    }
+
+    currentDbVersion = 15;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 15) { ... currentDbVersion = 16; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 
