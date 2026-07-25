@@ -26,7 +26,7 @@ export type LogValues = {
 
 export function useRecurringTasks() {
   const db = useSQLiteContext();
-  const table = useLocalTable<Task>('tasks', { where: 'archived = 0 AND is_recurring = 1', orderBy: 'created_at ASC' });
+  const table = useLocalTable<Task>('tasks', { where: 'archived = 0 AND is_recurring = 1', orderBy: 'sort_order ASC, created_at ASC' });
   const [completionsByTask, setCompletionsByTask] = useState<Record<number, TaskCompletion[]>>({});
 
   const refreshCompletions = useCallback(async () => {
@@ -90,7 +90,7 @@ export function useRecurringTasks() {
         due_time: null,
         completed_at: null,
         parent_task_id: null,
-        sort_order: 0,
+        sort_order: table.rows.length ? Math.max(...table.rows.map((t) => t.sort_order)) + 1 : 0,
         is_recurring: 1,
         recurrence_frequency: values.recurrenceFrequency,
         recurrence_days: JSON.stringify(values.recurrenceDays ?? []),
@@ -119,12 +119,33 @@ export function useRecurringTasks() {
     return { task, todayLog, due, periodProgress };
   });
 
+  const moveRecurringTask = useCallback(
+    async (id: number, direction: 'up' | 'down') => {
+      const index = table.rows.findIndex((t) => t.id === id);
+      if (index === -1) return;
+      const swapIndex = direction === 'up' ? index - 1 : index + 1;
+      if (swapIndex < 0 || swapIndex >= table.rows.length) return;
+      const a = table.rows[index];
+      const b = table.rows[swapIndex];
+      await db.runAsync('UPDATE tasks SET sort_order = ? WHERE id = ?', [b.sort_order, a.id]);
+      await db.runAsync('UPDATE tasks SET sort_order = ? WHERE id = ?', [a.sort_order, b.id]);
+      await table.refresh();
+    },
+    [db, table]
+  );
+
+  const archiveRecurringTask = useCallback((id: number) => table.update(id, { archived: 1 } as Partial<Task>), [table]);
+  const removeRecurringTask = useCallback((id: number) => table.remove(id), [table]);
+
   return {
     tasks: tasksWithToday,
     loading: table.loading,
     createRecurringTask,
     upsertCompletion,
     clearCompletion,
+    moveRecurringTask,
+    archiveRecurringTask,
+    removeRecurringTask,
     refresh: useCallback(async () => {
       await Promise.all([table.refresh(), refreshCompletions()]);
     }, [table, refreshCompletions]),

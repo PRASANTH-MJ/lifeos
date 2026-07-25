@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Card } from '@/components';
+import { Card, RowActionsMenu } from '@/components';
 import type { Category } from '@/modules/categories';
 import { useAppTheme } from '@/theme';
 import { StreakBadge } from './StreakBadge';
@@ -17,9 +17,29 @@ type Props = {
   category?: Category;
   onToggle: () => void;
   onOpenLogSheet: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
 };
 
-export function HabitListItem({ habit, streak, periodProgress, todayLog, category, onToggle, onOpenLogSheet }: Props) {
+export function HabitListItem({
+  habit,
+  streak,
+  periodProgress,
+  todayLog,
+  category,
+  onToggle,
+  onOpenLogSheet,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+  onArchive,
+  onDelete,
+}: Props) {
   const theme = useAppTheme();
   const due = isDueToday(habit.frequency, parseTargetDays(habit.target_days));
   const isYesNo = habit.tracking_type === 'yesno';
@@ -104,6 +124,17 @@ export function HabitListItem({ habit, streak, periodProgress, todayLog, categor
             />
           </Pressable>
         )
+      ) : null}
+      {onDelete ? (
+        <RowActionsMenu
+          itemLabel={habit.name}
+          canMoveUp={canMoveUp}
+          canMoveDown={canMoveDown}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onArchive={onArchive}
+          onDelete={onDelete}
+        />
       ) : null}
     </Card>
   );

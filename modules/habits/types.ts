@@ -24,6 +24,7 @@ export type Habit = {
    * which days the habit is actually due (a known simplification). */
   reminder_time: string | null;
   alarm_enabled: number;
+  sort_order: number;
   created_at: string;
   archived: number;
 };

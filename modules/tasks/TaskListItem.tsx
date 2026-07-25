@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Card } from '@/components';
+import { Card, RowActionsMenu } from '@/components';
 import { useAppTheme } from '@/theme';
 import { formatDisplayDate } from '@/lib/date';
 import type { Category } from '@/modules/categories';
@@ -15,9 +15,11 @@ type Props = {
   subtaskCount?: { total: number; done: number };
   category?: Category;
   onToggle: () => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
 };
 
-export function TaskListItem({ task, subtaskCount, category, onToggle }: Props) {
+export function TaskListItem({ task, subtaskCount, category, onToggle, onArchive, onDelete }: Props) {
   const theme = useAppTheme();
   const { settings } = useSettings();
   const completed = Boolean(task.completed_at);
@@ -78,6 +80,7 @@ export function TaskListItem({ task, subtaskCount, category, onToggle }: Props) 
           </View>
         </Pressable>
       </Link>
+      {onDelete ? <RowActionsMenu itemLabel={task.title} onArchive={onArchive} onDelete={onDelete} /> : null}
     </Card>
   );
 }

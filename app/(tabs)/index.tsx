@@ -2,10 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Card, Chip, ScreenContainer, useTabSwipeNavigation } from '@/components';
 import { addDays, buildMonthGrid, monthCursorOf, shiftMonth, todayKey, weekdayOf } from '@/lib/date';
+import { useCategories } from '@/modules/categories';
 import {
   HabitLogSheet,
   isDue,
@@ -49,7 +50,9 @@ export default function TodayScreen() {
 
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [categoryFilter, setCategoryFilter] = useState<number | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const { categories } = useCategories();
   const [habitsDue, setHabitsDue] = useState<{ habit: Habit; log?: HabitLog }[]>([]);
   const [tasksDue, setTasksDue] = useState<{ task: Task; completion?: TaskCompletion; isRecurring: boolean }[]>([]);
   const [allHabits, setAllHabits] = useState<Habit[]>([]);
@@ -156,8 +159,10 @@ export default function TodayScreen() {
   const query = searchQuery.trim().toLowerCase();
   const matchesQuery = (label: string) => !query || label.toLowerCase().includes(query);
 
+  const matchesCategory = (categoryId: number | null) => categoryFilter === 'all' || categoryId === categoryFilter;
+
   const filteredHabits = (filter === 'tasks' || filter === 'important' || filter === 'recurring' ? [] : habitsDue).filter(
-    ({ habit }) => matchesQuery(habit.name)
+    ({ habit }) => matchesQuery(habit.name) && matchesCategory(habit.category_id)
   );
   const filteredTasks = (
     filter === 'habits'
@@ -169,7 +174,12 @@ export default function TodayScreen() {
           : filter === 'recurring'
             ? tasksDue.filter((t) => t.isRecurring)
             : tasksDue
-  ).filter(({ task }) => matchesQuery(task.title));
+  ).filter(({ task }) => matchesQuery(task.title) && matchesCategory(task.category_id));
+
+  const usedCategoryIds = new Set(
+    [...habitsDue.map((h) => h.habit.category_id), ...tasksDue.map((t) => t.task.category_id)].filter((id): id is number => id != null)
+  );
+  const usedCategories = categories.filter((c) => usedCategoryIds.has(c.id));
 
   const weekStart = weekStartOf(selectedDate);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -272,6 +282,21 @@ export default function TodayScreen() {
             <Chip key={key} label={FILTER_LABELS[key]} selected={filter === key} onPress={() => setFilter(key)} />
           ))}
         </View>
+
+        {usedCategories.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
+            <Chip label="All lists" selected={categoryFilter === 'all'} onPress={() => setCategoryFilter('all')} />
+            {usedCategories.map((category) => (
+              <Chip
+                key={category.id}
+                label={category.name}
+                selected={categoryFilter === category.id}
+                color={category.color}
+                onPress={() => setCategoryFilter(category.id)}
+              />
+            ))}
+          </ScrollView>
+        ) : null}
 
         {!loading && filteredHabits.length === 0 && filteredTasks.length === 0 ? (
           <Card>

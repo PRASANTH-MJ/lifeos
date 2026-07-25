@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 17;
+const DATABASE_VERSION = 18;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -776,7 +776,29 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 17;
   }
 
-  // Future modules land here as `if (currentDbVersion === 17) { ... currentDbVersion = 18; }`
+  if (currentDbVersion === 17) {
+    // Manual drag-style reordering for Habits and Recurring tasks (both otherwise ordered only
+    // by created_at) — backfilled from the current created_at order so existing lists don't
+    // visually jump the moment this ships; from here on, moveHabit/moveRecurringTask swap two
+    // rows' sort_order directly.
+    await db.execAsync("ALTER TABLE habits ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0");
+    await db.execAsync(`
+      UPDATE habits SET sort_order = (
+        SELECT COUNT(*) FROM habits h2
+        WHERE h2.created_at < habits.created_at OR (h2.created_at = habits.created_at AND h2.id < habits.id)
+      )
+    `);
+    await db.execAsync(`
+      UPDATE tasks SET sort_order = (
+        SELECT COUNT(*) FROM tasks t2
+        WHERE t2.is_recurring = 1 AND (t2.created_at < tasks.created_at OR (t2.created_at = tasks.created_at AND t2.id < tasks.id))
+      ) WHERE is_recurring = 1
+    `);
+
+    currentDbVersion = 18;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 18) { ... currentDbVersion = 19; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

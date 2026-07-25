@@ -1,23 +1,30 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
-import { EmptyState, ScreenContainer, useTabSwipeNavigation } from '@/components';
+import { Chip, EmptyState, ScreenContainer, useTabSwipeNavigation } from '@/components';
 import { todayKey } from '@/lib/date';
 import { useCategories } from '@/modules/categories';
 import { HabitListItem, HabitLogSheet, useHabits } from '@/modules/habits';
 import { useAppTheme } from '@/theme';
 
+type FilterKey = 'all' | number;
+
 export default function HabitsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const swipeHandlers = useTabSwipeNavigation('/habits');
-  const { habits, loading, toggleToday, upsertLog, clearLog, refresh } = useHabits();
+  const { habits, loading, toggleToday, upsertLog, clearLog, moveHabit, archiveHabit, removeHabit, refresh } = useHabits();
   const { categories } = useCategories('habit');
   const [sheetHabitId, setSheetHabitId] = useState<number | null>(null);
+  const [filter, setFilter] = useState<FilterKey>('all');
 
   const sheetEntry = habits.find((entry) => entry.habit.id === sheetHabitId);
+  const usedCategoryIds = new Set(habits.map((h) => h.habit.category_id).filter((id): id is number => id != null));
+  const usedCategories = categories.filter((c) => usedCategoryIds.has(c.id));
+
+  const filteredHabits = filter === 'all' ? habits : habits.filter(({ habit }) => habit.category_id === filter);
 
   return (
     <View style={{ flex: 1 }} {...swipeHandlers}>
@@ -31,19 +38,45 @@ export default function HabitsScreen() {
             onPressCta={() => router.push('/habits/new')}
           />
         ) : (
-          <View style={{ gap: theme.spacing.md }}>
-            {habits.map(({ habit, streak, periodProgress, todayLog }) => (
-              <HabitListItem
-                key={habit.id}
-                habit={habit}
-                streak={streak}
-                periodProgress={periodProgress}
-                todayLog={todayLog}
-                category={categories.find((c) => c.id === habit.category_id)}
-                onToggle={() => toggleToday(habit)}
-                onOpenLogSheet={() => setSheetHabitId(habit.id)}
-              />
-            ))}
+          <View style={{ gap: theme.spacing.lg }}>
+            {usedCategories.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
+                <Chip label="All" selected={filter === 'all'} onPress={() => setFilter('all')} />
+                {usedCategories.map((category) => (
+                  <Chip
+                    key={category.id}
+                    label={category.name}
+                    selected={filter === category.id}
+                    color={category.color}
+                    onPress={() => setFilter(category.id)}
+                  />
+                ))}
+              </ScrollView>
+            ) : null}
+
+            <View style={{ gap: theme.spacing.md }}>
+              {filteredHabits.map(({ habit, streak, periodProgress, todayLog }) => {
+                const fullIndex = habits.findIndex((h) => h.habit.id === habit.id);
+                return (
+                  <HabitListItem
+                    key={habit.id}
+                    habit={habit}
+                    streak={streak}
+                    periodProgress={periodProgress}
+                    todayLog={todayLog}
+                    category={categories.find((c) => c.id === habit.category_id)}
+                    onToggle={() => toggleToday(habit)}
+                    onOpenLogSheet={() => setSheetHabitId(habit.id)}
+                    canMoveUp={filter === 'all' && fullIndex > 0}
+                    canMoveDown={filter === 'all' && fullIndex < habits.length - 1}
+                    onMoveUp={filter === 'all' ? () => moveHabit(habit.id, 'up') : undefined}
+                    onMoveDown={filter === 'all' ? () => moveHabit(habit.id, 'down') : undefined}
+                    onArchive={() => archiveHabit(habit.id)}
+                    onDelete={() => removeHabit(habit.id)}
+                  />
+                );
+              })}
+            </View>
           </View>
         )}
 

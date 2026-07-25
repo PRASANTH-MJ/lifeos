@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Card } from '@/components';
+import { Card, RowActionsMenu } from '@/components';
 import type { Category } from '@/modules/categories';
 import { useAppTheme } from '@/theme';
 import { PriorityChip } from './PriorityChip';
@@ -15,9 +15,28 @@ type Props = {
   periodProgress: number | null;
   category?: Category;
   onOpenLogSheet: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
 };
 
-export function RecurringTaskListItem({ task, todayLog, due, periodProgress, category, onOpenLogSheet }: Props) {
+export function RecurringTaskListItem({
+  task,
+  todayLog,
+  due,
+  periodProgress,
+  category,
+  onOpenLogSheet,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+  onArchive,
+  onDelete,
+}: Props) {
   const theme = useAppTheme();
 
   return (
@@ -76,6 +95,17 @@ export function RecurringTaskListItem({ task, todayLog, due, periodProgress, cat
             color={todayLog ? '#fff' : theme.colors.textTertiary}
           />
         </Pressable>
+      ) : null}
+      {onDelete ? (
+        <RowActionsMenu
+          itemLabel={task.title}
+          canMoveUp={canMoveUp}
+          canMoveDown={canMoveDown}
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onArchive={onArchive}
+          onDelete={onDelete}
+        />
       ) : null}
     </Card>
   );

@@ -94,12 +94,17 @@ export function useTasks() {
     [table]
   );
 
+  const archiveTask = useCallback((id: number) => table.update(id, { archived: 1 } as Partial<Task>), [table]);
+  const removeTask = useCallback((id: number) => table.remove(id), [table]);
+
   return {
     tasks: table.rows,
     loading: table.loading,
     subtaskCounts,
     createTask,
     toggleComplete,
+    archiveTask,
+    removeTask,
     refresh: useCallback(async () => {
       await Promise.all([table.refresh(), refreshSubtaskCounts()]);
     }, [table, refreshSubtaskCounts]),

@@ -45,7 +45,7 @@ export type LogValues = {
 
 export function useHabits() {
   const db = useSQLiteContext();
-  const table = useLocalTable<Habit>('habits', { where: 'archived = 0', orderBy: 'created_at ASC' });
+  const table = useLocalTable<Habit>('habits', { where: 'archived = 0', orderBy: 'sort_order ASC, created_at ASC' });
   const [logsByHabit, setLogsByHabit] = useState<Record<number, HabitLog[]>>({});
 
   const refreshLogs = useCallback(async () => {
@@ -128,6 +128,7 @@ export function useHabits() {
         period_length_days: values.periodLengthDays ?? null,
         reminder_time: values.reminderTime ?? null,
         alarm_enabled: values.alarmEnabled ? 1 : 0,
+        sort_order: table.rows.length ? Math.max(...table.rows.map((h) => h.sort_order)) + 1 : 0,
         created_at: new Date().toISOString(),
         archived: 0,
       } as Partial<Habit>);
@@ -163,6 +164,26 @@ export function useHabits() {
     return { habit, streak, todayLog, periodProgress };
   });
 
+  // Swaps sort_order with the adjacent habit in the full (unfiltered) list — reordering is always
+  // relative to that global order, regardless of which category filter chip is active on screen.
+  const moveHabit = useCallback(
+    async (id: number, direction: 'up' | 'down') => {
+      const index = table.rows.findIndex((h) => h.id === id);
+      if (index === -1) return;
+      const swapIndex = direction === 'up' ? index - 1 : index + 1;
+      if (swapIndex < 0 || swapIndex >= table.rows.length) return;
+      const a = table.rows[index];
+      const b = table.rows[swapIndex];
+      await db.runAsync('UPDATE habits SET sort_order = ? WHERE id = ?', [b.sort_order, a.id]);
+      await db.runAsync('UPDATE habits SET sort_order = ? WHERE id = ?', [a.sort_order, b.id]);
+      await table.refresh();
+    },
+    [db, table]
+  );
+
+  const archiveHabit = useCallback((id: number) => table.update(id, { archived: 1 } as Partial<Habit>), [table]);
+  const removeHabit = useCallback((id: number) => table.remove(id), [table]);
+
   return {
     habits: habitsWithStats,
     loading: table.loading,
@@ -170,6 +191,9 @@ export function useHabits() {
     upsertLog,
     clearLog,
     createHabit,
+    moveHabit,
+    archiveHabit,
+    removeHabit,
     refresh: useCallback(async () => {
       await Promise.all([table.refresh(), refreshLogs()]);
     }, [table, refreshLogs]),
