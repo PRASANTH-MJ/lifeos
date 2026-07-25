@@ -3,7 +3,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { EmptyState, ScreenContainer } from '@/components';
+import { EmptyState, ScreenContainer, useTabSwipeNavigation } from '@/components';
 import { todayKey } from '@/lib/date';
 import { useCategories } from '@/modules/categories';
 import { RecurringTaskListItem, TaskListItem, TaskLogSheet, useRecurringTasks, useTasks } from '@/modules/tasks';
@@ -12,6 +12,7 @@ import { useAppTheme } from '@/theme';
 export default function TasksScreen() {
   const theme = useAppTheme();
   const router = useRouter();
+  const swipeHandlers = useTabSwipeNavigation('/tasks');
   const { tasks, loading, subtaskCounts, toggleComplete } = useTasks();
   const { tasks: recurringTasks, loading: loadingRecurring, upsertCompletion, clearCompletion } = useRecurringTasks();
   const { categories } = useCategories('task');
@@ -21,6 +22,7 @@ export default function TasksScreen() {
   const sheetEntry = recurringTasks.find((entry) => entry.task.id === sheetTaskId);
 
   return (
+    <View style={{ flex: 1 }} {...swipeHandlers}>
     <ScreenContainer>
       <Stack.Screen
         options={{
@@ -101,5 +103,6 @@ export default function TasksScreen() {
         />
       ) : null}
     </ScreenContainer>
+    </View>
   );
 }

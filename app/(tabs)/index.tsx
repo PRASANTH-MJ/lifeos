@@ -4,7 +4,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 
-import { Card, Chip, ScreenContainer } from '@/components';
+import { Card, Chip, ScreenContainer, useTabSwipeNavigation } from '@/components';
 import { addDays, buildMonthGrid, monthCursorOf, shiftMonth, todayKey, weekdayOf } from '@/lib/date';
 import {
   HabitLogSheet,
@@ -45,6 +45,7 @@ export default function TodayScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const db = useSQLiteContext();
+  const swipeHandlers = useTabSwipeNavigation('/');
 
   const [selectedDate, setSelectedDate] = useState(todayKey());
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -179,7 +180,7 @@ export default function TodayScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1 }} {...swipeHandlers}>
     <ScreenContainer>
       <View style={{ gap: theme.spacing.xl }}>
         <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>

@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { EmptyState, ScreenContainer } from '@/components';
+import { EmptyState, ScreenContainer, useTabSwipeNavigation } from '@/components';
 import { todayKey } from '@/lib/date';
 import { useCategories } from '@/modules/categories';
 import { HabitListItem, HabitLogSheet, useHabits } from '@/modules/habits';
@@ -12,6 +12,7 @@ import { useAppTheme } from '@/theme';
 export default function HabitsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
+  const swipeHandlers = useTabSwipeNavigation('/habits');
   const { habits, loading, toggleToday, upsertLog, clearLog } = useHabits();
   const { categories } = useCategories('habit');
   const [sheetHabitId, setSheetHabitId] = useState<number | null>(null);
@@ -19,7 +20,7 @@ export default function HabitsScreen() {
   const sheetEntry = habits.find((entry) => entry.habit.id === sheetHabitId);
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1 }} {...swipeHandlers}>
       <ScreenContainer>
         {!loading && habits.length === 0 ? (
           <EmptyState

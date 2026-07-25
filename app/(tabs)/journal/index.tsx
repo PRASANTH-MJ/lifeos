@@ -3,7 +3,7 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Card, EmptyState, HeatmapCalendar, ScreenContainer, TextField } from '@/components';
+import { Card, EmptyState, HeatmapCalendar, ScreenContainer, TextField, useTabSwipeNavigation } from '@/components';
 import { toDateKey } from '@/lib/date';
 import { JournalListItem, useJournal } from '@/modules/journal';
 import { useAppTheme } from '@/theme';
@@ -11,6 +11,7 @@ import { useAppTheme } from '@/theme';
 export default function JournalScreen() {
   const theme = useAppTheme();
   const router = useRouter();
+  const swipeHandlers = useTabSwipeNavigation('/journal');
   const [search, setSearch] = useState('');
   const { entries, loading } = useJournal(search);
 
@@ -24,6 +25,7 @@ export default function JournalScreen() {
   }, [entries]);
 
   return (
+    <View style={{ flex: 1 }} {...swipeHandlers}>
     <ScreenContainer>
       <Stack.Screen
         options={{
@@ -62,5 +64,6 @@ export default function JournalScreen() {
         )}
       </View>
     </ScreenContainer>
+    </View>
   );
 }

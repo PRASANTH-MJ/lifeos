@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, ScreenContainer } from '@/components';
+import { Card, ScreenContainer, useTabSwipeNavigation } from '@/components';
 import { useAppTheme } from '@/theme';
 
 type ModuleHref = '/calendar' | '/meditation' | '/breathing' | '/affirmations' | '/finance' | '/food' | '/mind-training' | '/workout' | '/timer' | '/shopping' | '/settings' | '/analytics';
@@ -23,6 +23,7 @@ type Section = {
 
 export default function MoreScreen() {
   const theme = useAppTheme();
+  const swipeHandlers = useTabSwipeNavigation('/more');
 
   const sections: Section[] = [
     {
@@ -144,6 +145,7 @@ export default function MoreScreen() {
   ];
 
   return (
+    <View style={{ flex: 1 }} {...swipeHandlers}>
     <ScreenContainer>
       <View style={{ gap: theme.spacing.xl }}>
         <Text
@@ -205,5 +207,6 @@ export default function MoreScreen() {
         ))}
       </View>
     </ScreenContainer>
+    </View>
   );
 }

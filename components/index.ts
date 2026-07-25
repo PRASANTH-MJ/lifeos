@@ -11,3 +11,4 @@ export { LoadingState } from './LoadingState';
 export { HeatmapCalendar } from './HeatmapCalendar';
 export { DonutChart } from './DonutChart';
 export { RangeChip, Legend } from './StatsBits';
+export { useTabSwipeNavigation, type TabPath } from './useTabSwipeNavigation';
