@@ -3,10 +3,10 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
-import { Card, EmptyState, HeatmapCalendar, ScreenContainer, TextField, useTabSwipeNavigation } from '@/components';
+import { Card, EmptyState, ScreenContainer, TextField, useTabSwipeNavigation } from '@/components';
 import { formatDisplayDate, monthCursorOf, shiftMonth, toDateKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
-import { JournalListItem, useJournal } from '@/modules/journal';
+import { computeWeeklyStreak, JournalListItem, useJournal } from '@/modules/journal';
 import { useAppTheme } from '@/theme';
 
 export default function JournalScreen() {
@@ -27,6 +27,11 @@ export default function JournalScreen() {
     }
     return counts;
   }, [entries]);
+
+  const weeklyStreak = useMemo(
+    () => computeWeeklyStreak(Object.keys(heatmapValues), toDateKey(new Date())),
+    [heatmapValues]
+  );
 
   const filteredEntries = dateFilter ? entries.filter((entry) => toDateKey(new Date(entry.created_at)) === dateFilter) : entries;
 
@@ -57,8 +62,13 @@ export default function JournalScreen() {
       />
       <View style={{ gap: theme.spacing.lg }}>
         {!search && entries.length > 0 ? (
-          <Card>
-            <HeatmapCalendar values={heatmapValues} accentColor={theme.colors.moduleJournal} maxIntensity={3} />
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <Ionicons name="flame" size={22} color={theme.colors.moduleJournal} />
+            <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>
+              {weeklyStreak > 0
+                ? `${weeklyStreak} week${weeklyStreak === 1 ? '' : 's'} of journaling in a row`
+                : 'Write this week to start a streak'}
+            </Text>
           </Card>
         ) : null}
 
