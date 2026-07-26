@@ -26,6 +26,7 @@ export default function BreathingScreen() {
   };
 
   return (
+    <View style={{ flex: 1 }}>
     <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.xl }}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
@@ -73,7 +74,7 @@ export default function BreathingScreen() {
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
             <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
             <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Log a past session
+              Add calendar entry
             </Text>
             <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
           </Card>
@@ -82,7 +83,7 @@ export default function BreathingScreen() {
 
       <LogPastEntryModal
         visible={logModalVisible}
-        title="Log a past session"
+        title="Add calendar entry"
         items={BREATHING_PATTERNS.map((p) => ({ key: p.key, label: p.title }))}
         selectedItemKey={logPatternKey}
         onSelectItem={setLogPatternKey}
@@ -94,5 +95,32 @@ export default function BreathingScreen() {
         moduleMutedColor={theme.colors.moduleTasksMuted}
       />
     </ScreenContainer>
+
+    <Pressable
+      onPress={() => {
+        setLogPatternKey(BREATHING_PATTERNS[0].key);
+        setLogDate(todayKey());
+        setLogModalVisible(true);
+      }}
+      accessibilityLabel="Add calendar entry"
+      style={{
+        position: 'absolute',
+        right: theme.spacing.xl,
+        bottom: theme.spacing.xl,
+        width: 56,
+        height: 56,
+        borderRadius: theme.radius.full,
+        backgroundColor: theme.colors.moduleTasks,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 4,
+      }}>
+      <Ionicons name="add" size={28} color="#fff" />
+    </Pressable>
+    </View>
   );
 }

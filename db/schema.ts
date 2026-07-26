@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 18;
+const DATABASE_VERSION = 19;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -798,7 +798,50 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 18;
   }
 
-  // Future modules land here as `if (currentDbVersion === 18) { ... currentDbVersion = 19; }`
+  if (currentDbVersion === 18) {
+    // Multiple named shopping lists instead of one flat list — existing items all move into a
+    // single "Shopping" list so nothing already on someone's list disappears.
+    await db.execAsync(`
+      CREATE TABLE shopping_lists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+    const defaultListId = await db.runAsync('INSERT INTO shopping_lists (name, created_at) VALUES (?, ?)', [
+      'Shopping',
+      new Date().toISOString(),
+    ]);
+
+    await db.execAsync('PRAGMA foreign_keys = OFF');
+    await db.execAsync(`
+      CREATE TABLE shopping_items_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        list_id INTEGER NOT NULL REFERENCES shopping_lists(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        quantity TEXT,
+        price REAL,
+        checked INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+    `);
+    await db.runAsync(
+      `INSERT INTO shopping_items_new (id, list_id, name, quantity, price, checked, sort_order, created_at)
+       SELECT id, ?, name, quantity, price, checked, sort_order, created_at FROM shopping_items`,
+      [defaultListId.lastInsertRowId]
+    );
+    await db.execAsync(`
+      DROP TABLE shopping_items;
+      ALTER TABLE shopping_items_new RENAME TO shopping_items;
+      CREATE INDEX idx_shopping_items_list_id ON shopping_items(list_id);
+    `);
+    await db.execAsync('PRAGMA foreign_keys = ON');
+
+    currentDbVersion = 19;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 19) { ... currentDbVersion = 20; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

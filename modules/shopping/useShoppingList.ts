@@ -8,14 +8,17 @@ function itemTotal(item: ShoppingItem): number {
   return (item.price ?? 0) * qty;
 }
 
-export function useShoppingList() {
+export function useShoppingList(listId: number) {
   const table = useLocalTable<ShoppingItem>('shopping_items', {
+    where: 'list_id = ?',
+    params: [listId],
     orderBy: 'checked ASC, sort_order ASC, created_at ASC',
   });
 
   const addItem = useCallback(
     async (name: string, quantity?: string | null, price?: number | null) => {
       await table.insert({
+        list_id: listId,
         name,
         quantity: quantity?.trim() || '1',
         price: price ?? null,
@@ -24,7 +27,7 @@ export function useShoppingList() {
         created_at: new Date().toISOString(),
       } as Partial<ShoppingItem>);
     },
-    [table]
+    [table, listId]
   );
 
   const toggleChecked = useCallback(

@@ -23,6 +23,7 @@ export default function MeditationScreen() {
   };
 
   return (
+    <View style={{ flex: 1 }}>
     <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.xl }}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
@@ -89,7 +90,7 @@ export default function MeditationScreen() {
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
             <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
             <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Log a past session
+              Add calendar entry
             </Text>
             <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
           </Card>
@@ -98,7 +99,7 @@ export default function MeditationScreen() {
 
       <LogPastEntryModal
         visible={logModalVisible}
-        title="Log a past session"
+        title="Add calendar entry"
         items={MEDITATION_SESSIONS.map((s) => ({ key: s.key, label: s.title }))}
         selectedItemKey={logSessionKey}
         onSelectItem={setLogSessionKey}
@@ -110,5 +111,32 @@ export default function MeditationScreen() {
         moduleMutedColor={theme.colors.moduleJournalMuted}
       />
     </ScreenContainer>
+
+    <Pressable
+      onPress={() => {
+        setLogSessionKey(MEDITATION_SESSIONS[0].key);
+        setLogDate(todayKey());
+        setLogModalVisible(true);
+      }}
+      accessibilityLabel="Add calendar entry"
+      style={{
+        position: 'absolute',
+        right: theme.spacing.xl,
+        bottom: theme.spacing.xl,
+        width: 56,
+        height: 56,
+        borderRadius: theme.radius.full,
+        backgroundColor: theme.colors.moduleJournal,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 4,
+      }}>
+      <Ionicons name="add" size={28} color="#fff" />
+    </Pressable>
+    </View>
   );
 }

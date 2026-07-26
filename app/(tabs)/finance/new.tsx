@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 
 import { Button, Chip, EmptyState, ScreenContainer, TextField } from '@/components';
-import { addDays, todayKey } from '@/lib/date';
+import { addDays, formatDisplayDate, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
+import { CalendarMonthGrid } from '@/modules/calendar';
 import { useAccounts, useFinanceCategories, useFinanceLabels, useTransactionLabels, useTransactions, type TransactionType } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
@@ -30,6 +31,8 @@ export default function NewTransactionScreen() {
   const [note, setNote] = useState('');
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
 
   if (!loadingAccounts && accounts.length === 0) {
     return (
@@ -141,10 +144,18 @@ export default function NewTransactionScreen() {
 
         <View style={{ gap: theme.spacing.sm }}>
           <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>Date</Text>
-          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm, alignItems: 'center' }}>
             {QUICK_DATES.map((option) => (
               <Chip key={option.label} label={option.label} selected={date === option.value} onPress={() => setDate(option.value)} />
             ))}
+            <Chip
+              label={QUICK_DATES.some((option) => option.value === date) ? 'Choose date' : formatDisplayDate(date)}
+              selected={!QUICK_DATES.some((option) => option.value === date)}
+              onPress={() => {
+                setDateCursor(monthCursorOf(date));
+                setDatePickerVisible(true);
+              }}
+            />
           </View>
         </View>
 
@@ -171,6 +182,32 @@ export default function NewTransactionScreen() {
 
         <Button label="Save transaction" onPress={onSave} disabled={!canSave} loading={saving} />
       </View>
+
+      <Modal visible={datePickerVisible} animationType="slide" transparent onRequestClose={() => setDatePickerVisible(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay }} onPress={() => setDatePickerVisible(false)} />
+          <View
+            style={{
+              backgroundColor: theme.colors.surface,
+              borderTopLeftRadius: theme.radius.xl,
+              borderTopRightRadius: theme.radius.xl,
+              padding: theme.spacing.xl,
+              gap: theme.spacing.lg,
+            }}>
+            <CalendarMonthGrid
+              year={dateCursor.year}
+              month={dateCursor.month}
+              selectedDate={date}
+              markedDates={new Set([date])}
+              onSelectDate={(selected) => {
+                setDate(selected);
+                setDatePickerVisible(false);
+              }}
+              onChangeMonth={(delta) => setDateCursor((cursor) => shiftMonth(cursor, delta))}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }

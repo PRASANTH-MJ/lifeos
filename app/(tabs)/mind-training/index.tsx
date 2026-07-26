@@ -27,6 +27,7 @@ export default function MindTrainingScreen() {
   };
 
   return (
+    <View style={{ flex: 1 }}>
     <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.md }}>
         {MIND_EXERCISES.map((exercise) => (
@@ -71,7 +72,7 @@ export default function MindTrainingScreen() {
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
             <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
             <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Log a past result
+              Add calendar entry
             </Text>
             <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
           </Card>
@@ -80,7 +81,7 @@ export default function MindTrainingScreen() {
 
       <LogPastEntryModal
         visible={logModalVisible}
-        title="Log a past result"
+        title="Add calendar entry"
         items={MIND_EXERCISES.map((e) => ({ key: e.key, label: e.title }))}
         selectedItemKey={logExerciseKey}
         onSelectItem={setLogExerciseKey}
@@ -102,5 +103,33 @@ export default function MindTrainingScreen() {
         }
       />
     </ScreenContainer>
+
+    <Pressable
+      onPress={() => {
+        setLogExerciseKey(MIND_EXERCISES[0].key);
+        setLogDate(todayKey());
+        setLogScoreText('');
+        setLogModalVisible(true);
+      }}
+      accessibilityLabel="Add calendar entry"
+      style={{
+        position: 'absolute',
+        right: theme.spacing.xl,
+        bottom: theme.spacing.xl,
+        width: 56,
+        height: 56,
+        borderRadius: theme.radius.full,
+        backgroundColor: theme.colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 4,
+      }}>
+      <Ionicons name="add" size={28} color="#fff" />
+    </Pressable>
+    </View>
   );
 }

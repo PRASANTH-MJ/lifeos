@@ -1,2 +1,3 @@
 export { useShoppingList } from './useShoppingList';
-export type { ShoppingItem } from './types';
+export { useShoppingLists, type ShoppingListSummary } from './useShoppingLists';
+export type { ShoppingItem, ShoppingList } from './types';
