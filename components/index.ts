@@ -18,3 +18,4 @@ export { RangeChip, Legend } from './StatsBits';
 export { useTabSwipeNavigation, type TabPath } from './useTabSwipeNavigation';
 export { LogPastEntryModal } from './LogPastEntryModal';
 export { RowActionsMenu } from './RowActionsMenu';
+export { ReminderCard } from './ReminderCard';

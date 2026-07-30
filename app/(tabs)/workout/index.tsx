@@ -3,8 +3,9 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, Chip, LoadingState, LogPastEntryModal, ScreenContainer } from '@/components';
+import { Card, Chip, LoadingState, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
 import { dayOfYear, todayKey } from '@/lib/date';
+import { useModuleReminder } from '@/modules/reminders';
 import {
   EQUIPMENT_OPTIONS,
   GOALS,
@@ -13,6 +14,7 @@ import {
   equipmentLabel,
   goalLabel,
   pickRecommendedWorkout,
+  useCustomWorkouts,
   useWorkoutLogs,
   useWorkoutPreferences,
 } from '@/modules/workout';
@@ -23,8 +25,11 @@ export default function WorkoutScreen() {
   const router = useRouter();
   const { preferences, loading, updatePreferences, refresh: refreshPreferences } = useWorkoutPreferences();
   const { completedThisWeek, logCompletion, refresh: refreshLogs } = useWorkoutLogs();
+  const { workouts: customWorkouts, refresh: refreshCustom } = useCustomWorkouts();
+  const reminder = useModuleReminder('workout', 'Time to work out', "Let's get moving today.");
+  const allWorkouts = useMemo(() => [...WORKOUTS, ...customWorkouts], [customWorkouts]);
   const refreshAll = async () => {
-    await Promise.all([refreshPreferences(), refreshLogs()]);
+    await Promise.all([refreshPreferences(), refreshLogs(), refreshCustom()]);
   };
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logWorkoutKey, setLogWorkoutKey] = useState<string | null>(null);
@@ -38,8 +43,8 @@ export default function WorkoutScreen() {
 
   const recommended = useMemo(() => {
     if (!preferences) return null;
-    return pickRecommendedWorkout(WORKOUTS, preferences, dayOfYear(new Date()));
-  }, [preferences]);
+    return pickRecommendedWorkout(allWorkouts, preferences, dayOfYear(new Date()));
+  }, [preferences, allWorkouts]);
 
   const toggleEquipment = (equipment: (typeof EQUIPMENT_OPTIONS)[number]) => {
     if (!preferences) return;
@@ -65,6 +70,8 @@ export default function WorkoutScreen() {
             {completedThisWeek} workouts completed this week
           </Text>
         </Card>
+
+        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.moduleTasks} />
 
         {recommended ? (
           <View style={{ gap: theme.spacing.sm }}>
@@ -155,9 +162,19 @@ export default function WorkoutScreen() {
           </Card>
         </Pressable>
 
+        <Pressable onPress={() => router.push('/workout/new')}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <Ionicons name="add-circle-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Create your own workout
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+          </Card>
+        </Pressable>
+
         <Pressable
           onPress={() => {
-            setLogWorkoutKey(WORKOUTS[0].key);
+            setLogWorkoutKey(allWorkouts[0]?.key ?? null);
             setLogDate(todayKey());
             setLogModalVisible(true);
           }}>
@@ -174,7 +191,7 @@ export default function WorkoutScreen() {
       <LogPastEntryModal
         visible={logModalVisible}
         title="Log a past workout"
-        items={WORKOUTS.map((w) => ({ key: w.key, label: w.title }))}
+        items={allWorkouts.map((w) => ({ key: w.key, label: w.title }))}
         selectedItemKey={logWorkoutKey}
         onSelectItem={setLogWorkoutKey}
         date={logDate}

@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 19;
+const DATABASE_VERSION = 20;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -841,7 +841,37 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 19;
   }
 
-  // Future modules land here as `if (currentDbVersion === 19) { ... currentDbVersion = 20; }`
+  if (currentDbVersion === 19) {
+    // One generic table backs a daily reminder/alarm toggle for any module that wants one
+    // (Journal, Meditation, Breathing, Mind Training, Workout, Food, Affirmations) — a single
+    // row per module keyed by a stable string, rather than seven near-identical tables.
+    await db.execAsync(`
+      CREATE TABLE module_reminders (
+        module_key TEXT PRIMARY KEY,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        reminder_time TEXT,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    // User-created workouts, alongside the built-in WORKOUTS catalog (which stays in code —
+    // it's fixed reference content, not user data).
+    await db.execAsync(`
+      CREATE TABLE custom_workouts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        goal TEXT NOT NULL CHECK (goal IN ('general', 'strength', 'cardio', 'flexibility')),
+        equipment TEXT NOT NULL CHECK (equipment IN ('none', 'dumbbells', 'full-gym')),
+        minutes INTEGER NOT NULL,
+        exercises TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL
+      );
+    `);
+
+    currentDbVersion = 20;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 20) { ... currentDbVersion = 21; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

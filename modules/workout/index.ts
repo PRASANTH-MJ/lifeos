@@ -1,5 +1,6 @@
 export { useWorkoutPreferences } from './useWorkoutPreferences';
 export { useWorkoutLogs } from './useWorkoutLogs';
+export { useCustomWorkouts } from './useCustomWorkouts';
 export { pickRecommendedWorkout } from './recommend';
 export {
   WORKOUTS,

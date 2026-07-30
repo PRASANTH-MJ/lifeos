@@ -2,14 +2,15 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { View, Text } from 'react-native';
 
 import { Button, Card, EmptyState, ScreenContainer } from '@/components';
-import { equipmentLabel, findWorkout, goalLabel, useWorkoutLogs } from '@/modules/workout';
+import { WORKOUTS, equipmentLabel, goalLabel, useCustomWorkouts, useWorkoutLogs } from '@/modules/workout';
 import { useAppTheme } from '@/theme';
 
 export default function WorkoutDetailScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { workoutKey } = useLocalSearchParams<{ workoutKey: string }>();
-  const workout = findWorkout(workoutKey);
+  const { workouts: customWorkouts } = useCustomWorkouts();
+  const workout = [...WORKOUTS, ...customWorkouts].find((w) => w.key === workoutKey);
   const { logCompletion } = useWorkoutLogs();
 
   if (!workout) {

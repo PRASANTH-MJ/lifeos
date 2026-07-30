@@ -7,4 +7,5 @@ export {
   taskAlarmId,
   habitReminderId,
   habitAlarmId,
+  moduleReminderId,
 } from './schedule';

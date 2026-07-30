@@ -68,3 +68,7 @@ export function habitReminderId(habitId: number): string {
 export function habitAlarmId(habitId: number): string {
   return `habit-alarm-${habitId}`;
 }
+
+export function moduleReminderId(moduleKey: string): string {
+  return `module-reminder-${moduleKey}`;
+}

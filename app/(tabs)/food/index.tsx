@@ -3,10 +3,11 @@ import { Link, Stack } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Modal, Pressable, Text, View } from 'react-native';
 
-import { Card, EmptyState, ScreenContainer, StatCard } from '@/components';
+import { Card, EmptyState, ReminderCard, ScreenContainer, StatCard } from '@/components';
 import { addDays, formatDisplayDate, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { MEALS, mealLabel, useFoodDay } from '@/modules/food';
+import { useModuleReminder } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function FoodScreen() {
@@ -15,6 +16,7 @@ export default function FoodScreen() {
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
   const { loading, totals, byMeal, deleteLog, refresh } = useFoodDay(date);
+  const reminder = useModuleReminder('food', 'Log your meals', "Don't forget to log what you've eaten today.");
 
   const onDelete = (id: number) => {
     Alert.alert('Remove entry?', undefined, [
@@ -65,6 +67,8 @@ export default function FoodScreen() {
           <StatCard label="Carbs (g)" value={String(totals.carbs)} />
           <StatCard label="Fat (g)" value={String(totals.fat)} />
         </View>
+
+        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.primary} />
 
         {isEmpty ? (
           <EmptyState icon="restaurant-outline" title="Nothing logged" subtitle="Tap + to log a meal or snack." />

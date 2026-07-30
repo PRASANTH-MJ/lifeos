@@ -3,10 +3,11 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
-import { Card, EmptyState, ScreenContainer, TextField, useTabSwipeNavigation } from '@/components';
+import { Card, EmptyState, ReminderCard, ScreenContainer, TextField, useTabSwipeNavigation } from '@/components';
 import { formatDisplayDate, monthCursorOf, shiftMonth, toDateKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { computeWeeklyStreak, JournalListItem, useJournal } from '@/modules/journal';
+import { useModuleReminder } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function JournalScreen() {
@@ -18,6 +19,7 @@ export default function JournalScreen() {
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(toDateKey(new Date())));
   const { entries, loading, refresh } = useJournal(search);
+  const reminder = useModuleReminder('journal', 'Time to journal', "Write down what's on your mind today.");
 
   const heatmapValues = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -71,6 +73,8 @@ export default function JournalScreen() {
             </Text>
           </Card>
         ) : null}
+
+        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.moduleJournal} />
 
         <TextField placeholder="Search entries" value={search} onChangeText={setSearch} />
 

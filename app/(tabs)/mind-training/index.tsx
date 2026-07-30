@@ -3,15 +3,17 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, LogPastEntryModal, ScreenContainer, TextField } from '@/components';
+import { Card, LogPastEntryModal, ReminderCard, ScreenContainer, TextField } from '@/components';
 import { todayKey } from '@/lib/date';
 import { MIND_EXERCISES, useBestScores, useMindTrainingLogs } from '@/modules/mind-training';
+import { useModuleReminder } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function MindTrainingScreen() {
   const theme = useAppTheme();
   const { best, loading, refresh } = useBestScores(MIND_EXERCISES);
   const { logScore } = useMindTrainingLogs();
+  const reminder = useModuleReminder('mind-training', 'Time to train your mind', 'Take a couple minutes to practice.');
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logExerciseKey, setLogExerciseKey] = useState<string | null>(null);
   const [logDate, setLogDate] = useState(todayKey());
@@ -30,6 +32,8 @@ export default function MindTrainingScreen() {
     <View style={{ flex: 1 }}>
     <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.md }}>
+        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.primary} />
+
         {MIND_EXERCISES.map((exercise) => (
           <Link key={exercise.key} href={{ pathname: '/mind-training/[exerciseKey]', params: { exerciseKey: exercise.key } }} asChild>
             <Pressable>

@@ -3,14 +3,16 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, LogPastEntryModal, ScreenContainer } from '@/components';
+import { Card, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
 import { todayKey } from '@/lib/date';
 import { MEDITATION_SESSIONS, findSession, useMeditationLogs } from '@/modules/meditation';
+import { useModuleReminder } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function MeditationScreen() {
   const theme = useAppTheme();
   const { totalMinutesThisWeek, refresh, logSession } = useMeditationLogs();
+  const reminder = useModuleReminder('meditation', 'Time to meditate', 'Take a few minutes to settle your mind.');
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logSessionKey, setLogSessionKey] = useState<string | null>(null);
   const [logDate, setLogDate] = useState(todayKey());
@@ -32,6 +34,8 @@ export default function MeditationScreen() {
             {totalMinutesThisWeek} min meditated this week
           </Text>
         </Card>
+
+        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.moduleJournal} />
 
         <View style={{ gap: theme.spacing.md }}>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>

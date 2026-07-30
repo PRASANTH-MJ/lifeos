@@ -3,14 +3,16 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ImageBackground, Pressable, Text, View } from 'react-native';
 
-import { Card, LoadingState, ScreenContainer } from '@/components';
+import { Card, LoadingState, ReminderCard, ScreenContainer } from '@/components';
 import { backgroundFor, useAffirmations, type Affirmation } from '@/modules/affirmations';
+import { useModuleReminder } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function AffirmationsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { affirmations, loading, todaysAffirmation, favorites, toggleFavorite } = useAffirmations();
+  const reminder = useModuleReminder('affirmations', 'Your daily affirmation', 'Take a moment to reflect on something positive.');
   const [displayed, setDisplayed] = useState<Affirmation | null>(null);
 
   useEffect(() => {
@@ -73,6 +75,8 @@ export default function AffirmationsScreen() {
             </View>
           </View>
         </ImageBackground>
+
+        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.moduleJournal} />
 
         {favorites.length > 0 ? (
           <View style={{ gap: theme.spacing.sm }}>
