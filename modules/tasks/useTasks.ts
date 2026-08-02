@@ -18,6 +18,10 @@ export type CreateTaskInput = {
   alarmEnabled?: boolean;
 };
 
+/** How long a completed task stays visible (checked off, sorted to the bottom) before it's
+ * auto-archived out of the active list — a brief undo window rather than an instant vanish. */
+const COMPLETED_ARCHIVE_DELAY_MS = 2 * 60 * 1000;
+
 export function useTasks() {
   const db = useSQLiteContext();
   const table = useLocalTable<Task>('tasks', {
@@ -26,6 +30,20 @@ export function useTasks() {
       "(completed_at IS NOT NULL) ASC, CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END ASC, (due_date IS NULL) ASC, due_date ASC",
   });
   const [subtaskCounts, setSubtaskCounts] = useState<Record<number, { total: number; done: number }>>({});
+
+  // Archives any task that finished its 2-minute undo window since the last check — run before
+  // every refresh so the active list never shows a long-completed task lingering.
+  const sweepCompletedArchive = useCallback(async () => {
+    const cutoff = new Date(Date.now() - COMPLETED_ARCHIVE_DELAY_MS).toISOString();
+    await db.runAsync('UPDATE tasks SET archived = 1 WHERE archived = 0 AND completed_at IS NOT NULL AND completed_at <= ?', [cutoff]);
+  }, [db]);
+
+  useFocusEffect(
+    useCallback(() => {
+      sweepCompletedArchive().then(() => table.refresh());
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sweepCompletedArchive])
+  );
 
   const refreshSubtaskCounts = useCallback(async () => {
     const rows = await db.getAllAsync<{ parent_task_id: number; total: number; done: number }>(
@@ -106,7 +124,8 @@ export function useTasks() {
     archiveTask,
     removeTask,
     refresh: useCallback(async () => {
+      await sweepCompletedArchive();
       await Promise.all([table.refresh(), refreshSubtaskCounts()]);
-    }, [table, refreshSubtaskCounts]),
+    }, [sweepCompletedArchive, table, refreshSubtaskCounts]),
   };
 }

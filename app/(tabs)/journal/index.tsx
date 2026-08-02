@@ -74,7 +74,11 @@ export default function JournalScreen() {
           </Card>
         ) : null}
 
-        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.moduleJournal} />
+        <ReminderCard
+          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
+          onSave={reminder.save}
+          color={theme.colors.moduleJournal}
+        />
 
         <TextField placeholder="Search entries" value={search} onChangeText={setSearch} />
 

@@ -38,7 +38,11 @@ export default function BreathingScreen() {
           </Text>
         </Card>
 
-        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.moduleTasks} />
+        <ReminderCard
+          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
+          onSave={reminder.save}
+          color={theme.colors.moduleTasks}
+        />
 
         <View style={{ gap: theme.spacing.md }}>
           {BREATHING_PATTERNS.map((pattern) => (

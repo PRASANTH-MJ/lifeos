@@ -32,7 +32,11 @@ export default function MindTrainingScreen() {
     <View style={{ flex: 1 }}>
     <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.md }}>
-        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.primary} />
+        <ReminderCard
+          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
+          onSave={reminder.save}
+          color={theme.colors.primary}
+        />
 
         {MIND_EXERCISES.map((exercise) => (
           <Link key={exercise.key} href={{ pathname: '/mind-training/[exerciseKey]', params: { exerciseKey: exercise.key } }} asChild>

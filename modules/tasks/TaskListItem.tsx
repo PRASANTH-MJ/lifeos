@@ -28,6 +28,7 @@ export function TaskListItem({ task, subtaskCount, category, onToggle, onArchive
   return (
     <Card style={styles.row}>
       <Pressable
+        accessibilityLabel={completed ? `Mark ${task.title} incomplete` : `Mark ${task.title} complete`}
         onPress={onToggle}
         hitSlop={8}
         style={[

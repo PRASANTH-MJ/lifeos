@@ -29,7 +29,18 @@
       "expo-router",
       "expo-sqlite",
       "expo-status-bar",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#F9FAFB",
+          "dark": {
+            "backgroundColor": "#0B0D12"
+          }
+        }
+      ],
       "expo-font",
       [
         "expo-notifications",

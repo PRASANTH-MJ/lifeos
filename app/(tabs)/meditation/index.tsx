@@ -35,7 +35,11 @@ export default function MeditationScreen() {
           </Text>
         </Card>
 
-        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.moduleJournal} />
+        <ReminderCard
+          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
+          onSave={reminder.save}
+          color={theme.colors.moduleJournal}
+        />
 
         <View style={{ gap: theme.spacing.md }}>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>

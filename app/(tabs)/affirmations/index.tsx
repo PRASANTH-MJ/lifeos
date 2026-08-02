@@ -76,7 +76,11 @@ export default function AffirmationsScreen() {
           </View>
         </ImageBackground>
 
-        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.moduleJournal} />
+        <ReminderCard
+          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
+          onSave={reminder.save}
+          color={theme.colors.moduleJournal}
+        />
 
         {favorites.length > 0 ? (
           <View style={{ gap: theme.spacing.sm }}>

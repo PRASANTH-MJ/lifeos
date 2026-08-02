@@ -68,7 +68,11 @@ export default function FoodScreen() {
           <StatCard label="Fat (g)" value={String(totals.fat)} />
         </View>
 
-        <ReminderCard enabled={reminder.enabled} time={reminder.time} onSave={reminder.save} color={theme.colors.primary} />
+        <ReminderCard
+          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
+          onSave={reminder.save}
+          color={theme.colors.primary}
+        />
 
         {isEmpty ? (
           <EmptyState icon="restaurant-outline" title="Nothing logged" subtitle="Tap + to log a meal or snack." />

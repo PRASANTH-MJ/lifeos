@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 20;
+const DATABASE_VERSION = 21;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -871,7 +871,19 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 20;
   }
 
-  // Future modules land here as `if (currentDbVersion === 20) { ... currentDbVersion = 21; }`
+  if (currentDbVersion === 20) {
+    // Module reminders gain a type (silent/notification/alarm-style sound) and a schedule
+    // (every day vs. specific weekdays) instead of a plain on/off toggle — the old `enabled`
+    // column backfills into 'notification' so nobody's existing reminder silently vanishes.
+    await db.execAsync("ALTER TABLE module_reminders ADD COLUMN reminder_type TEXT NOT NULL DEFAULT 'none'");
+    await db.execAsync("ALTER TABLE module_reminders ADD COLUMN schedule_type TEXT NOT NULL DEFAULT 'daily'");
+    await db.execAsync("ALTER TABLE module_reminders ADD COLUMN schedule_days TEXT NOT NULL DEFAULT '[]'");
+    await db.execAsync("UPDATE module_reminders SET reminder_type = 'notification' WHERE enabled = 1");
+
+    currentDbVersion = 21;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 21) { ... currentDbVersion = 22; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

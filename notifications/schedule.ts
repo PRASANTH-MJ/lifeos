@@ -11,11 +11,12 @@ export async function scheduleDailyReminder(options: {
   body: string;
   hour: number;
   minute: number;
+  sound?: boolean;
 }): Promise<string> {
   await Notifications.cancelScheduledNotificationAsync(options.identifier).catch(() => {});
   return Notifications.scheduleNotificationAsync({
     identifier: options.identifier,
-    content: { title: options.title, body: options.body },
+    content: { title: options.title, body: options.body, sound: options.sound ?? false },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
       hour: options.hour,
@@ -25,8 +26,38 @@ export async function scheduleDailyReminder(options: {
   });
 }
 
+/** Never throws — expo-notifications has no scheduling support on web at all, so cancelling an
+ * identifier that (from the web runtime's perspective) was never actually schedulable would
+ * otherwise crash every call site on web for what's a complete no-op there anyway. */
 export function cancelReminder(identifier: string) {
-  return Notifications.cancelScheduledNotificationAsync(identifier);
+  return Notifications.cancelScheduledNotificationAsync(identifier).catch(() => {});
+}
+
+/**
+ * Schedules a notification that repeats every week on one weekday — used for a "specific days
+ * of the week" reminder schedule, where `scheduleDailyReminder`'s every-day repeat doesn't fit.
+ * `weekday` is 1–7 with 1 = Sunday, matching expo-notifications' own convention.
+ */
+export async function scheduleWeeklyReminder(options: {
+  identifier: string;
+  title: string;
+  body: string;
+  weekday: number;
+  hour: number;
+  minute: number;
+  sound?: boolean;
+}): Promise<string> {
+  await Notifications.cancelScheduledNotificationAsync(options.identifier).catch(() => {});
+  return Notifications.scheduleNotificationAsync({
+    identifier: options.identifier,
+    content: { title: options.title, body: options.body, sound: options.sound ?? false },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+      weekday: options.weekday,
+      hour: options.hour,
+      minute: options.minute,
+    },
+  });
 }
 
 /**
