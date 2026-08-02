@@ -6,8 +6,8 @@ import { addDays, buildDailySeries, todayKey } from '@/lib/date';
 import { MOODS } from '@/modules/journal';
 import { WORKOUTS } from '@/modules/workout';
 
-const WORKOUT_MINUTES: Record<string, number> = Object.fromEntries(WORKOUTS.map((workout) => [workout.key, workout.minutes]));
-const MOOD_SCORE: Record<string, number> = Object.fromEntries(MOODS.map((mood, index) => [mood.key, MOODS.length - index]));
+export const WORKOUT_MINUTES: Record<string, number> = Object.fromEntries(WORKOUTS.map((workout) => [workout.key, workout.minutes]));
+export const MOOD_SCORE: Record<string, number> = Object.fromEntries(MOODS.map((mood, index) => [mood.key, MOODS.length - index]));
 
 type Series = { date: string; value: number }[];
 

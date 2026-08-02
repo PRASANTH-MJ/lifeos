@@ -14,6 +14,7 @@ export { DonutChart } from './DonutChart';
 export { BarPairChart } from './BarPairChart';
 export { StackedBarChart } from './StackedBarChart';
 export { NamedBarChart } from './NamedBarChart';
+export { OverlayChart } from './OverlayChart';
 export { RangeChip, Legend } from './StatsBits';
 export { useTabSwipeNavigation, type TabPath } from './useTabSwipeNavigation';
 export { LogPastEntryModal } from './LogPastEntryModal';

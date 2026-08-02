@@ -1,8 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Card, Chip, DonutChart, LineChart, Legend, LoadingState, ScreenContainer, StatCard, TrendChart } from '@/components';
-import { nearestMoodLabel, useAnalyticsDashboard } from '@/modules/analytics';
+import { Card, Chip, DonutChart, LineChart, Legend, LoadingState, OverlayChart, ScreenContainer, StatCard, TrendChart } from '@/components';
+import {
+  ActionableInsights,
+  MetricGrid,
+  generateActionableInsights,
+  nearestMoodLabel,
+  useAnalyticsDashboard,
+  usePreviousPeriodStats,
+  type MetricDomain,
+} from '@/modules/analytics';
 import { formatCurrency, formatCurrencyCompact, useFinanceBudgets, useFinanceDailySpend, useFinanceSummary, useFinanceWeekSpend } from '@/modules/finance';
 import { todayKey } from '@/lib/date';
 import { useAppTheme } from '@/theme';
@@ -24,6 +32,7 @@ export default function AnalyticsScreen() {
   const rangeLabel = RANGE_OPTIONS.find((option) => option.key === range)!.label.toLowerCase();
 
   const { data, loading } = useAnalyticsDashboard(days);
+  const { stats: previousStats } = usePreviousPeriodStats(days);
 
   const today = todayKey();
   const monthPrefix = today.slice(0, 7);
@@ -32,6 +41,84 @@ export default function AnalyticsScreen() {
   const { weekSpend } = useFinanceWeekSpend();
   const { series: spendSeries, total: spendTotal } = useFinanceDailySpend(days);
   const { budgets } = useFinanceBudgets();
+
+  const insights = useMemo(
+    () => (data ? generateActionableInsights(data, previousStats, rangeLabel, spendTotal) : []),
+    [data, previousStats, rangeLabel, spendTotal]
+  );
+
+  const domains: MetricDomain[] = useMemo(() => {
+    if (!data) return [];
+    return [
+      {
+        key: 'productivity',
+        label: 'Productivity',
+        color: theme.colors.moduleTasks,
+        metrics: [
+          { label: 'Active habits', value: String(data.activeHabitsCount), current: data.activeHabitsCount, previous: null },
+          {
+            label: 'Tasks completed',
+            value: String(data.tasksCompletedTotal),
+            current: data.tasksCompletedTotal,
+            previous: previousStats?.tasksCompletedTotal ?? null,
+          },
+          {
+            label: 'Overdue tasks',
+            value: String(data.overdueTasksCount),
+            current: data.overdueTasksCount,
+            previous: null,
+            invert: true,
+          },
+          {
+            label: 'Missed habits',
+            value: String(data.habitStatusBreakdown.fail),
+            current: data.habitStatusBreakdown.fail,
+            previous: previousStats?.missedHabits ?? null,
+            invert: true,
+          },
+        ],
+      },
+      {
+        key: 'wellness',
+        label: 'Wellness',
+        color: theme.colors.moduleJournal,
+        metrics: [
+          {
+            label: 'Avg mood',
+            value: data.avgMood != null ? nearestMoodLabel(data.avgMood) : '—',
+            current: data.avgMood ?? 0,
+            previous: previousStats?.avgMood ?? null,
+          },
+          {
+            label: 'Wellness min',
+            value: String(data.wellnessMinutesTotal),
+            current: data.wellnessMinutesTotal,
+            previous: previousStats?.wellnessMinutesTotal ?? null,
+          },
+          {
+            label: 'Workouts',
+            value: String(data.workoutsCompletedTotal),
+            current: data.workoutsCompletedTotal,
+            previous: previousStats?.workoutsCompletedTotal ?? null,
+          },
+          {
+            label: 'Workout min',
+            value: String(data.workoutMinutesTotal),
+            current: data.workoutMinutesTotal,
+            previous: previousStats?.workoutMinutesTotal ?? null,
+          },
+        ],
+      },
+      {
+        key: 'finance',
+        label: 'Finance',
+        color: theme.colors.primary,
+        metrics: [
+          { label: 'Spend', value: formatCurrencyCompact(spendTotal), current: spendTotal, previous: previousStats?.spend ?? null, invert: true },
+        ],
+      },
+    ];
+  }, [data, previousStats, spendTotal, theme]);
 
   if (loading || !data) {
     return (
@@ -61,21 +148,39 @@ export default function AnalyticsScreen() {
           ))}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-          <StatCard label="Active habits" value={String(data.activeHabitsCount)} />
-          <StatCard label="Tasks completed" value={String(data.tasksCompletedTotal)} color={theme.colors.moduleTasks} />
-          <StatCard label="Overdue tasks" value={String(data.overdueTasksCount)} color={data.overdueTasksCount > 0 ? theme.colors.danger : theme.colors.success} />
-        </View>
-        <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-          <StatCard label="Missed habits" value={String(data.habitStatusBreakdown.fail)} color={data.habitStatusBreakdown.fail > 0 ? theme.colors.danger : theme.colors.success} />
-          <StatCard label="Avg mood" value={data.avgMood != null ? nearestMoodLabel(data.avgMood) : '—'} color={theme.colors.moduleJournal} />
-          <StatCard label="Wellness min" value={String(data.wellnessMinutesTotal)} color={theme.colors.moduleJournal} />
-        </View>
-        <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-          <StatCard label="Workouts" value={String(data.workoutsCompletedTotal)} color={theme.colors.moduleTasks} />
-          <StatCard label="Workout min" value={String(data.workoutMinutesTotal)} color={theme.colors.moduleTasks} />
-          <StatCard label="Spend" value={formatCurrencyCompact(spendTotal)} color={theme.colors.danger} />
-        </View>
+        <ActionableInsights insights={insights} />
+
+        <MetricGrid domains={domains} />
+
+        {data.tasksSeries.length >= 5 ? (
+          <Card style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Mood vs. tasks completed
+            </Text>
+            <OverlayChart
+              barSeries={data.tasksSeries}
+              lineSeries={data.moodSeries}
+              barColor={theme.colors.moduleTasks}
+              lineColor={theme.colors.moduleJournal}
+              barLabel="Tasks completed"
+              lineLabel="Mood (1–5)"
+            />
+          </Card>
+        ) : null}
+
+        {budgets && (budgets.weeklyBudget != null || budgets.monthlyBudget != null) ? (
+          <Card style={{ gap: theme.spacing.md }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Finance pacing
+            </Text>
+            {budgets.weeklyBudget != null ? (
+              <FinanceSituationRow label="This week" spend={weekSpend} budget={budgets.weeklyBudget} />
+            ) : null}
+            {budgets.monthlyBudget != null ? (
+              <FinanceSituationRow label="This month" spend={currentMonthSummary?.expense ?? 0} budget={budgets.monthlyBudget} />
+            ) : null}
+          </Card>
+        ) : null}
 
         <Card>
           <TrendChart label={`Habit completions / day (${rangeLabel})`} data={data.habitsSeries} color={theme.colors.moduleHabits} />
@@ -129,20 +234,6 @@ export default function AnalyticsScreen() {
         <Card>
           <TrendChart label="Meditation + breathing minutes / day" data={data.wellnessSeries} color={theme.colors.moduleJournal} />
         </Card>
-
-        {budgets && (budgets.weeklyBudget != null || budgets.monthlyBudget != null) ? (
-          <Card style={{ gap: theme.spacing.md }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Finance situation
-            </Text>
-            {budgets.weeklyBudget != null ? (
-              <FinanceSituationRow label="This week" spend={weekSpend} budget={budgets.weeklyBudget} />
-            ) : null}
-            {budgets.monthlyBudget != null ? (
-              <FinanceSituationRow label="This month" spend={currentMonthSummary?.expense ?? 0} budget={budgets.monthlyBudget} />
-            ) : null}
-          </Card>
-        ) : null}
 
         <Card>
           <TrendChart label="Spending / day" data={spendSeries} color={theme.colors.danger} formatValue={(v) => formatCurrency(v)} />
