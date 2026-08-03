@@ -6,7 +6,7 @@ import { ActivityIndicator, Platform, useColorScheme, View } from 'react-native'
 import { SQLiteProvider } from 'expo-sqlite';
 
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db';
-import { configureNotificationHandler, ensureAlarmChannel } from '@/notifications';
+import { configureNotificationHandler, ensureAlarmChannel, requestNotificationPermissions } from '@/notifications';
 import { PinLockScreen, useProfile } from '@/modules/profile';
 import { ThemeProvider } from '@/theme';
 
@@ -53,6 +53,16 @@ function useAlarmNotificationRouting() {
   }, [router]);
 }
 
+/** Asks for notification access up front, on first mount, rather than waiting for the user to
+ * stumble into a module's reminder toggle — Android only shows its permission dialog once, so
+ * asking early gives the best chance of a grant instead of a silent permanent denial. */
+function useRequestNotificationPermissionOnLaunch() {
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    requestNotificationPermissions();
+  }, []);
+}
+
 export default function RootLayout() {
   return (
     <Suspense fallback={<LoadingScreen />}>
@@ -70,6 +80,7 @@ function RootNavigation() {
   const { profile, loading, verifyPin } = useProfile();
   const [unlocked, setUnlocked] = useState(false);
   useAlarmNotificationRouting();
+  useRequestNotificationPermissionOnLaunch();
 
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync();

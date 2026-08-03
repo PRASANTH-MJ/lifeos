@@ -1,9 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
-import { Image, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { AppState, Image, Modal, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 import { Button, Card, Chip, LoadingState, ScreenContainer, TextField } from '@/components';
+import {
+  getNotificationPermissionSnapshot,
+  type NotificationPermissionSnapshot,
+  openAlarmSettings,
+  openNotificationSettings,
+  requestNotificationPermissions,
+} from '@/notifications';
 import { useProfile } from '@/modules/profile';
 import { useSettings } from '@/modules/settings';
 import { useAppTheme } from '@/theme';
@@ -14,6 +22,21 @@ export default function SettingsScreen() {
   const { profile, setName, setAvatarUri, setPin, disablePin } = useProfile();
   const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
   const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [permissionSnapshot, setPermissionSnapshot] = useState<NotificationPermissionSnapshot | null>(null);
+
+  const refreshPermissionSnapshot = useCallback(() => {
+    getNotificationPermissionSnapshot().then(setPermissionSnapshot);
+  }, []);
+
+  // Re-check whenever this tab regains focus or the app returns from background — the only way to
+  // find out the user granted a permission from the OS Settings screen we deep-linked them to.
+  useFocusEffect(refreshPermissionSnapshot);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshPermissionSnapshot();
+    });
+    return () => sub.remove();
+  }, [refreshPermissionSnapshot]);
 
   if (!settings || !profile) {
     return (
@@ -105,6 +128,40 @@ export default function SettingsScreen() {
             </View>
           )}
         </Card>
+
+        {permissionSnapshot && permissionSnapshot.notifications !== 'unsupported' ? (
+          <Card style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Notifications & alarms
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              Required for reminders and alarms in every module to actually go off.
+            </Text>
+
+            <PermissionRow
+              label="Notifications"
+              state={permissionSnapshot.notifications}
+              onFix={async () => {
+                if (permissionSnapshot.canAskAgain) {
+                  await requestNotificationPermissions();
+                  refreshPermissionSnapshot();
+                } else {
+                  await openNotificationSettings();
+                }
+              }}
+              fixLabel={permissionSnapshot.canAskAgain ? 'Enable' : 'Open settings'}
+            />
+
+            {Platform.OS === 'android' && permissionSnapshot.alarms !== 'unsupported' ? (
+              <PermissionRow
+                label="Alarms & reminders access"
+                state={permissionSnapshot.alarms}
+                onFix={openAlarmSettings}
+                fixLabel="Open settings"
+              />
+            ) : null}
+          </Card>
+        ) : null}
 
         <Card style={{ gap: theme.spacing.sm }}>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
@@ -209,5 +266,41 @@ function PinSetupModal({ visible, onClose, onSave }: { visible: boolean; onClose
         </View>
       </View>
     </Modal>
+  );
+}
+
+function PermissionRow({
+  label,
+  state,
+  onFix,
+  fixLabel,
+}: {
+  label: string;
+  state: 'granted' | 'denied' | 'undetermined' | 'unsupported';
+  onFix: () => void;
+  fixLabel: string;
+}) {
+  const theme = useAppTheme();
+  const granted = state === 'granted';
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: granted ? theme.colors.success : theme.colors.danger,
+        }}
+      />
+      <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.sm }}>{label}</Text>
+      {granted ? (
+        <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.semibold }}>
+          Allowed
+        </Text>
+      ) : (
+        <Button label={fixLabel} variant="secondary" onPress={onFix} />
+      )}
+    </View>
   );
 }
