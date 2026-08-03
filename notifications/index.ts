@@ -10,3 +10,4 @@ export {
   habitAlarmId,
   moduleReminderId,
 } from './schedule';
+export { ensureAlarmChannel, scheduleDailyAlarm, scheduleWeeklyAlarm, scheduleOneTimeAlarm, cancelAlarm } from './alarm';

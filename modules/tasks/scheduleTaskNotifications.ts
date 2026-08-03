@@ -1,4 +1,4 @@
-import { cancelReminder, requestNotificationPermissions, scheduleOneTimeNotification, taskAlarmId, taskReminderId } from '@/notifications';
+import { cancelAlarm, cancelReminder, requestNotificationPermissions, scheduleOneTimeAlarm, scheduleOneTimeNotification, taskAlarmId, taskReminderId } from '@/notifications';
 import type { Task } from './types';
 
 export const REMINDER_OFFSET_OPTIONS = [0, 10, 30, 60, 1440];
@@ -48,19 +48,21 @@ export async function syncTaskNotifications(
   if (task.alarm_enabled && due) {
     const granted = await requestNotificationPermissions();
     if (granted) {
-      await scheduleOneTimeNotification({
-        identifier: taskAlarmId(task.id),
-        title: `⏰ ${task.title}`,
-        body: 'This task is due now.',
-        date: due,
-      });
+      const identifier = taskAlarmId(task.id);
+      const title = `⏰ ${task.title}`;
+      const body = 'This task is due now.';
+      // Clears out anything scheduled at this ID by the old plain-notification alarm path.
+      await cancelReminder(identifier);
+      await scheduleOneTimeAlarm({ identifier, title, body, date: due, data: { kind: 'alarm', identifier, title, body } });
     }
   } else {
     await cancelReminder(taskAlarmId(task.id));
+    await cancelAlarm(taskAlarmId(task.id));
   }
 }
 
 export async function cancelTaskNotifications(taskId: number): Promise<void> {
   await cancelReminder(taskReminderId(taskId));
   await cancelReminder(taskAlarmId(taskId));
+  await cancelAlarm(taskAlarmId(taskId));
 }

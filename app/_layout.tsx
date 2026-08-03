@@ -1,16 +1,57 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider as RouterThemeProvider } from 'expo-router';
+import notifee, { EventType } from '@notifee/react-native';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider as RouterThemeProvider, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { Suspense, useEffect, useState } from 'react';
-import { ActivityIndicator, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Platform, useColorScheme, View } from 'react-native';
 import { SQLiteProvider } from 'expo-sqlite';
 
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db';
-import { configureNotificationHandler } from '@/notifications';
+import { configureNotificationHandler, ensureAlarmChannel } from '@/notifications';
 import { PinLockScreen, useProfile } from '@/modules/profile';
 import { ThemeProvider } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 configureNotificationHandler();
+ensureAlarmChannel();
+
+// Required by notifee even when there's nothing to do here — background events (e.g. a full-screen
+// alarm launching while the app is killed) are instead picked up via getInitialNotification() once
+// the JS layer is running again, in useAlarmNotificationRouting below.
+if (Platform.OS !== 'web') {
+  notifee.onBackgroundEvent(async () => {});
+}
+
+type AlarmNotificationData = { kind?: string; identifier?: string; title?: string; body?: string };
+
+/** Routes to the full-screen ringing UI whenever an alarm-type reminder fires — whether the app
+ * was cold-started by the notification's full-screen intent, or the alarm arrived while the app
+ * was already open. */
+function useAlarmNotificationRouting() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    const routeToAlarm = (data?: AlarmNotificationData) => {
+      if (!data || data.kind !== 'alarm') return;
+      router.push({
+        pathname: '/alarm-ringing',
+        params: { identifier: data.identifier ?? '', title: data.title ?? 'Alarm', body: data.body ?? '' },
+      });
+    };
+
+    notifee
+      .getInitialNotification()
+      .then((initial) => routeToAlarm(initial?.notification.data as AlarmNotificationData | undefined))
+      .catch(() => {});
+
+    return notifee.onForegroundEvent(({ type, detail }) => {
+      if (type === EventType.PRESS || type === EventType.DELIVERED) {
+        routeToAlarm(detail.notification?.data as AlarmNotificationData | undefined);
+      }
+    });
+  }, [router]);
+}
 
 export default function RootLayout() {
   return (
@@ -28,6 +69,7 @@ function RootNavigation() {
   const colorScheme = useColorScheme();
   const { profile, loading, verifyPin } = useProfile();
   const [unlocked, setUnlocked] = useState(false);
+  useAlarmNotificationRouting();
 
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync();
@@ -45,6 +87,7 @@ function RootNavigation() {
     <RouterThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="alarm-ringing" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
       </Stack>
     </RouterThemeProvider>
   );

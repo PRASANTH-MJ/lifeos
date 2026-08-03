@@ -3,10 +3,13 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 
 import {
+  cancelAlarm,
   cancelReminder,
   moduleReminderId,
   requestNotificationPermissions,
+  scheduleDailyAlarm,
   scheduleDailyReminder,
+  scheduleWeeklyAlarm,
   scheduleWeeklyReminder,
 } from '@/notifications';
 
@@ -26,9 +29,10 @@ const DEFAULT_STATE: ModuleReminderState = { reminderType: 'none', time: null, s
 /**
  * One reminder per module (Journal, Meditation, Breathing, Mind Training, Workout, Food,
  * Affirmations), backed by the shared `module_reminders` table. Supports a reminder *type*
- * (silent/Notification/Alarm-style sound) and a *schedule* (every day, or specific weekdays) —
- * "Alarm" plays a sound and gets a ⏰ title prefix, but is still a one-shot local notification,
- * not a continuously-ringing alarm-clock (that needs a native module LifeOS doesn't have).
+ * (silent/Notification/Alarm) and a *schedule* (every day, or specific weekdays). "Notification"
+ * is a plain expo-notifications reminder; "Alarm" schedules a true full-screen, looping-sound
+ * alarm via notifee (see notifications/alarm.ts and app/alarm-ringing.tsx) — both systems use the
+ * same identifier space, so every save cancels both before scheduling whichever type is current.
  */
 export function useModuleReminder(moduleKey: string, title: string, body: string) {
   const db = useSQLiteContext();
@@ -64,24 +68,32 @@ export function useModuleReminder(moduleKey: string, title: string, body: string
   const applySchedule = useCallback(
     async (next: ModuleReminderState) => {
       const baseId = moduleReminderId(moduleKey);
-      await cancelReminder(baseId);
-      for (let weekday = 1; weekday <= 7; weekday += 1) {
-        await cancelReminder(`${baseId}-${weekday}`);
-      }
+      const allIds = [baseId, ...Array.from({ length: 7 }, (_, i) => `${baseId}-${i + 1}`)];
+      // Both notification systems share this identifier space — clear both regardless of which
+      // one a previous save used, so switching type/schedule never leaves a stale alarm behind.
+      await Promise.all(allIds.flatMap((id) => [cancelReminder(id), cancelAlarm(id)]));
 
       if (next.reminderType === 'none' || !next.time) return;
       const granted = await requestNotificationPermissions();
       if (!granted) return;
 
       const [hour, minute] = next.time.split(':').map(Number);
-      const finalTitle = next.reminderType === 'alarm' ? `⏰ ${title}` : title;
-      const sound = next.reminderType === 'alarm';
 
-      if (next.scheduleType === 'daily') {
-        await scheduleDailyReminder({ identifier: baseId, title: finalTitle, body, hour, minute, sound });
+      if (next.reminderType === 'alarm') {
+        const alarmTitle = `⏰ ${title}`;
+        if (next.scheduleType === 'daily') {
+          await scheduleDailyAlarm({ identifier: baseId, title: alarmTitle, body, hour, minute, data: { kind: 'alarm', identifier: baseId, title: alarmTitle, body } });
+        } else {
+          for (const weekday of next.scheduleDays) {
+            const id = `${baseId}-${weekday}`;
+            await scheduleWeeklyAlarm({ identifier: id, title: alarmTitle, body, weekday, hour, minute, data: { kind: 'alarm', identifier: id, title: alarmTitle, body } });
+          }
+        }
+      } else if (next.scheduleType === 'daily') {
+        await scheduleDailyReminder({ identifier: baseId, title, body, hour, minute });
       } else {
         for (const weekday of next.scheduleDays) {
-          await scheduleWeeklyReminder({ identifier: `${baseId}-${weekday}`, title: finalTitle, body, weekday, hour, minute, sound });
+          await scheduleWeeklyReminder({ identifier: `${baseId}-${weekday}`, title, body, weekday, hour, minute });
         }
       }
     },

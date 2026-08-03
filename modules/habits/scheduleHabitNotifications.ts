@@ -1,4 +1,4 @@
-import { cancelReminder, habitAlarmId, habitReminderId, requestNotificationPermissions, scheduleDailyReminder } from '@/notifications';
+import { cancelAlarm, cancelReminder, habitAlarmId, habitReminderId, requestNotificationPermissions, scheduleDailyAlarm, scheduleDailyReminder } from '@/notifications';
 import type { Habit } from './types';
 
 function parseTime(time: string): { hour: number; minute: number } | null {
@@ -12,7 +12,9 @@ function parseTime(time: string): { hour: number; minute: number } | null {
  * current settings — call after every create/update so the OS-level
  * schedule never drifts from what's in SQLite. Fires every day at the
  * chosen time regardless of which days the habit is actually due — a
- * known simplification, same as Tasks' reminder/alarm.
+ * known simplification, same as Tasks' reminder/alarm. The alarm variant
+ * uses the same notifee-based full-screen ringing alarm as module reminders
+ * (see notifications/alarm.ts), not a plain notification.
  */
 export async function syncHabitNotifications(
   habit: Pick<Habit, 'id' | 'name' | 'reminder_time' | 'alarm_enabled'>
@@ -37,21 +39,21 @@ export async function syncHabitNotifications(
   if (habit.alarm_enabled && time) {
     const granted = await requestNotificationPermissions();
     if (granted) {
-      await scheduleDailyReminder({
-        identifier: habitAlarmId(habit.id),
-        title: `⏰ ${habit.name}`,
-        body: 'This habit is due now.',
-        hour: time.hour,
-        minute: time.minute,
-        sound: true,
-      });
+      const identifier = habitAlarmId(habit.id);
+      const title = `⏰ ${habit.name}`;
+      const body = 'This habit is due now.';
+      // Clears out anything scheduled at this ID by the old plain-notification alarm path.
+      await cancelReminder(identifier);
+      await scheduleDailyAlarm({ identifier, title, body, hour: time.hour, minute: time.minute, data: { kind: 'alarm', identifier, title, body } });
     }
   } else {
     await cancelReminder(habitAlarmId(habit.id));
+    await cancelAlarm(habitAlarmId(habit.id));
   }
 }
 
 export async function cancelHabitNotifications(habitId: number): Promise<void> {
   await cancelReminder(habitReminderId(habitId));
   await cancelReminder(habitAlarmId(habitId));
+  await cancelAlarm(habitAlarmId(habitId));
 }
