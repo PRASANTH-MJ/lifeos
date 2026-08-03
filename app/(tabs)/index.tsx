@@ -4,9 +4,10 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { Card, Chip, ScreenContainer, useTabSwipeNavigation } from '@/components';
+import { Card, Chip, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
 import { addDays, buildMonthGrid, monthCursorOf, shiftMonth, todayKey, weekdayOf } from '@/lib/date';
 import { useCategories } from '@/modules/categories';
+import { LIMIT_LABELS, useFreeTierGate, type LimitKind } from '@/modules/premium';
 import {
   HabitLogSheet,
   isDue,
@@ -62,6 +63,9 @@ export default function TodayScreen() {
   const [taskSheetId, setTaskSheetId] = useState<number | null>(null);
   const [monthVisible, setMonthVisible] = useState(false);
   const [createMenuVisible, setCreateMenuVisible] = useState(false);
+  const habitGate = useFreeTierGate('habits');
+  const recurringGate = useFreeTierGate('recurringTasks');
+  const [upsellKind, setUpsellKind] = useState<LimitKind | null>(null);
   const [monthCursor, setMonthCursor] = useState(() => monthCursorOf(selectedDate));
   const [markedDates, setMarkedDates] = useState<Set<string>>(new Set());
 
@@ -477,13 +481,21 @@ export default function TodayScreen() {
           </Text>
           {(
             [
-              { label: 'Habit', icon: 'checkmark-circle-outline', color: theme.colors.moduleHabits, onPress: () => router.push('/habits/new') },
+              {
+                label: 'Habit',
+                icon: 'checkmark-circle-outline',
+                color: theme.colors.moduleHabits,
+                onPress: () => (habitGate.allowed ? router.push('/habits/new') : setUpsellKind('habits')),
+              },
               { label: 'Task', icon: 'checkbox-outline', color: theme.colors.moduleTasks, onPress: () => router.push('/tasks/new') },
               {
                 label: 'Recurring Task',
                 icon: 'repeat-outline',
                 color: theme.colors.moduleTasks,
-                onPress: () => router.push({ pathname: '/tasks/new', params: { recurring: '1' } }),
+                onPress: () =>
+                  recurringGate.allowed
+                    ? router.push({ pathname: '/tasks/new', params: { recurring: '1' } })
+                    : setUpsellKind('recurringTasks'),
               },
               { label: 'Journal Entry', icon: 'book-outline', color: theme.colors.moduleJournal, onPress: () => router.push('/journal/new') },
               { label: 'Expense', icon: 'cash-outline', color: theme.colors.primary, onPress: () => router.push('/finance/new') },
@@ -514,6 +526,13 @@ export default function TodayScreen() {
         </View>
       </View>
     </Modal>
+
+    <UpsellModal
+      visible={upsellKind != null}
+      resourceLabel={upsellKind ? LIMIT_LABELS[upsellKind] : ''}
+      limit={upsellKind === 'habits' ? habitGate.limit : recurringGate.limit}
+      onClose={() => setUpsellKind(null)}
+    />
     </View>
   );
 }
