@@ -8,16 +8,13 @@ import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import { Platform } from 'react-native';
 
-// TODO(user): replace with your Firebase project's "Web app" config, from
-// Firebase Console → Project settings → General → Your apps → Web app.
-// Nothing below this line will actually authenticate until this is filled in.
 const firebaseConfig = {
-  apiKey: 'REPLACE_ME',
-  authDomain: 'REPLACE_ME.firebaseapp.com',
-  projectId: 'REPLACE_ME',
-  storageBucket: 'REPLACE_ME.firebasestorage.app',
-  messagingSenderId: 'REPLACE_ME',
-  appId: 'REPLACE_ME',
+  apiKey: 'AIzaSyDS9UkjSxl6x1RV-mzWMvR7l5PZ7OVPVq8',
+  authDomain: 'lifeos-8f0bf.firebaseapp.com',
+  projectId: 'lifeos-8f0bf',
+  storageBucket: 'lifeos-8f0bf.firebasestorage.app',
+  messagingSenderId: '537711771675',
+  appId: '1:537711771675:web:638e0567e003a83d2078be',
 };
 
 const app = initializeApp(firebaseConfig);
