@@ -1,9 +1,10 @@
 import * as Notifications from 'expo-notifications';
 
 /**
- * Scaffolded for Phase 1 but not wired to any UI toggle yet — habit reminders
- * and meditation nudges both call through here once each module grows a
- * "remind me" setting.
+ * Repeats once per day at the given time. Deliberately uses the `DAILY` trigger, not `CALENDAR`
+ * (which expo-notifications documents as iOS-only) — `CALENDAR` silently never fires on Android,
+ * which was a real bug here: every daily reminder (Habits, and all seven module reminders in
+ * their default "every day" schedule) was Android-dead until this was caught.
  */
 export async function scheduleDailyReminder(options: {
   identifier: string;
@@ -18,10 +19,10 @@ export async function scheduleDailyReminder(options: {
     identifier: options.identifier,
     content: { title: options.title, body: options.body, sound: options.sound ?? false },
     trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      channelId: 'default',
       hour: options.hour,
       minute: options.minute,
-      repeats: true,
     },
   });
 }
@@ -53,6 +54,7 @@ export async function scheduleWeeklyReminder(options: {
     content: { title: options.title, body: options.body, sound: options.sound ?? false },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+      channelId: 'default',
       weekday: options.weekday,
       hour: options.hour,
       minute: options.minute,
@@ -79,6 +81,7 @@ export async function scheduleOneTimeNotification(options: {
     content: { title: options.title, body: options.body, sound: true },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
+      channelId: 'default',
       date: options.date,
     },
   });

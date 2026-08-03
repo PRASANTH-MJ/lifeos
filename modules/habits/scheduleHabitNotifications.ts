@@ -43,6 +43,7 @@ export async function syncHabitNotifications(
         body: 'This habit is due now.',
         hour: time.hour,
         minute: time.minute,
+        sound: true,
       });
     }
   } else {
