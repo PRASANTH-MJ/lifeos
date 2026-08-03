@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 21;
+const DATABASE_VERSION = 22;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -883,7 +883,18 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 21;
   }
 
-  // Future modules land here as `if (currentDbVersion === 21) { ... currentDbVersion = 22; }`
+  if (currentDbVersion === 21) {
+    // Premium entitlement, cached locally so the app stays instant/offline like every other
+    // screen — Firestore (`users/{uid}.premium`) is the actual source of truth, reconciled into
+    // these columns on auth-state change and app-foreground (see modules/premium/usePremium.ts).
+    await db.execAsync('ALTER TABLE user_profile ADD COLUMN firebase_uid TEXT');
+    await db.execAsync('ALTER TABLE user_profile ADD COLUMN premium INTEGER NOT NULL DEFAULT 0');
+    await db.execAsync('ALTER TABLE user_profile ADD COLUMN premium_synced_at TEXT');
+
+    currentDbVersion = 22;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 22) { ... currentDbVersion = 23; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

@@ -7,7 +7,9 @@ import { SQLiteProvider } from 'expo-sqlite';
 
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db';
 import { configureNotificationHandler, ensureAlarmChannel, requestNotificationPermissions } from '@/notifications';
+import { LoginScreen, useAuth } from '@/modules/auth';
 import { PinLockScreen, useProfile } from '@/modules/profile';
+import { usePremium } from '@/modules/premium';
 import { ThemeProvider } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -77,10 +79,14 @@ export default function RootLayout() {
 
 function RootNavigation() {
   const colorScheme = useColorScheme();
-  const { profile, loading, verifyPin } = useProfile();
+  const { user, loading: authLoading } = useAuth();
+  const { profile, loading: profileLoading, verifyPin } = useProfile();
   const [unlocked, setUnlocked] = useState(false);
+  usePremium();
   useAlarmNotificationRouting();
   useRequestNotificationPermissionOnLaunch();
+
+  const loading = authLoading || profileLoading;
 
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync();
@@ -88,6 +94,10 @@ function RootNavigation() {
 
   if (loading) {
     return <LoadingScreen />;
+  }
+
+  if (!user) {
+    return <LoginScreen />;
   }
 
   if (profile?.pinEnabled && !unlocked) {
@@ -99,6 +109,7 @@ function RootNavigation() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="alarm-ringing" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
+        <Stack.Screen name="premium" options={{ presentation: 'modal' }} />
       </Stack>
     </RouterThemeProvider>
   );

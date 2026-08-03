@@ -5,7 +5,14 @@ import { useSQLiteContext } from 'expo-sqlite';
 
 import type { UserProfile } from './types';
 
-type ProfileRow = { name: string | null; avatar_uri: string | null; pin_hash: string | null; pin_enabled: number };
+type ProfileRow = {
+  name: string | null;
+  avatar_uri: string | null;
+  pin_hash: string | null;
+  pin_enabled: number;
+  firebase_uid: string | null;
+  premium: number;
+};
 
 function toProfile(row: ProfileRow | null): UserProfile {
   return {
@@ -13,6 +20,8 @@ function toProfile(row: ProfileRow | null): UserProfile {
     avatarUri: row?.avatar_uri ?? null,
     pinEnabled: Boolean(row?.pin_enabled),
     pinHash: row?.pin_hash ?? null,
+    firebaseUid: row?.firebase_uid ?? null,
+    premium: Boolean(row?.premium),
   };
 }
 
@@ -28,7 +37,7 @@ export function useProfile() {
   const refresh = useCallback(async () => {
     setLoading(true);
     const row = await db.getFirstAsync<ProfileRow>(
-      'SELECT name, avatar_uri, pin_hash, pin_enabled FROM user_profile WHERE id = 1'
+      'SELECT name, avatar_uri, pin_hash, pin_enabled, firebase_uid, premium FROM user_profile WHERE id = 1'
     );
     setProfile(toProfile(row));
     setLoading(false);
@@ -82,5 +91,20 @@ export function useProfile() {
     [profile]
   );
 
-  return { profile, loading, setName, setAvatarUri, setPin, disablePin, verifyPin, refresh };
+  /** Caches the signed-in Firebase account + its entitlement locally, so the rest of the app
+   * (free-tier limit checks in particular) never has to wait on a network round trip. Firestore
+   * remains the source of truth — see modules/premium/usePremium.ts, which calls this. */
+  const syncAccount = useCallback(
+    async (firebaseUid: string | null, premium: boolean) => {
+      await db.runAsync('UPDATE user_profile SET firebase_uid = ?, premium = ?, premium_synced_at = ? WHERE id = 1', [
+        firebaseUid,
+        premium ? 1 : 0,
+        new Date().toISOString(),
+      ]);
+      await refresh();
+    },
+    [db, refresh]
+  );
+
+  return { profile, loading, setName, setAvatarUri, setPin, disablePin, verifyPin, syncAccount, refresh };
 }

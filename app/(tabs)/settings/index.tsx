@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Image, Modal, Platform, Pressable, Text, TextInput, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import { Button, Card, Chip, LoadingState, ScreenContainer, TextField } from '@/components';
 import {
@@ -12,12 +12,17 @@ import {
   openNotificationSettings,
   requestNotificationPermissions,
 } from '@/notifications';
+import { useAuth } from '@/modules/auth';
+import { usePremium } from '@/modules/premium';
 import { useProfile } from '@/modules/profile';
 import { useSettings } from '@/modules/settings';
 import { useAppTheme } from '@/theme';
 
 export default function SettingsScreen() {
   const theme = useAppTheme();
+  const router = useRouter();
+  const { user, signOut } = useAuth();
+  const { premium } = usePremium();
   const { settings, setTimeFormat } = useSettings();
   const { profile, setName, setAvatarUri, setPin, disablePin } = useProfile();
   const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
@@ -108,6 +113,36 @@ export default function SettingsScreen() {
               <TextField placeholder="Your name" value={nameDraft} onChangeText={setNameDraft} onBlur={onSaveName} />
             </View>
           </View>
+        </Card>
+
+        <Card style={{ gap: theme.spacing.sm }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+            Account
+          </Text>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{user?.email}</Text>
+          <View style={{ marginTop: theme.spacing.xs }}>
+            <Button label="Log out" variant="danger" onPress={signOut} />
+          </View>
+        </Card>
+
+        <Card style={{ gap: theme.spacing.sm }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+            Premium
+          </Text>
+          {premium ? (
+            <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+              ✓ You're on Premium — every limit is lifted, for good.
+            </Text>
+          ) : (
+            <>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                Free plan: up to 5 habits, 2 recurring tasks, 1 finance account.
+              </Text>
+              <View style={{ marginTop: theme.spacing.xs }}>
+                <Button label="Go Premium — ₹500 lifetime" onPress={() => router.push('/premium')} />
+              </View>
+            </>
+          )}
         </Card>
 
         <Card style={{ gap: theme.spacing.sm }}>

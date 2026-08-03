@@ -1,0 +1,18 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Entitlement is only ever written by the Cloud Functions (Admin SDK, which bypasses these
+    // rules) — the client can read its own status but must never be able to grant itself
+    // premium by writing to its own document directly.
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Order → account mapping used to verify payments; clients never need to touch this directly.
+    match /orders/{orderId} {
+      allow read, write: if false;
+    }
+  }
+}

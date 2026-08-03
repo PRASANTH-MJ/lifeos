@@ -1,7 +1,9 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import { useState } from 'react';
 
-import { LoadingState, ScreenContainer } from '@/components';
+import { LoadingState, ScreenContainer, UpsellModal } from '@/components';
+import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
 import { TaskForm, useRecurringTasks, useTaskDetail, useTasks } from '@/modules/tasks';
 
 export default function TaskFormScreen() {
@@ -10,6 +12,8 @@ export default function TaskFormScreen() {
   const { taskId, recurring } = useLocalSearchParams<{ taskId?: string; recurring?: string }>();
   const isEdit = Boolean(taskId);
   const initialRecurring = recurring === '1';
+  const recurringGate = useFreeTierGate('recurringTasks');
+  const [showUpsell, setShowUpsell] = useState(false);
 
   const { createTask } = useTasks();
   const { createRecurringTask } = useRecurringTasks();
@@ -34,6 +38,12 @@ export default function TaskFormScreen() {
         lockRecurring={!isEdit}
         submitLabel={isEdit ? 'Save changes' : 'Save task'}
         onSave={async (values, checklistItems) => {
+          const addsANewRecurringTask = values.isRecurring && (!isEdit || !existingTask?.is_recurring);
+          if (addsANewRecurringTask && !recurringGate.allowed) {
+            setShowUpsell(true);
+            return;
+          }
+
           if (isEdit) {
             await updateTask({
               title: values.title,
@@ -85,6 +95,13 @@ export default function TaskFormScreen() {
           }
           router.back();
         }}
+      />
+
+      <UpsellModal
+        visible={showUpsell}
+        resourceLabel={LIMIT_LABELS.recurringTasks}
+        limit={recurringGate.limit}
+        onClose={() => setShowUpsell(false)}
       />
     </ScreenContainer>
   );

@@ -3,10 +3,11 @@ import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { Chip, EmptyState, ScreenContainer, useTabSwipeNavigation } from '@/components';
+import { Chip, EmptyState, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
 import { todayKey } from '@/lib/date';
 import { useCategories } from '@/modules/categories';
 import { RecurringTaskListItem, TaskListItem, TaskLogSheet, useRecurringTasks, useTasks } from '@/modules/tasks';
+import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
 import { useAppTheme } from '@/theme';
 
 type FilterKey = 'all' | number;
@@ -30,10 +31,21 @@ export default function TasksScreen() {
   const [tab, setTab] = useState<'single' | 'recurring'>('single');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [sheetTaskId, setSheetTaskId] = useState<number | null>(null);
+  const recurringGate = useFreeTierGate('recurringTasks');
+  const [showUpsell, setShowUpsell] = useState(false);
 
   const sheetEntry = recurringTasks.find((entry) => entry.task.id === sheetTaskId);
   const refreshAll = async () => {
     await Promise.all([refresh(), refreshRecurring()]);
+  };
+
+  const onAddTask = (forceRecurring?: boolean) => {
+    const wantsRecurring = forceRecurring ?? tab === 'recurring';
+    if (wantsRecurring && !recurringGate.allowed) {
+      setShowUpsell(true);
+      return;
+    }
+    router.push({ pathname: '/tasks/new', params: wantsRecurring ? { recurring: '1' } : {} });
   };
 
   const changeTab = (next: 'single' | 'recurring') => {
@@ -55,7 +67,7 @@ export default function TasksScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Pressable hitSlop={8} onPress={() => router.push({ pathname: '/tasks/new', params: tab === 'recurring' ? { recurring: '1' } : {} })}>
+            <Pressable hitSlop={8} onPress={() => onAddTask()}>
               <Ionicons name="add-circle" size={28} color={theme.colors.moduleTasks} />
             </Pressable>
           ),
@@ -88,7 +100,7 @@ export default function TasksScreen() {
               title={tasks.length === 0 ? 'No tasks yet' : 'Nothing in this list'}
               subtitle={tasks.length === 0 ? 'Add a to-do with a priority and due date to get started.' : undefined}
               ctaLabel={tasks.length === 0 ? 'Add your first task' : undefined}
-              onPressCta={tasks.length === 0 ? () => router.push('/tasks/new') : undefined}
+              onPressCta={tasks.length === 0 ? () => onAddTask(false) : undefined}
             />
           ) : (
             <View style={{ gap: theme.spacing.md }}>
@@ -111,7 +123,7 @@ export default function TasksScreen() {
             title={recurringTasks.length === 0 ? 'No recurring tasks yet' : 'Nothing in this list'}
             subtitle={recurringTasks.length === 0 ? 'Add a task that repeats every day, week, or month.' : undefined}
             ctaLabel={recurringTasks.length === 0 ? 'Add a recurring task' : undefined}
-            onPressCta={recurringTasks.length === 0 ? () => router.push({ pathname: '/tasks/new', params: { recurring: '1' } }) : undefined}
+            onPressCta={recurringTasks.length === 0 ? () => onAddTask(true) : undefined}
           />
         ) : (
           <View style={{ gap: theme.spacing.md }}>
@@ -150,6 +162,13 @@ export default function TasksScreen() {
           onClear={() => clearCompletion(sheetEntry.task.id)}
         />
       ) : null}
+
+      <UpsellModal
+        visible={showUpsell}
+        resourceLabel={LIMIT_LABELS.recurringTasks}
+        limit={recurringGate.limit}
+        onClose={() => setShowUpsell(false)}
+      />
     </ScreenContainer>
     </View>
   );

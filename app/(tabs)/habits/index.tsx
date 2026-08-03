@@ -3,10 +3,11 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
-import { Chip, EmptyState, ScreenContainer, useTabSwipeNavigation } from '@/components';
+import { Chip, EmptyState, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
 import { todayKey } from '@/lib/date';
 import { useCategories } from '@/modules/categories';
 import { HabitListItem, HabitLogSheet, useHabits } from '@/modules/habits';
+import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
 import { useAppTheme } from '@/theme';
 
 type FilterKey = 'all' | number;
@@ -19,6 +20,13 @@ export default function HabitsScreen() {
   const { categories } = useCategories('habit');
   const [sheetHabitId, setSheetHabitId] = useState<number | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const habitGate = useFreeTierGate('habits');
+  const [showUpsell, setShowUpsell] = useState(false);
+
+  const onAddHabit = () => {
+    if (habitGate.allowed) router.push('/habits/new');
+    else setShowUpsell(true);
+  };
 
   const sheetEntry = habits.find((entry) => entry.habit.id === sheetHabitId);
   const usedCategoryIds = new Set(habits.map((h) => h.habit.category_id).filter((id): id is number => id != null));
@@ -35,7 +43,7 @@ export default function HabitsScreen() {
             title="No habits yet"
             subtitle="Add a daily or weekly habit to start building your streak."
             ctaLabel="Add your first habit"
-            onPressCta={() => router.push('/habits/new')}
+            onPressCta={onAddHabit}
           />
         ) : (
           <View style={{ gap: theme.spacing.lg }}>
@@ -95,7 +103,7 @@ export default function HabitsScreen() {
 
       {!loading && habits.length > 0 ? (
         <Pressable
-          onPress={() => router.push('/habits/new')}
+          onPress={onAddHabit}
           accessibilityLabel="Add habit"
           style={{
             position: 'absolute',
@@ -116,6 +124,13 @@ export default function HabitsScreen() {
           <Ionicons name="add" size={28} color="#fff" />
         </Pressable>
       ) : null}
+
+      <UpsellModal
+        visible={showUpsell}
+        resourceLabel={LIMIT_LABELS.habits}
+        limit={habitGate.limit}
+        onClose={() => setShowUpsell(false)}
+      />
     </View>
   );
 }

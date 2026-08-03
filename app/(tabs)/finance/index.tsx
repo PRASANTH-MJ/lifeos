@@ -3,7 +3,7 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { Card, EmptyState, LoadingState, ScreenContainer, StatCard } from '@/components';
+import { Card, EmptyState, LoadingState, ScreenContainer, StatCard, UpsellModal } from '@/components';
 import { formatDisplayDate, todayKey } from '@/lib/date';
 import {
   ACCOUNT_TYPE_LABELS,
@@ -16,6 +16,7 @@ import {
   useTransactions,
   type AccountType,
 } from '@/modules/finance';
+import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
 import { useAppTheme } from '@/theme';
 
 const TYPE_ORDER: AccountType[] = ['cash', 'general', 'investment', 'credit'];
@@ -33,6 +34,8 @@ export default function FinanceScreen() {
   const { transactions, loading: loadingTransactions, refresh: refreshTransactions } = useTransactions();
   const { budgets, setBudgets, refresh: refreshBudgets } = useFinanceBudgets();
   const { weekSpend, refresh: refreshWeekSpend } = useFinanceWeekSpend();
+  const accountGate = useFreeTierGate('financeAccounts');
+  const [showUpsell, setShowUpsell] = useState(false);
   const today = todayKey();
   const monthPrefix = today.slice(0, 7);
   const daysInMonth = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0).getDate();
@@ -43,6 +46,11 @@ export default function FinanceScreen() {
 
   const refreshAll = async () => {
     await Promise.all([refresh(), refreshTransactions(), refreshBudgets(), refreshWeekSpend(), refreshSummary()]);
+  };
+
+  const onAddAccount = () => {
+    if (accountGate.allowed) router.push('/finance/accounts/new');
+    else setShowUpsell(true);
   };
 
   if (loading) {
@@ -58,11 +66,9 @@ export default function FinanceScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Link href="/finance/accounts/new" asChild>
-              <Pressable hitSlop={8}>
-                <Ionicons name="add-circle" size={28} color={theme.colors.primary} />
-              </Pressable>
-            </Link>
+            <Pressable hitSlop={8} onPress={onAddAccount}>
+              <Ionicons name="add-circle" size={28} color={theme.colors.primary} />
+            </Pressable>
           ),
         }}
       />
@@ -94,7 +100,7 @@ export default function FinanceScreen() {
             title="No accounts yet"
             subtitle="Add a cash, bank, investment, or credit account to start tracking."
             ctaLabel="Add your first account"
-            onPressCta={() => router.push('/finance/accounts/new')}
+            onPressCta={onAddAccount}
           />
         ) : (
           <View style={{ gap: theme.spacing.lg }}>
@@ -236,6 +242,13 @@ export default function FinanceScreen() {
           )}
         </View>
       </View>
+
+      <UpsellModal
+        visible={showUpsell}
+        resourceLabel={LIMIT_LABELS.financeAccounts}
+        limit={accountGate.limit}
+        onClose={() => setShowUpsell(false)}
+      />
     </ScreenContainer>
   );
 }
