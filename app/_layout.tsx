@@ -10,6 +10,7 @@ import { configureNotificationHandler, ensureAlarmChannel, requestNotificationPe
 import { LoginScreen, useAuth } from '@/modules/auth';
 import { PinLockScreen, useProfile } from '@/modules/profile';
 import { usePremium } from '@/modules/premium';
+import { useSyncEngine } from '@/modules/sync';
 import { ThemeProvider } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -83,6 +84,7 @@ function RootNavigation() {
   const { profile, loading: profileLoading, verifyPin } = useProfile();
   const [unlocked, setUnlocked] = useState(false);
   usePremium();
+  useSyncEngine();
   useAlarmNotificationRouting();
   useRequestNotificationPermissionOnLaunch();
 

@@ -1,8 +1,10 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
+import * as Crypto from 'expo-crypto';
 
 import { computeLongestStreak, computePeriodProgress, computeStreak } from '@/modules/habits';
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import { cancelTaskNotifications, syncTaskNotifications } from './scheduleTaskNotifications';
 import { parseRecurrenceDays, type Task, type TaskCompletion, type TaskLogStatus } from './types';
 
@@ -57,11 +59,13 @@ export function useTaskDetail(taskId: number) {
       >
     ) => {
       const keys = Object.keys(values) as (keyof typeof values)[];
-      const setClause = keys.map((key) => `${key} = ?`).join(', ');
+      const setClause = [...keys.map((key) => `${key} = ?`), 'updated_at = ?'].join(', ');
       await db.runAsync(`UPDATE tasks SET ${setClause} WHERE id = ?`, [
         ...keys.map((key) => values[key] as string | number | null),
+        new Date().toISOString(),
         taskId,
       ]);
+      await pushLocalRow(db, 'tasks', taskId);
       const updated = await db.getFirstAsync<Task>('SELECT * FROM tasks WHERE id = ?', [taskId]);
       // Best-effort — never block the save on notification scheduling.
       if (updated && !updated.completed_at) syncTaskNotifications(updated).catch(() => {});
@@ -73,21 +77,26 @@ export function useTaskDetail(taskId: number) {
   const toggleComplete = useCallback(async () => {
     if (!task) return;
     const completing = !task.completed_at;
-    await db.runAsync('UPDATE tasks SET completed_at = ? WHERE id = ?', [
-      completing ? new Date().toISOString() : null,
+    const now = new Date().toISOString();
+    await db.runAsync('UPDATE tasks SET completed_at = ?, updated_at = ? WHERE id = ?', [
+      completing ? now : null,
+      now,
       taskId,
     ]);
+    await pushLocalRow(db, 'tasks', taskId);
     (completing ? cancelTaskNotifications(taskId) : syncTaskNotifications(task)).catch(() => {});
     await refresh();
   }, [db, task, taskId, refresh]);
 
   const addSubtask = useCallback(
     async (title: string) => {
-      await db.runAsync(
-        `INSERT INTO tasks (title, notes, priority, due_date, completed_at, parent_task_id, sort_order, created_at, archived)
-         VALUES (?, NULL, ?, NULL, NULL, ?, ?, ?, 0)`,
-        [title, task?.priority ?? 'medium', taskId, subtasks.length, new Date().toISOString()]
+      const now = new Date().toISOString();
+      const result = await db.runAsync(
+        `INSERT INTO tasks (title, notes, priority, due_date, completed_at, parent_task_id, sort_order, created_at, archived, sync_id, updated_at)
+         VALUES (?, NULL, ?, NULL, NULL, ?, ?, ?, 0, ?, ?)`,
+        [title, task?.priority ?? 'medium', taskId, subtasks.length, now, Crypto.randomUUID(), now]
       );
+      await pushLocalRow(db, 'tasks', result.lastInsertRowId);
       await refresh();
     },
     [db, task, taskId, subtasks.length, refresh]
@@ -95,27 +104,36 @@ export function useTaskDetail(taskId: number) {
 
   const toggleSubtask = useCallback(
     async (subtask: Task) => {
-      await db.runAsync('UPDATE tasks SET completed_at = ? WHERE id = ?', [
-        subtask.completed_at ? null : new Date().toISOString(),
+      const now = new Date().toISOString();
+      await db.runAsync('UPDATE tasks SET completed_at = ?, updated_at = ? WHERE id = ?', [
+        subtask.completed_at ? null : now,
+        now,
         subtask.id,
       ]);
+      await pushLocalRow(db, 'tasks', subtask.id);
       await refresh();
     },
     [db, refresh]
   );
 
   const archiveTask = useCallback(async () => {
-    await db.runAsync('UPDATE tasks SET archived = 1 WHERE id = ?', [taskId]);
+    await db.runAsync('UPDATE tasks SET archived = 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), taskId]);
+    await pushLocalRow(db, 'tasks', taskId);
     cancelTaskNotifications(taskId).catch(() => {});
   }, [db, taskId]);
 
   const deleteTask = useCallback(async () => {
+    await recordDeleteBeforeRemoving(db, 'tasks', taskId);
     await db.runAsync('DELETE FROM tasks WHERE id = ?', [taskId]);
     cancelTaskNotifications(taskId).catch(() => {});
   }, [db, taskId]);
 
   // "Clear history" equivalent of a habit restart — wipes logged completions without deleting the task itself.
   const clearCompletionHistory = useCallback(async () => {
+    const rows = await db.getAllAsync<{ id: number }>('SELECT id FROM task_completions WHERE task_id = ?', [taskId]);
+    for (const row of rows) {
+      await recordDeleteBeforeRemoving(db, 'task_completions', row.id);
+    }
     await db.runAsync('DELETE FROM task_completions WHERE task_id = ?', [taskId]);
     await refresh();
   }, [db, taskId, refresh]);
@@ -123,15 +141,16 @@ export function useTaskDetail(taskId: number) {
   const upsertCompletion = useCallback(
     async (date: string, status: TaskLogStatus) => {
       const existing = await db.getFirstAsync<{ id: number }>('SELECT id FROM task_completions WHERE task_id = ? AND date = ?', [taskId, date]);
+      const now = new Date().toISOString();
       if (existing) {
-        await db.runAsync('UPDATE task_completions SET status = ?, completed_at = ? WHERE id = ?', [status, new Date().toISOString(), existing.id]);
+        await db.runAsync('UPDATE task_completions SET status = ?, completed_at = ?, updated_at = ? WHERE id = ?', [status, now, now, existing.id]);
+        await pushLocalRow(db, 'task_completions', existing.id);
       } else {
-        await db.runAsync('INSERT INTO task_completions (task_id, date, status, completed_at) VALUES (?, ?, ?, ?)', [
-          taskId,
-          date,
-          status,
-          new Date().toISOString(),
-        ]);
+        const result = await db.runAsync(
+          'INSERT INTO task_completions (task_id, date, status, completed_at, sync_id, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [taskId, date, status, now, Crypto.randomUUID(), now]
+        );
+        await pushLocalRow(db, 'task_completions', result.lastInsertRowId);
       }
       await refresh();
     },
@@ -140,6 +159,10 @@ export function useTaskDetail(taskId: number) {
 
   const clearCompletion = useCallback(
     async (date: string) => {
+      const existing = await db.getFirstAsync<{ id: number }>('SELECT id FROM task_completions WHERE task_id = ? AND date = ?', [taskId, date]);
+      if (existing) {
+        await recordDeleteBeforeRemoving(db, 'task_completions', existing.id);
+      }
       await db.runAsync('DELETE FROM task_completions WHERE task_id = ? AND date = ?', [taskId, date]);
       await refresh();
     },

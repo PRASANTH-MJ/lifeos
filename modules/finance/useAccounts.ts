@@ -1,6 +1,9 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useMemo, useState } from 'react';
+
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 import type { Account, AccountType } from './types';
 
@@ -55,10 +58,11 @@ export function useAccounts() {
   const addAccount = useCallback(
     async (values: { name: string; type: AccountType; currency?: string; currentBalance?: number }) => {
       const now = new Date().toISOString();
-      await db.runAsync(
-        'INSERT INTO finance_accounts (name, type, currency, current_balance, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)',
-        [values.name, values.type, values.currency ?? 'USD', values.currentBalance ?? 0, now, now]
+      const result = await db.runAsync(
+        'INSERT INTO finance_accounts (name, type, currency, current_balance, is_archived, created_at, updated_at, sync_id) VALUES (?, ?, ?, ?, 0, ?, ?, ?)',
+        [values.name, values.type, values.currency ?? 'USD', values.currentBalance ?? 0, now, now, Crypto.randomUUID()]
       );
+      await pushLocalRow(db, 'finance_accounts', result.lastInsertRowId);
       await refresh();
     },
     [db, refresh]
@@ -89,6 +93,7 @@ export function useAccounts() {
       params.push(new Date().toISOString());
       params.push(Number(id));
       await db.runAsync(`UPDATE finance_accounts SET ${updates.join(', ')} WHERE id = ?`, params);
+      await pushLocalRow(db, 'finance_accounts', Number(id));
       await refresh();
     },
     [db, refresh]
@@ -98,6 +103,7 @@ export function useAccounts() {
 
   const removeAccount = useCallback(
     async (id: string) => {
+      await recordDeleteBeforeRemoving(db, 'finance_accounts', Number(id));
       await db.runAsync('DELETE FROM finance_accounts WHERE id = ?', [Number(id)]);
       await refresh();
     },

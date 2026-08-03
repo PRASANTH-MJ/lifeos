@@ -1,6 +1,9 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
+
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 import type { Label } from './types';
 
@@ -27,7 +30,13 @@ export function useFinanceLabels() {
 
   const addLabel = useCallback(
     async (name: string, color = '#8E8E93') => {
-      await db.runAsync('INSERT INTO finance_labels (name, color) VALUES (?, ?)', [name, color]);
+      const result = await db.runAsync('INSERT INTO finance_labels (name, color, updated_at, sync_id) VALUES (?, ?, ?, ?)', [
+        name,
+        color,
+        new Date().toISOString(),
+        Crypto.randomUUID(),
+      ]);
+      await pushLocalRow(db, 'finance_labels', result.lastInsertRowId);
       await refresh();
     },
     [db, refresh]
@@ -35,6 +44,7 @@ export function useFinanceLabels() {
 
   const removeLabel = useCallback(
     async (id: string) => {
+      await recordDeleteBeforeRemoving(db, 'finance_labels', Number(id));
       await db.runAsync('DELETE FROM finance_labels WHERE id = ?', [Number(id)]);
       await refresh();
     },

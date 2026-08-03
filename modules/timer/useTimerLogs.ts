@@ -1,8 +1,10 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, toDateKey, todayKey } from '@/lib/date';
+import { pushLocalRow } from '@/modules/sync';
 import type { TimerLog } from './types';
 
 export function useTimerLogs() {
@@ -25,12 +27,12 @@ export function useTimerLogs() {
 
   const logSession = useCallback(
     async (label: string | null, durationSeconds: number, habitId: number | null) => {
-      await db.runAsync('INSERT INTO timer_logs (label, habit_id, duration_seconds, completed_at) VALUES (?, ?, ?, ?)', [
-        label,
-        habitId,
-        Math.round(durationSeconds),
-        new Date().toISOString(),
-      ]);
+      const completedAt = new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO timer_logs (label, habit_id, duration_seconds, completed_at, sync_id, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [label, habitId, Math.round(durationSeconds), completedAt, Crypto.randomUUID(), completedAt]
+      );
+      await pushLocalRow(db, 'timer_logs', result.lastInsertRowId);
       await refresh();
     },
     [db, refresh]

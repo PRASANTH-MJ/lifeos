@@ -1,6 +1,9 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
+
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 import type { Debt, DebtDirection, DebtPayment } from './types';
 
@@ -66,13 +69,12 @@ export function useFinanceDebts() {
 
   const addDebt = useCallback(
     async (values: { personName: string; direction: DebtDirection; amount: number; note?: string | null }) => {
-      await db.runAsync('INSERT INTO finance_debts (person_name, direction, amount, note, is_closed, created_at, closed_at) VALUES (?, ?, ?, ?, 0, ?, NULL)', [
-        values.personName,
-        values.direction,
-        values.amount,
-        values.note ?? null,
-        new Date().toISOString(),
-      ]);
+      const now = new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO finance_debts (person_name, direction, amount, note, is_closed, created_at, closed_at, updated_at, sync_id) VALUES (?, ?, ?, ?, 0, ?, NULL, ?, ?)',
+        [values.personName, values.direction, values.amount, values.note ?? null, now, now, Crypto.randomUUID()]
+      );
+      await pushLocalRow(db, 'finance_debts', result.lastInsertRowId);
       await refresh();
     },
     [db, refresh]
@@ -80,11 +82,14 @@ export function useFinanceDebts() {
 
   const setClosed = useCallback(
     async (id: string, isClosed: boolean) => {
-      await db.runAsync('UPDATE finance_debts SET is_closed = ?, closed_at = ? WHERE id = ?', [
+      const now = new Date().toISOString();
+      await db.runAsync('UPDATE finance_debts SET is_closed = ?, closed_at = ?, updated_at = ? WHERE id = ?', [
         isClosed ? 1 : 0,
-        isClosed ? new Date().toISOString() : null,
+        isClosed ? now : null,
+        now,
         Number(id),
       ]);
+      await pushLocalRow(db, 'finance_debts', Number(id));
       await refresh();
     },
     [db, refresh]
@@ -92,6 +97,7 @@ export function useFinanceDebts() {
 
   const removeDebt = useCallback(
     async (id: string) => {
+      await recordDeleteBeforeRemoving(db, 'finance_debts', Number(id));
       await db.runAsync('DELETE FROM finance_debts WHERE id = ?', [Number(id)]);
       await refresh();
     },
@@ -127,12 +133,12 @@ export function useDebtPayments(debtId: string) {
 
   const addPayment = useCallback(
     async (amount: number, date: string) => {
-      await db.runAsync('INSERT INTO finance_debt_payments (debt_id, amount, date, created_at) VALUES (?, ?, ?, ?)', [
-        Number(debtId),
-        amount,
-        date,
-        new Date().toISOString(),
-      ]);
+      const now = new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO finance_debt_payments (debt_id, amount, date, created_at, updated_at, sync_id) VALUES (?, ?, ?, ?, ?, ?)',
+        [Number(debtId), amount, date, now, now, Crypto.randomUUID()]
+      );
+      await pushLocalRow(db, 'finance_debt_payments', result.lastInsertRowId);
       await refresh();
     },
     [db, debtId, refresh]
@@ -140,6 +146,7 @@ export function useDebtPayments(debtId: string) {
 
   const removePayment = useCallback(
     async (id: string) => {
+      await recordDeleteBeforeRemoving(db, 'finance_debt_payments', Number(id));
       await db.runAsync('DELETE FROM finance_debt_payments WHERE id = ?', [Number(id)]);
       await refresh();
     },

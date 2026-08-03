@@ -1,8 +1,10 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
+import * as Crypto from 'expo-crypto';
 
 import { isDue, parseTargetDays, type Habit } from '@/modules/habits';
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import type { Task } from '@/modules/tasks';
 import type { CalendarEvent } from './types';
 
@@ -51,10 +53,12 @@ export function useCalendarDay(dateKey: string) {
 
   const createEvent = useCallback(
     async (values: { title: string; notes?: string; startTime?: string | null; endTime?: string | null }) => {
-      await db.runAsync(
-        'INSERT INTO calendar_events (title, notes, date, start_time, end_time, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [values.title, values.notes ?? null, dateKey, values.startTime ?? null, values.endTime ?? null, new Date().toISOString()]
+      const now = new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO calendar_events (title, notes, date, start_time, end_time, created_at, sync_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [values.title, values.notes ?? null, dateKey, values.startTime ?? null, values.endTime ?? null, now, Crypto.randomUUID(), now]
       );
+      await pushLocalRow(db, 'calendar_events', result.lastInsertRowId);
       await refresh();
     },
     [db, dateKey, refresh]
@@ -67,13 +71,15 @@ export function useCalendarDay(dateKey: string) {
         [habitId, dateKey]
       );
       if (existing) {
+        await recordDeleteBeforeRemoving(db, 'habit_logs', existing.id);
         await db.runAsync('DELETE FROM habit_logs WHERE id = ?', [existing.id]);
       } else {
-        await db.runAsync("INSERT INTO habit_logs (habit_id, date, status, completed_at) VALUES (?, ?, 'done', ?)", [
-          habitId,
-          dateKey,
-          new Date().toISOString(),
-        ]);
+        const now = new Date().toISOString();
+        const result = await db.runAsync(
+          "INSERT INTO habit_logs (habit_id, date, status, completed_at, sync_id, updated_at) VALUES (?, ?, 'done', ?, ?, ?)",
+          [habitId, dateKey, now, Crypto.randomUUID(), now]
+        );
+        await pushLocalRow(db, 'habit_logs', result.lastInsertRowId);
       }
       await refresh();
     },
@@ -82,10 +88,13 @@ export function useCalendarDay(dateKey: string) {
 
   const toggleTask = useCallback(
     async (task: Task) => {
-      await db.runAsync('UPDATE tasks SET completed_at = ? WHERE id = ?', [
-        task.completed_at ? null : new Date().toISOString(),
+      const now = new Date().toISOString();
+      await db.runAsync('UPDATE tasks SET completed_at = ?, updated_at = ? WHERE id = ?', [
+        task.completed_at ? null : now,
+        now,
         task.id,
       ]);
+      await pushLocalRow(db, 'tasks', task.id);
       await refresh();
     },
     [db, refresh]

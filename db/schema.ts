@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 export const DATABASE_NAME = 'lifeos.db';
@@ -5,7 +6,16 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 23;
+const DATABASE_VERSION = 24;
+
+/** A deterministic, non-random id derived from a fixed string — used only for seed rows (built-in
+ * categories, starter affirmations) so every fresh install gets the exact same sync_id for "the
+ * same" seed content, instead of each install's independent seeding creating cloud-sync
+ * duplicates of rows that are supposed to be identical everywhere. */
+async function deterministicSyncId(namespace: string, key: string): Promise<string> {
+  const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${namespace}:${key}`);
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
+}
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -939,7 +949,174 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 23;
   }
 
-  // Future modules land here as `if (currentDbVersion === 23) { ... currentDbVersion = 24; }`
+  if (currentDbVersion === 23) {
+    // Cross-device sync groundwork — every table gets a `sync_id` (a UUID, stable across
+    // devices, unlike the local auto-increment `id` two offline devices could independently
+    // reuse) and an `updated_at` that's actually maintained on every write (most tables here only
+    // ever had `created_at`, or an event timestamp like `completed_at`, neither of which changes
+    // on update — useless as a "what changed" signal for sync). See modules/sync/ for how these
+    // get used; this block only adds the columns and backfills existing rows.
+    const ALL_SYNCED_TABLES = [
+      'habits', 'habit_logs', 'tasks', 'task_completions', 'journal_entries', 'journal_checkins',
+      'calendar_events', 'meditation_logs', 'meditation_custom_track', 'breathing_logs', 'affirmations',
+      'finance_transactions', 'food_logs', 'mind_training_logs', 'workout_preferences', 'workout_logs',
+      'categories', 'app_settings', 'shopping_items', 'finance_budgets', 'finance_accounts',
+      'finance_categories', 'user_profile', 'finance_goals', 'finance_goal_contributions', 'finance_debts',
+      'finance_debt_payments', 'finance_planned_payments', 'finance_labels', 'finance_transaction_labels',
+      'finance_budget_plans', 'timer_logs', 'module_reminders', 'shopping_lists', 'custom_workouts',
+    ];
+    for (const table of ALL_SYNCED_TABLES) {
+      await db.execAsync(`ALTER TABLE ${table} ADD COLUMN sync_id TEXT`);
+    }
+
+    // Already had a real, maintained updated_at before this migration.
+    const HAS_UPDATED_AT = new Set([
+      'journal_entries', 'journal_checkins', 'workout_preferences', 'app_settings',
+      'finance_budgets', 'finance_accounts', 'user_profile', 'module_reminders',
+    ]);
+    // Everything else needs the column added and backfilled from whatever timestamp it does have.
+    const BACKFILL_FROM_CREATED_AT = [
+      'habits', 'tasks', 'calendar_events', 'meditation_custom_track', 'affirmations',
+      'finance_transactions', 'food_logs', 'categories', 'shopping_items', 'finance_goals',
+      'finance_goal_contributions', 'finance_debts', 'finance_debt_payments', 'finance_planned_payments',
+      'finance_budget_plans', 'shopping_lists', 'custom_workouts',
+    ];
+    const BACKFILL_FROM_COMPLETED_AT = [
+      'habit_logs', 'task_completions', 'meditation_logs', 'breathing_logs', 'mind_training_logs',
+      'workout_logs', 'timer_logs',
+    ];
+    const BACKFILL_FROM_NOW = ['finance_categories', 'finance_labels', 'finance_transaction_labels'];
+
+    for (const table of ALL_SYNCED_TABLES) {
+      if (HAS_UPDATED_AT.has(table)) continue;
+      await db.execAsync(`ALTER TABLE ${table} ADD COLUMN updated_at TEXT`);
+    }
+    for (const table of BACKFILL_FROM_CREATED_AT) {
+      await db.execAsync(`UPDATE ${table} SET updated_at = created_at WHERE updated_at IS NULL`);
+    }
+    for (const table of BACKFILL_FROM_COMPLETED_AT) {
+      await db.execAsync(`UPDATE ${table} SET updated_at = completed_at WHERE updated_at IS NULL`);
+    }
+    const now = new Date().toISOString();
+    for (const table of BACKFILL_FROM_NOW) {
+      await db.runAsync(`UPDATE ${table} SET updated_at = ? WHERE updated_at IS NULL`, [now]);
+    }
+
+    // Singleton config rows (always id = 1) — a fixed, non-random sync_id is exactly as
+    // deterministic as they need, since there's only ever one row.
+    for (const table of ['workout_preferences', 'app_settings', 'finance_budgets', 'user_profile']) {
+      await db.execAsync(`UPDATE ${table} SET sync_id = 'singleton' WHERE sync_id IS NULL`);
+    }
+
+    // Seed rows (built-in categories, finance categories, starter affirmations) get deterministic
+    // ids derived from their fixed content, so a second device's fresh install seeds the *same*
+    // sync_ids instead of creating duplicate rows once both sides sync. Any affirmation whose text
+    // isn't in this known-seed list is a real user-added one and gets a random id below instead.
+    for (const category of SEED_CATEGORIES) {
+      const syncId = await deterministicSyncId('category', category.name);
+      await db.runAsync('UPDATE categories SET sync_id = ? WHERE name = ? AND sync_id IS NULL', [syncId, category.name]);
+    }
+    for (const category of SEED_FINANCE_CATEGORIES) {
+      const syncId = await deterministicSyncId('finance_category', `${category.name}:${category.type}`);
+      await db.runAsync('UPDATE finance_categories SET sync_id = ? WHERE name = ? AND type = ? AND sync_id IS NULL', [
+        syncId,
+        category.name,
+        category.type,
+      ]);
+    }
+    const KNOWN_SEED_AFFIRMATIONS = [
+      ...SEED_AFFIRMATIONS,
+      'Be Good to Yourself',
+      'Dream. Believe. Achieve.',
+      'I am a magnet for success & happiness!',
+      'My dream life is already mine.',
+      'Believe in your dreams.',
+      'In a world full of roses, be a sunflower.',
+      'Be kind to yourself.',
+      'Reset, restart, refocus.',
+      'Not yesterday, not tomorrow — now.',
+      'What if it all works out?',
+      'Discipline.',
+      'Dream the impossible dream.',
+      "It's always been you vs. you.",
+      'I attract everything I want.',
+    ];
+    for (const text of KNOWN_SEED_AFFIRMATIONS) {
+      const syncId = await deterministicSyncId('affirmation', text);
+      await db.runAsync('UPDATE affirmations SET sync_id = ? WHERE text = ? AND sync_id IS NULL', [syncId, text]);
+    }
+
+    // Everything else with existing rows (real user data — habits, tasks, transactions, journal
+    // entries, etc.) gets a random UUID per row, since there's no fixed content to derive from.
+    const RANDOM_BACKFILL_TABLES = ALL_SYNCED_TABLES.filter(
+      (table) =>
+        !['workout_preferences', 'app_settings', 'finance_budgets', 'user_profile', 'categories', 'finance_categories', 'affirmations', 'finance_transaction_labels'].includes(
+          table
+        )
+    );
+    for (const table of RANDOM_BACKFILL_TABLES) {
+      const rows = await db.getAllAsync<{ id: number }>(`SELECT id FROM ${table} WHERE sync_id IS NULL`);
+      for (const row of rows) {
+        await db.runAsync(`UPDATE ${table} SET sync_id = ? WHERE id = ?`, [Crypto.randomUUID(), row.id]);
+      }
+    }
+    // No single `id` column (composite PRIMARY KEY (transaction_id, label_id)) — handled separately.
+    const transactionLabelRows = await db.getAllAsync<{ transaction_id: number; label_id: number }>(
+      'SELECT transaction_id, label_id FROM finance_transaction_labels WHERE sync_id IS NULL'
+    );
+    for (const row of transactionLabelRows) {
+      await db.runAsync('UPDATE finance_transaction_labels SET sync_id = ? WHERE transaction_id = ? AND label_id = ?', [
+        Crypto.randomUUID(),
+        row.transaction_id,
+        row.label_id,
+      ]);
+    }
+    // Any remaining seed rows without an app-level insert path (categories/finance_categories) or
+    // any affirmation that somehow didn't match the known-seed list still needs *some* sync_id.
+    for (const table of ['categories', 'finance_categories', 'affirmations']) {
+      const rows = await db.getAllAsync<{ id: number }>(`SELECT id FROM ${table} WHERE sync_id IS NULL`);
+      for (const row of rows) {
+        await db.runAsync(`UPDATE ${table} SET sync_id = ? WHERE id = ?`, [Crypto.randomUUID(), row.id]);
+      }
+    }
+
+    // Indexes on sync_id for the tables other tables' foreign keys resolve against during a
+    // remote-record merge (see modules/sync/syncSchema.ts).
+    await db.execAsync(`
+      CREATE INDEX idx_habits_sync_id ON habits(sync_id);
+      CREATE INDEX idx_tasks_sync_id ON tasks(sync_id);
+      CREATE INDEX idx_categories_sync_id ON categories(sync_id);
+      CREATE INDEX idx_finance_accounts_sync_id ON finance_accounts(sync_id);
+      CREATE INDEX idx_finance_categories_sync_id ON finance_categories(sync_id);
+      CREATE INDEX idx_finance_goals_sync_id ON finance_goals(sync_id);
+      CREATE INDEX idx_finance_debts_sync_id ON finance_debts(sync_id);
+      CREATE INDEX idx_finance_labels_sync_id ON finance_labels(sync_id);
+      CREATE INDEX idx_finance_transactions_sync_id ON finance_transactions(sync_id);
+      CREATE INDEX idx_shopping_lists_sync_id ON shopping_lists(sync_id);
+    `);
+
+    // Tombstones (recorded before a hard DELETE, so a remote listener can tell "deleted" apart
+    // from "never existed") and the offline outbox (every local write lands here first, so it
+    // survives an app restart while offline; flushed on regained connectivity/app foreground).
+    await db.execAsync(`
+      CREATE TABLE sync_tombstones (
+        sync_id TEXT PRIMARY KEY,
+        table_name TEXT NOT NULL,
+        deleted_at TEXT NOT NULL
+      );
+      CREATE TABLE sync_outbox (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        sync_id TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+
+    currentDbVersion = 24;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 24) { ... currentDbVersion = 25; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

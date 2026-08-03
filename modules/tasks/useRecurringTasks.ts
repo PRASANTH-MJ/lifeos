@@ -1,10 +1,12 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
+import * as Crypto from 'expo-crypto';
 
 import { todayKey } from '@/lib/date';
 import { computePeriodProgress, isDue } from '@/modules/habits';
 import { useLocalTable } from '@/db';
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import { parseRecurrenceDays, type RecurrenceFrequency, type Task, type TaskCompletion, type TaskLogStatus, type TaskPriority } from './types';
 
 export type CreateRecurringTaskInput = {
@@ -51,19 +53,21 @@ export function useRecurringTasks() {
         'SELECT id FROM task_completions WHERE task_id = ? AND date = ?',
         [taskId, date]
       );
+      const now = new Date().toISOString();
       if (existing) {
-        await db.runAsync('UPDATE task_completions SET status = ?, completed_at = ? WHERE id = ?', [
+        await db.runAsync('UPDATE task_completions SET status = ?, completed_at = ?, updated_at = ? WHERE id = ?', [
           values.status,
-          new Date().toISOString(),
+          now,
+          now,
           existing.id,
         ]);
+        await pushLocalRow(db, 'task_completions', existing.id);
       } else {
-        await db.runAsync('INSERT INTO task_completions (task_id, date, status, completed_at) VALUES (?, ?, ?, ?)', [
-          taskId,
-          date,
-          values.status,
-          new Date().toISOString(),
-        ]);
+        const result = await db.runAsync(
+          'INSERT INTO task_completions (task_id, date, status, completed_at, sync_id, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [taskId, date, values.status, now, Crypto.randomUUID(), now]
+        );
+        await pushLocalRow(db, 'task_completions', result.lastInsertRowId);
       }
       await refreshCompletions();
     },
@@ -72,7 +76,15 @@ export function useRecurringTasks() {
 
   const clearCompletion = useCallback(
     async (taskId: number, date?: string) => {
-      await db.runAsync('DELETE FROM task_completions WHERE task_id = ? AND date = ?', [taskId, date ?? todayKey()]);
+      const targetDate = date ?? todayKey();
+      const existing = await db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM task_completions WHERE task_id = ? AND date = ?',
+        [taskId, targetDate]
+      );
+      if (existing) {
+        await recordDeleteBeforeRemoving(db, 'task_completions', existing.id);
+      }
+      await db.runAsync('DELETE FROM task_completions WHERE task_id = ? AND date = ?', [taskId, targetDate]);
       await refreshCompletions();
     },
     [db, refreshCompletions]
@@ -127,8 +139,11 @@ export function useRecurringTasks() {
       if (swapIndex < 0 || swapIndex >= table.rows.length) return;
       const a = table.rows[index];
       const b = table.rows[swapIndex];
-      await db.runAsync('UPDATE tasks SET sort_order = ? WHERE id = ?', [b.sort_order, a.id]);
-      await db.runAsync('UPDATE tasks SET sort_order = ? WHERE id = ?', [a.sort_order, b.id]);
+      const now = new Date().toISOString();
+      await db.runAsync('UPDATE tasks SET sort_order = ?, updated_at = ? WHERE id = ?', [b.sort_order, now, a.id]);
+      await db.runAsync('UPDATE tasks SET sort_order = ?, updated_at = ? WHERE id = ?', [a.sort_order, now, b.id]);
+      await pushLocalRow(db, 'tasks', a.id);
+      await pushLocalRow(db, 'tasks', b.id);
       await table.refresh();
     },
     [db, table]

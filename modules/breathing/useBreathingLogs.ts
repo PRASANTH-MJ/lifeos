@@ -1,8 +1,10 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, dateKeyToTimestamp, toDateKey, todayKey } from '@/lib/date';
+import { pushLocalRow } from '@/modules/sync';
 import type { BreathingLog } from './types';
 
 export function useBreathingLogs() {
@@ -25,10 +27,12 @@ export function useBreathingLogs() {
 
   const logSession = useCallback(
     async (patternKey: string, durationSeconds: number, cycles: number, dateKey?: string) => {
-      await db.runAsync(
-        'INSERT INTO breathing_logs (pattern_key, duration_seconds, cycles, completed_at) VALUES (?, ?, ?, ?)',
-        [patternKey, Math.round(durationSeconds), cycles, dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString()]
+      const completedAt = dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO breathing_logs (pattern_key, duration_seconds, cycles, completed_at, sync_id, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [patternKey, Math.round(durationSeconds), cycles, completedAt, Crypto.randomUUID(), completedAt]
       );
+      await pushLocalRow(db, 'breathing_logs', result.lastInsertRowId);
       await refresh();
     },
     [db, refresh]

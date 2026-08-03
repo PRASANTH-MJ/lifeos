@@ -1,6 +1,9 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext, type SQLiteBindParams } from 'expo-sqlite';
+
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 type Row = { id: number };
 
@@ -14,6 +17,11 @@ export type QueryOptions = {
  * Generic CRUD-over-SQLite hook. One instance = one live query against a
  * single table; every module hook (useHabits, useTasks, useJournal, ...)
  * composes this instead of hand-rolling its own query/refresh plumbing.
+ *
+ * Every table this hook is used against is synced to Firestore (see modules/sync/) — insert/
+ * update stamp `sync_id`/`updated_at` if the caller didn't already provide them, then push the
+ * row's current state; remove records a tombstone before deleting so a remote listener can tell
+ * "deleted" apart from "never existed".
  */
 export function useLocalTable<T extends Row>(table: string, options: QueryOptions = {}) {
   const db = useSQLiteContext();
@@ -45,12 +53,18 @@ export function useLocalTable<T extends Row>(table: string, options: QueryOption
 
   const insert = useCallback(
     async (values: Partial<T>) => {
-      const keys = Object.keys(values) as (keyof T)[];
+      const withSync = {
+        ...values,
+        sync_id: (values as Record<string, unknown>).sync_id ?? Crypto.randomUUID(),
+        updated_at: (values as Record<string, unknown>).updated_at ?? new Date().toISOString(),
+      };
+      const keys = Object.keys(withSync) as (keyof typeof withSync)[];
       const placeholders = keys.map(() => '?').join(', ');
       const result = await db.runAsync(
         `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`,
-        keys.map((k) => values[k] as string | number | null)
+        keys.map((k) => withSync[k] as string | number | null)
       );
+      await pushLocalRow(db, table, result.lastInsertRowId);
       await refresh();
       return result.lastInsertRowId;
     },
@@ -59,12 +73,14 @@ export function useLocalTable<T extends Row>(table: string, options: QueryOption
 
   const update = useCallback(
     async (id: number, values: Partial<T>) => {
-      const keys = Object.keys(values) as (keyof T)[];
+      const withSync = { ...values, updated_at: (values as Record<string, unknown>).updated_at ?? new Date().toISOString() };
+      const keys = Object.keys(withSync) as (keyof typeof withSync)[];
       const setClause = keys.map((k) => `${String(k)} = ?`).join(', ');
       await db.runAsync(`UPDATE ${table} SET ${setClause} WHERE id = ?`, [
-        ...keys.map((k) => values[k] as string | number | null),
+        ...keys.map((k) => withSync[k] as string | number | null),
         id,
       ]);
+      await pushLocalRow(db, table, id);
       await refresh();
     },
     [db, table, refresh]
@@ -72,6 +88,7 @@ export function useLocalTable<T extends Row>(table: string, options: QueryOption
 
   const remove = useCallback(
     async (id: number) => {
+      await recordDeleteBeforeRemoving(db, table, id);
       await db.runAsync(`DELETE FROM ${table} WHERE id = ?`, [id]);
       await refresh();
     },

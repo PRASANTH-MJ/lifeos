@@ -1,6 +1,9 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
+
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 import type { PlannedPayment, PlannedPaymentFrequency } from './types';
 
@@ -86,9 +89,10 @@ export function useFinancePlannedPayments() {
       notify: boolean;
       note?: string | null;
     }) => {
+      const now = new Date().toISOString();
       const result = await db.runAsync(
-        `INSERT INTO finance_planned_payments (account_id, category_id, type, amount, payee, frequency, next_date, notify, note, is_active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+        `INSERT INTO finance_planned_payments (account_id, category_id, type, amount, payee, frequency, next_date, notify, note, is_active, created_at, updated_at, sync_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
         [
           Number(values.accountId),
           values.categoryId ? Number(values.categoryId) : null,
@@ -99,9 +103,12 @@ export function useFinancePlannedPayments() {
           values.nextDate,
           values.notify ? 1 : 0,
           values.note ?? null,
-          new Date().toISOString(),
+          now,
+          now,
+          Crypto.randomUUID(),
         ]
       );
+      await pushLocalRow(db, 'finance_planned_payments', result.lastInsertRowId);
       await refresh();
       return String(result.lastInsertRowId);
     },
@@ -114,9 +121,10 @@ export function useFinancePlannedPayments() {
    * the caller to reschedule its reminder) or null if the payment is now fully done. */
   const markPaid = useCallback(
     async (payment: PlannedPayment): Promise<string | null> => {
-      await db.runAsync(
-        `INSERT INTO finance_transactions (account_id, category_id, type, amount, date, note, to_account_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
+      const now = new Date().toISOString();
+      const txResult = await db.runAsync(
+        `INSERT INTO finance_transactions (account_id, category_id, type, amount, date, note, to_account_id, created_at, updated_at, sync_id)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
         [
           Number(payment.account_id),
           payment.category_id ? Number(payment.category_id) : null,
@@ -124,16 +132,30 @@ export function useFinancePlannedPayments() {
           payment.amount,
           payment.next_date,
           payment.note ? `${payment.payee} — ${payment.note}` : payment.payee,
-          new Date().toISOString(),
+          now,
+          now,
+          Crypto.randomUUID(),
         ]
       );
+      await pushLocalRow(db, 'finance_transactions', txResult.lastInsertRowId);
+      // The transaction insert trigger recomputes finance_accounts.current_balance directly via
+      // SQL — push the affected account too so the recalculated balance syncs.
+      await pushLocalRow(db, 'finance_accounts', Number(payment.account_id));
 
       const nextDate = advanceByFrequency(payment.next_date, payment.frequency);
       if (nextDate) {
-        await db.runAsync('UPDATE finance_planned_payments SET next_date = ? WHERE id = ?', [nextDate, Number(payment.id)]);
+        await db.runAsync('UPDATE finance_planned_payments SET next_date = ?, updated_at = ? WHERE id = ?', [
+          nextDate,
+          new Date().toISOString(),
+          Number(payment.id),
+        ]);
       } else {
-        await db.runAsync('UPDATE finance_planned_payments SET is_active = 0 WHERE id = ?', [Number(payment.id)]);
+        await db.runAsync('UPDATE finance_planned_payments SET is_active = 0, updated_at = ? WHERE id = ?', [
+          new Date().toISOString(),
+          Number(payment.id),
+        ]);
       }
+      await pushLocalRow(db, 'finance_planned_payments', Number(payment.id));
       await refresh();
       return nextDate;
     },
@@ -142,6 +164,7 @@ export function useFinancePlannedPayments() {
 
   const removePlannedPayment = useCallback(
     async (id: string) => {
+      await recordDeleteBeforeRemoving(db, 'finance_planned_payments', Number(id));
       await db.runAsync('DELETE FROM finance_planned_payments WHERE id = ?', [Number(id)]);
       await refresh();
     },

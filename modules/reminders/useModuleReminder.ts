@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
@@ -12,6 +13,7 @@ import {
   scheduleWeeklyAlarm,
   scheduleWeeklyReminder,
 } from '@/notifications';
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 export type ReminderType = 'none' | 'notification' | 'alarm';
 export type ScheduleType = 'daily' | 'specific_days';
@@ -114,16 +116,27 @@ export function useModuleReminders(moduleKey: string, title: string, body: strin
       let reminderId = id;
       if (reminderId == null) {
         const result = await db.runAsync(
-          `INSERT INTO module_reminders (module_key, enabled, reminder_time, reminder_type, schedule_type, schedule_days, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [moduleKey, next.reminderType !== 'none' ? 1 : 0, next.time, next.reminderType, next.scheduleType, JSON.stringify(next.scheduleDays), new Date().toISOString()]
+          `INSERT INTO module_reminders (module_key, enabled, reminder_time, reminder_type, schedule_type, schedule_days, updated_at, sync_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            moduleKey,
+            next.reminderType !== 'none' ? 1 : 0,
+            next.time,
+            next.reminderType,
+            next.scheduleType,
+            JSON.stringify(next.scheduleDays),
+            new Date().toISOString(),
+            Crypto.randomUUID(),
+          ]
         );
         reminderId = result.lastInsertRowId;
+        await pushLocalRow(db, 'module_reminders', reminderId);
       } else {
         await db.runAsync(
           `UPDATE module_reminders SET enabled = ?, reminder_time = ?, reminder_type = ?, schedule_type = ?, schedule_days = ?, updated_at = ? WHERE id = ?`,
           [next.reminderType !== 'none' ? 1 : 0, next.time, next.reminderType, next.scheduleType, JSON.stringify(next.scheduleDays), new Date().toISOString(), reminderId]
         );
+        await pushLocalRow(db, 'module_reminders', reminderId);
       }
       await applySchedule(reminderId, next);
       await refresh();
@@ -138,6 +151,7 @@ export function useModuleReminders(moduleKey: string, title: string, body: strin
       const baseId = moduleReminderId(moduleKey, id);
       const allIds = [baseId, ...Array.from({ length: 7 }, (_, i) => `${baseId}-${i + 1}`)];
       await Promise.all(allIds.flatMap((idStr) => [cancelReminder(idStr), cancelAlarm(idStr)]));
+      await recordDeleteBeforeRemoving(db, 'module_reminders', id);
       await db.runAsync('DELETE FROM module_reminders WHERE id = ?', [id]);
       await refresh();
     },

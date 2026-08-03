@@ -1,8 +1,10 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 
 import { addDays, todayKey, weekdayOf } from '@/lib/date';
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 import type { BudgetPeriod, BudgetPlan, BudgetPlanProgress, BudgetStatus } from './types';
 
@@ -124,8 +126,9 @@ export function useFinanceBudgetPlans() {
 
   const addBudgetPlan = useCallback(
     async (values: { name: string; period: BudgetPeriod; amount: number; categoryId?: string | null; startDate?: string | null; endDate?: string | null }) => {
-      await db.runAsync(
-        'INSERT INTO finance_budget_plans (name, period, amount, category_id, start_date, end_date, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)',
+      const now = new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO finance_budget_plans (name, period, amount, category_id, start_date, end_date, is_active, created_at, updated_at, sync_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)',
         [
           values.name,
           values.period,
@@ -133,9 +136,12 @@ export function useFinanceBudgetPlans() {
           values.categoryId ? Number(values.categoryId) : null,
           values.startDate ?? null,
           values.endDate ?? null,
-          new Date().toISOString(),
+          now,
+          now,
+          Crypto.randomUUID(),
         ]
       );
+      await pushLocalRow(db, 'finance_budget_plans', result.lastInsertRowId);
       await refresh();
     },
     [db, refresh]
@@ -143,6 +149,7 @@ export function useFinanceBudgetPlans() {
 
   const removeBudgetPlan = useCallback(
     async (id: string) => {
+      await recordDeleteBeforeRemoving(db, 'finance_budget_plans', Number(id));
       await db.runAsync('DELETE FROM finance_budget_plans WHERE id = ?', [Number(id)]);
       await refresh();
     },

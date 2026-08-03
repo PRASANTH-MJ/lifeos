@@ -2,6 +2,8 @@ import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 
+import { pushLocalRow } from '@/modules/sync';
+
 import type { Category, CategoryType, SpendingPriority } from './types';
 
 type CategoryRow = { id: number; name: string; type: CategoryType; icon: string; color: string; priority: SpendingPriority };
@@ -30,7 +32,12 @@ export function useFinanceCategories() {
 
   const setCategoryPriority = useCallback(
     async (id: string, priority: SpendingPriority) => {
-      await db.runAsync('UPDATE finance_categories SET priority = ? WHERE id = ?', [priority, Number(id)]);
+      await db.runAsync('UPDATE finance_categories SET priority = ?, updated_at = ? WHERE id = ?', [
+        priority,
+        new Date().toISOString(),
+        Number(id),
+      ]);
+      await pushLocalRow(db, 'finance_categories', Number(id));
       await refresh();
     },
     [db, refresh]

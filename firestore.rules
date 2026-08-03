@@ -10,6 +10,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Cross-device data sync (habits, tasks, journal, finance, etc.) — unlike the entitlement
+    // doc above, this is the user's own content, not a money/trust boundary, so the client reads
+    // and writes it directly; no Cloud Function needed.
+    match /users/{uid}/records/{recordId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
     // Order → account mapping used to verify payments; clients never need to touch this directly.
     match /orders/{orderId} {
       allow read, write: if false;

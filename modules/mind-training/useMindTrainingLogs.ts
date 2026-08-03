@@ -1,8 +1,10 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { dateKeyToTimestamp } from '@/lib/date';
+import { pushLocalRow } from '@/modules/sync';
 import type { MindExercise, MindTrainingLog } from './types';
 
 export function useMindTrainingLogs() {
@@ -27,11 +29,12 @@ export function useMindTrainingLogs() {
 
   const logScore = useCallback(
     async (exerciseKey: string, score: number, dateKey?: string) => {
-      await db.runAsync('INSERT INTO mind_training_logs (exercise_key, score, completed_at) VALUES (?, ?, ?)', [
-        exerciseKey,
-        score,
-        dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString(),
-      ]);
+      const completedAt = dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO mind_training_logs (exercise_key, score, completed_at, sync_id, updated_at) VALUES (?, ?, ?, ?, ?)',
+        [exerciseKey, score, completedAt, Crypto.randomUUID(), completedAt]
+      );
+      await pushLocalRow(db, 'mind_training_logs', result.lastInsertRowId);
       await refresh();
     },
     [db, refresh]

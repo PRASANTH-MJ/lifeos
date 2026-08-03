@@ -1,7 +1,9 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import type { ShoppingList } from './types';
 
 export type ShoppingListSummary = ShoppingList & { totalItems: number; checkedItems: number; estimate: number };
@@ -49,7 +51,12 @@ export function useShoppingLists() {
 
   const addList = useCallback(
     async (name: string) => {
-      const result = await db.runAsync('INSERT INTO shopping_lists (name, created_at) VALUES (?, ?)', [name, new Date().toISOString()]);
+      const now = new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO shopping_lists (name, created_at, updated_at, sync_id) VALUES (?, ?, ?, ?)',
+        [name, now, now, Crypto.randomUUID()]
+      );
+      await pushLocalRow(db, 'shopping_lists', result.lastInsertRowId);
       await refresh();
       return result.lastInsertRowId;
     },
@@ -58,6 +65,7 @@ export function useShoppingLists() {
 
   const removeList = useCallback(
     async (id: number) => {
+      await recordDeleteBeforeRemoving(db, 'shopping_lists', id);
       await db.runAsync('DELETE FROM shopping_lists WHERE id = ?', [id]);
       await refresh();
     },

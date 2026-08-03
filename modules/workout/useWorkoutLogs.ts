@@ -1,8 +1,10 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, dateKeyToTimestamp, toDateKey, todayKey } from '@/lib/date';
+import { pushLocalRow } from '@/modules/sync';
 
 type WorkoutLog = { id: number; workout_key: string; completed_at: string };
 
@@ -26,10 +28,12 @@ export function useWorkoutLogs() {
 
   const logCompletion = useCallback(
     async (workoutKey: string, dateKey?: string) => {
-      await db.runAsync('INSERT INTO workout_logs (workout_key, completed_at) VALUES (?, ?)', [
-        workoutKey,
-        dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString(),
-      ]);
+      const completedAt = dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO workout_logs (workout_key, completed_at, sync_id, updated_at) VALUES (?, ?, ?, ?)',
+        [workoutKey, completedAt, Crypto.randomUUID(), completedAt]
+      );
+      await pushLocalRow(db, 'workout_logs', result.lastInsertRowId);
       await refresh();
     },
     [db, refresh]

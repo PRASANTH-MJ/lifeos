@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
+import { pushLocalRow } from '@/modules/sync';
 import type { Equipment, WorkoutGoal, WorkoutPreferences } from './types';
 
 export function useWorkoutPreferences() {
@@ -45,6 +46,7 @@ export function useWorkoutPreferences() {
            time_minutes = excluded.time_minutes, updated_at = excluded.updated_at`,
         [merged.goal, JSON.stringify(merged.equipment), merged.timeMinutes, new Date().toISOString()]
       );
+      await pushLocalRow(db, 'workout_preferences', 1);
       await refresh();
     },
     [db, preferences, refresh]

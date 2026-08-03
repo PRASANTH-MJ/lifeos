@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
+import { pushLocalRow } from '@/modules/sync';
 import type { AppSettings, TimeFormat } from './types';
 
 export function useSettings() {
@@ -30,6 +31,7 @@ export function useSettings() {
         timeFormat,
         new Date().toISOString(),
       ]);
+      await pushLocalRow(db, 'app_settings', 1);
       await refresh();
     },
     [db, refresh]

@@ -1,6 +1,9 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
+
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 import type { Goal, GoalContribution } from './types';
 
@@ -53,10 +56,12 @@ export function useFinanceGoals() {
 
   const addGoal = useCallback(
     async (values: { name: string; icon?: string; color?: string; targetAmount: number; targetDate?: string | null }) => {
-      await db.runAsync(
-        'INSERT INTO finance_goals (name, icon, color, target_amount, target_date, current_amount, is_closed, created_at) VALUES (?, ?, ?, ?, ?, 0, 0, ?)',
-        [values.name, values.icon ?? 'flag', values.color ?? '#3D8BFF', values.targetAmount, values.targetDate ?? null, new Date().toISOString()]
+      const now = new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO finance_goals (name, icon, color, target_amount, target_date, current_amount, is_closed, created_at, updated_at, sync_id) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?)',
+        [values.name, values.icon ?? 'flag', values.color ?? '#3D8BFF', values.targetAmount, values.targetDate ?? null, now, now, Crypto.randomUUID()]
       );
+      await pushLocalRow(db, 'finance_goals', result.lastInsertRowId);
       await refresh();
     },
     [db, refresh]
@@ -64,7 +69,12 @@ export function useFinanceGoals() {
 
   const closeGoal = useCallback(
     async (id: string, isClosed: boolean) => {
-      await db.runAsync('UPDATE finance_goals SET is_closed = ? WHERE id = ?', [isClosed ? 1 : 0, Number(id)]);
+      await db.runAsync('UPDATE finance_goals SET is_closed = ?, updated_at = ? WHERE id = ?', [
+        isClosed ? 1 : 0,
+        new Date().toISOString(),
+        Number(id),
+      ]);
+      await pushLocalRow(db, 'finance_goals', Number(id));
       await refresh();
     },
     [db, refresh]
@@ -72,6 +82,7 @@ export function useFinanceGoals() {
 
   const removeGoal = useCallback(
     async (id: string) => {
+      await recordDeleteBeforeRemoving(db, 'finance_goals', Number(id));
       await db.runAsync('DELETE FROM finance_goals WHERE id = ?', [Number(id)]);
       await refresh();
     },
@@ -107,12 +118,15 @@ export function useGoalContributions(goalId: string) {
 
   const addContribution = useCallback(
     async (amount: number, date: string) => {
-      await db.runAsync('INSERT INTO finance_goal_contributions (goal_id, amount, date, created_at) VALUES (?, ?, ?, ?)', [
-        Number(goalId),
-        amount,
-        date,
-        new Date().toISOString(),
-      ]);
+      const now = new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO finance_goal_contributions (goal_id, amount, date, created_at, updated_at, sync_id) VALUES (?, ?, ?, ?, ?, ?)',
+        [Number(goalId), amount, date, now, now, Crypto.randomUUID()]
+      );
+      await pushLocalRow(db, 'finance_goal_contributions', result.lastInsertRowId);
+      // The insert trigger recomputes finance_goals.current_amount directly via SQL — push the
+      // parent goal too so the recalculated total syncs.
+      await pushLocalRow(db, 'finance_goals', Number(goalId));
       await refresh();
     },
     [db, goalId, refresh]
@@ -120,10 +134,13 @@ export function useGoalContributions(goalId: string) {
 
   const removeContribution = useCallback(
     async (id: string) => {
+      await recordDeleteBeforeRemoving(db, 'finance_goal_contributions', Number(id));
       await db.runAsync('DELETE FROM finance_goal_contributions WHERE id = ?', [Number(id)]);
+      // The delete trigger recomputes finance_goals.current_amount — push the parent goal too.
+      await pushLocalRow(db, 'finance_goals', Number(goalId));
       await refresh();
     },
-    [db, refresh]
+    [db, goalId, refresh]
   );
 
   return { contributions, loading, addContribution, removeContribution };

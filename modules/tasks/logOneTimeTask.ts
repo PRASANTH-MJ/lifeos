@@ -1,5 +1,7 @@
+import * as Crypto from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import type { Task, TaskLogStatus } from './types';
 
 /**
@@ -16,19 +18,21 @@ export async function logOneTimeTaskStatus(
   toggleComplete: (task: Task) => Promise<void>
 ): Promise<void> {
   const existing = await db.getFirstAsync<{ id: number }>('SELECT id FROM task_completions WHERE task_id = ? AND date = ?', [task.id, date]);
+  const now = new Date().toISOString();
   if (existing) {
-    await db.runAsync('UPDATE task_completions SET status = ?, completed_at = ? WHERE id = ?', [
+    await db.runAsync('UPDATE task_completions SET status = ?, completed_at = ?, updated_at = ? WHERE id = ?', [
       status,
-      new Date().toISOString(),
+      now,
+      now,
       existing.id,
     ]);
+    await pushLocalRow(db, 'task_completions', existing.id);
   } else {
-    await db.runAsync('INSERT INTO task_completions (task_id, date, status, completed_at) VALUES (?, ?, ?, ?)', [
-      task.id,
-      date,
-      status,
-      new Date().toISOString(),
-    ]);
+    const result = await db.runAsync(
+      'INSERT INTO task_completions (task_id, date, status, completed_at, sync_id, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [task.id, date, status, now, Crypto.randomUUID(), now]
+    );
+    await pushLocalRow(db, 'task_completions', result.lastInsertRowId);
   }
   const completing = status === 'done';
   if (Boolean(task.completed_at) !== completing) {
@@ -42,6 +46,10 @@ export async function clearOneTimeTaskLog(
   date: string,
   toggleComplete: (task: Task) => Promise<void>
 ): Promise<void> {
+  const existing = await db.getFirstAsync<{ id: number }>('SELECT id FROM task_completions WHERE task_id = ? AND date = ?', [task.id, date]);
+  if (existing) {
+    await recordDeleteBeforeRemoving(db, 'task_completions', existing.id);
+  }
   await db.runAsync('DELETE FROM task_completions WHERE task_id = ? AND date = ?', [task.id, date]);
   if (task.completed_at) {
     await toggleComplete(task);

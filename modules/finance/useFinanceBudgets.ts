@@ -2,6 +2,8 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
+import { pushLocalRow } from '@/modules/sync';
+
 export type FinanceBudgets = {
   weeklyBudget: number | null;
   monthlyBudget: number | null;
@@ -35,6 +37,7 @@ export function useFinanceBudgets() {
         next.monthlyBudget ?? null,
         new Date().toISOString(),
       ]);
+      await pushLocalRow(db, 'finance_budgets', 1);
       await refresh();
     },
     [db, budgets, refresh]

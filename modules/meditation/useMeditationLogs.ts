@@ -1,8 +1,10 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, dateKeyToTimestamp, toDateKey, todayKey } from '@/lib/date';
+import { pushLocalRow } from '@/modules/sync';
 import type { MeditationLog } from './types';
 
 export function useMeditationLogs() {
@@ -27,11 +29,12 @@ export function useMeditationLogs() {
 
   const logSession = useCallback(
     async (sessionKey: string, durationSeconds: number, dateKey?: string) => {
-      await db.runAsync('INSERT INTO meditation_logs (session_key, duration_seconds, completed_at) VALUES (?, ?, ?)', [
-        sessionKey,
-        Math.round(durationSeconds),
-        dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString(),
-      ]);
+      const completedAt = dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString();
+      const result = await db.runAsync(
+        'INSERT INTO meditation_logs (session_key, duration_seconds, completed_at, sync_id, updated_at) VALUES (?, ?, ?, ?, ?)',
+        [sessionKey, Math.round(durationSeconds), completedAt, Crypto.randomUUID(), completedAt]
+      );
+      await pushLocalRow(db, 'meditation_logs', result.lastInsertRowId);
       await refresh();
     },
     [db, refresh]

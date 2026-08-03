@@ -1,8 +1,10 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
+import * as Crypto from 'expo-crypto';
 
 import { useLocalTable } from '@/db';
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import { todayKey } from '@/lib/date';
 import { syncHabitNotifications } from './scheduleHabitNotifications';
 import { computePeriodProgress, computeStreak } from './streak';
@@ -71,17 +73,20 @@ export function useHabits() {
         'SELECT id FROM habit_logs WHERE habit_id = ? AND date = ?',
         [habitId, date]
       );
+      const now = new Date().toISOString();
       if (existing) {
         await db.runAsync(
-          'UPDATE habit_logs SET status = ?, value = ?, checklist_checked = ?, note = ?, completed_at = ? WHERE id = ?',
-          [values.status, values.value ?? null, checklistJson, values.note ?? null, new Date().toISOString(), existing.id]
+          'UPDATE habit_logs SET status = ?, value = ?, checklist_checked = ?, note = ?, completed_at = ?, updated_at = ? WHERE id = ?',
+          [values.status, values.value ?? null, checklistJson, values.note ?? null, now, now, existing.id]
         );
+        await pushLocalRow(db, 'habit_logs', existing.id);
       } else {
-        await db.runAsync(
-          `INSERT INTO habit_logs (habit_id, date, status, value, checklist_checked, note, completed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [habitId, date, values.status, values.value ?? null, checklistJson, values.note ?? null, new Date().toISOString()]
+        const result = await db.runAsync(
+          `INSERT INTO habit_logs (habit_id, date, status, value, checklist_checked, note, completed_at, sync_id, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [habitId, date, values.status, values.value ?? null, checklistJson, values.note ?? null, now, Crypto.randomUUID(), now]
         );
+        await pushLocalRow(db, 'habit_logs', result.lastInsertRowId);
       }
       await refreshLogs();
     },
@@ -90,7 +95,15 @@ export function useHabits() {
 
   const clearLog = useCallback(
     async (habitId: number, date?: string) => {
-      await db.runAsync('DELETE FROM habit_logs WHERE habit_id = ? AND date = ?', [habitId, date ?? todayKey()]);
+      const targetDate = date ?? todayKey();
+      const existing = await db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM habit_logs WHERE habit_id = ? AND date = ?',
+        [habitId, targetDate]
+      );
+      if (existing) {
+        await recordDeleteBeforeRemoving(db, 'habit_logs', existing.id);
+      }
+      await db.runAsync('DELETE FROM habit_logs WHERE habit_id = ? AND date = ?', [habitId, targetDate]);
       await refreshLogs();
     },
     [db, refreshLogs]
@@ -174,8 +187,11 @@ export function useHabits() {
       if (swapIndex < 0 || swapIndex >= table.rows.length) return;
       const a = table.rows[index];
       const b = table.rows[swapIndex];
-      await db.runAsync('UPDATE habits SET sort_order = ? WHERE id = ?', [b.sort_order, a.id]);
-      await db.runAsync('UPDATE habits SET sort_order = ? WHERE id = ?', [a.sort_order, b.id]);
+      const now = new Date().toISOString();
+      await db.runAsync('UPDATE habits SET sort_order = ?, updated_at = ? WHERE id = ?', [b.sort_order, now, a.id]);
+      await db.runAsync('UPDATE habits SET sort_order = ?, updated_at = ? WHERE id = ?', [a.sort_order, now, b.id]);
+      await pushLocalRow(db, 'habits', a.id);
+      await pushLocalRow(db, 'habits', b.id);
       await table.refresh();
     },
     [db, table]

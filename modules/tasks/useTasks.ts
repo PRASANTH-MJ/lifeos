@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { useLocalTable } from '@/db';
+import { pushLocalRow } from '@/modules/sync';
 import { cancelTaskNotifications, syncTaskNotifications } from './scheduleTaskNotifications';
 import type { Task, TaskPriority } from './types';
 
@@ -35,7 +36,18 @@ export function useTasks() {
   // every refresh so the active list never shows a long-completed task lingering.
   const sweepCompletedArchive = useCallback(async () => {
     const cutoff = new Date(Date.now() - COMPLETED_ARCHIVE_DELAY_MS).toISOString();
-    await db.runAsync('UPDATE tasks SET archived = 1 WHERE archived = 0 AND completed_at IS NOT NULL AND completed_at <= ?', [cutoff]);
+    const rows = await db.getAllAsync<{ id: number }>(
+      'SELECT id FROM tasks WHERE archived = 0 AND completed_at IS NOT NULL AND completed_at <= ?',
+      [cutoff]
+    );
+    if (rows.length === 0) return;
+    await db.runAsync(
+      'UPDATE tasks SET archived = 1, updated_at = ? WHERE archived = 0 AND completed_at IS NOT NULL AND completed_at <= ?',
+      [new Date().toISOString(), cutoff]
+    );
+    for (const row of rows) {
+      await pushLocalRow(db, 'tasks', row.id);
+    }
   }, [db]);
 
   useFocusEffect(

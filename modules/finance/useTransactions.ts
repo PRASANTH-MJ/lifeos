@@ -1,6 +1,9 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
+
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 import type { Transaction, TransactionType } from './types';
 
@@ -79,9 +82,11 @@ export function useTransactions(start?: string, end?: string, accountId?: string
       date: string;
       note?: string | null;
     }) => {
+      const now = new Date().toISOString();
+      const toAccountId = values.type === 'transfer' && values.toAccountId ? Number(values.toAccountId) : null;
       const result = await db.runAsync(
-        `INSERT INTO finance_transactions (account_id, category_id, type, amount, date, note, to_account_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO finance_transactions (account_id, category_id, type, amount, date, note, to_account_id, created_at, updated_at, sync_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           Number(values.accountId),
           values.type === 'transfer' ? null : values.categoryId ? Number(values.categoryId) : null,
@@ -89,10 +94,17 @@ export function useTransactions(start?: string, end?: string, accountId?: string
           values.amount,
           values.date,
           values.note ?? null,
-          values.type === 'transfer' && values.toAccountId ? Number(values.toAccountId) : null,
-          new Date().toISOString(),
+          toAccountId,
+          now,
+          now,
+          Crypto.randomUUID(),
         ]
       );
+      await pushLocalRow(db, 'finance_transactions', result.lastInsertRowId);
+      // The insert trigger recomputes current_balance directly via SQL, not through this file's
+      // own runAsync calls — push the affected account(s) so the recalculated balance syncs too.
+      await pushLocalRow(db, 'finance_accounts', Number(values.accountId));
+      if (toAccountId) await pushLocalRow(db, 'finance_accounts', toAccountId);
       await refresh();
       return String(result.lastInsertRowId);
     },
@@ -120,8 +132,21 @@ export function useTransactions(start?: string, end?: string, accountId?: string
         params.push(values.note);
       }
       if (updates.length === 0) return;
+      updates.push('updated_at = ?');
+      params.push(new Date().toISOString());
       params.push(Number(id));
       await db.runAsync(`UPDATE finance_transactions SET ${updates.join(', ')} WHERE id = ?`, params);
+      await pushLocalRow(db, 'finance_transactions', Number(id));
+      // The update trigger recomputes current_balance for the transaction's account(s) — push
+      // those too so the recalculated balance syncs.
+      const row = await db.getFirstAsync<{ account_id: number; to_account_id: number | null }>(
+        'SELECT account_id, to_account_id FROM finance_transactions WHERE id = ?',
+        [Number(id)]
+      );
+      if (row) {
+        await pushLocalRow(db, 'finance_accounts', row.account_id);
+        if (row.to_account_id) await pushLocalRow(db, 'finance_accounts', row.to_account_id);
+      }
       await refresh();
     },
     [db, refresh]
@@ -129,7 +154,18 @@ export function useTransactions(start?: string, end?: string, accountId?: string
 
   const removeTransaction = useCallback(
     async (id: string) => {
+      const row = await db.getFirstAsync<{ account_id: number; to_account_id: number | null }>(
+        'SELECT account_id, to_account_id FROM finance_transactions WHERE id = ?',
+        [Number(id)]
+      );
+      await recordDeleteBeforeRemoving(db, 'finance_transactions', Number(id));
       await db.runAsync('DELETE FROM finance_transactions WHERE id = ?', [Number(id)]);
+      // The delete trigger recomputes current_balance for the transaction's account(s) — push
+      // those too so the recalculated balance syncs.
+      if (row) {
+        await pushLocalRow(db, 'finance_accounts', row.account_id);
+        if (row.to_account_id) await pushLocalRow(db, 'finance_accounts', row.to_account_id);
+      }
       await refresh();
     },
     [db, refresh]

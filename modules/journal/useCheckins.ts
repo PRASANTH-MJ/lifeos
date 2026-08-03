@@ -1,8 +1,10 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 
 import { todayKey } from '@/lib/date';
+import { pushLocalRow } from '@/modules/sync';
 import type { FirstReachedFor, JournalCheckin, MorningCheckinInput, NightCheckinInput, SleepBucket } from './types';
 
 type CheckinRow = {
@@ -49,8 +51,8 @@ export function useCheckins(dateKey: string = todayKey()) {
     async (values: MorningCheckinInput) => {
       const now = new Date().toISOString();
       await db.runAsync(
-        `INSERT INTO journal_checkins (date, type, energy, sleep_bucket, stress, first_reached_for, mood, created_at, updated_at)
-         VALUES (?, 'morning', ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO journal_checkins (date, type, energy, sleep_bucket, stress, first_reached_for, mood, created_at, updated_at, sync_id)
+         VALUES (?, 'morning', ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(date, type) DO UPDATE SET
            energy = excluded.energy,
            sleep_bucket = excluded.sleep_bucket,
@@ -58,8 +60,13 @@ export function useCheckins(dateKey: string = todayKey()) {
            first_reached_for = excluded.first_reached_for,
            mood = excluded.mood,
            updated_at = excluded.updated_at`,
-        [dateKey, values.energy, values.sleepBucket, values.stress, values.firstReachedFor, values.mood, now, now]
+        [dateKey, values.energy, values.sleepBucket, values.stress, values.firstReachedFor, values.mood, now, now, Crypto.randomUUID()]
       );
+      const row = await db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM journal_checkins WHERE date = ? AND type = ?',
+        [dateKey, 'morning']
+      );
+      if (row) await pushLocalRow(db, 'journal_checkins', row.id);
       await refresh();
     },
     [db, dateKey, refresh]
@@ -69,14 +76,19 @@ export function useCheckins(dateKey: string = todayKey()) {
     async (values: NightCheckinInput) => {
       const now = new Date().toISOString();
       await db.runAsync(
-        `INSERT INTO journal_checkins (date, type, productivity, mood, created_at, updated_at)
-         VALUES (?, 'night', ?, ?, ?, ?)
+        `INSERT INTO journal_checkins (date, type, productivity, mood, created_at, updated_at, sync_id)
+         VALUES (?, 'night', ?, ?, ?, ?, ?)
          ON CONFLICT(date, type) DO UPDATE SET
            productivity = excluded.productivity,
            mood = excluded.mood,
            updated_at = excluded.updated_at`,
-        [dateKey, values.productivity, values.mood, now, now]
+        [dateKey, values.productivity, values.mood, now, now, Crypto.randomUUID()]
       );
+      const row = await db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM journal_checkins WHERE date = ? AND type = ?',
+        [dateKey, 'night']
+      );
+      if (row) await pushLocalRow(db, 'journal_checkins', row.id);
       await refresh();
     },
     [db, dateKey, refresh]

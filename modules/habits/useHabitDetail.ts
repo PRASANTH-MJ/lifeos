@@ -1,7 +1,9 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
+import * as Crypto from 'expo-crypto';
 
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import { cancelHabitNotifications, syncHabitNotifications } from './scheduleHabitNotifications';
 import { computeLongestStreak, computePeriodProgress, computeStreak } from './streak';
 import { parseTargetDays, type Habit, type HabitLog, type LogStatus } from './types';
@@ -37,17 +39,20 @@ export function useHabitDetail(habitId: number) {
         'SELECT id FROM habit_logs WHERE habit_id = ? AND date = ?',
         [habitId, date]
       );
+      const now = new Date().toISOString();
       if (existing) {
         await db.runAsync(
-          'UPDATE habit_logs SET status = ?, value = ?, checklist_checked = ?, note = ?, completed_at = ? WHERE id = ?',
-          [values.status, values.value ?? null, checklistJson, values.note ?? null, new Date().toISOString(), existing.id]
+          'UPDATE habit_logs SET status = ?, value = ?, checklist_checked = ?, note = ?, completed_at = ?, updated_at = ? WHERE id = ?',
+          [values.status, values.value ?? null, checklistJson, values.note ?? null, now, now, existing.id]
         );
+        await pushLocalRow(db, 'habit_logs', existing.id);
       } else {
-        await db.runAsync(
-          `INSERT INTO habit_logs (habit_id, date, status, value, checklist_checked, note, completed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [habitId, date, values.status, values.value ?? null, checklistJson, values.note ?? null, new Date().toISOString()]
+        const result = await db.runAsync(
+          `INSERT INTO habit_logs (habit_id, date, status, value, checklist_checked, note, completed_at, sync_id, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [habitId, date, values.status, values.value ?? null, checklistJson, values.note ?? null, now, Crypto.randomUUID(), now]
         );
+        await pushLocalRow(db, 'habit_logs', result.lastInsertRowId);
       }
       await refresh();
     },
@@ -56,6 +61,13 @@ export function useHabitDetail(habitId: number) {
 
   const clearLog = useCallback(
     async (date: string) => {
+      const existing = await db.getFirstAsync<{ id: number }>(
+        'SELECT id FROM habit_logs WHERE habit_id = ? AND date = ?',
+        [habitId, date]
+      );
+      if (existing) {
+        await recordDeleteBeforeRemoving(db, 'habit_logs', existing.id);
+      }
       await db.runAsync('DELETE FROM habit_logs WHERE habit_id = ? AND date = ?', [habitId, date]);
       await refresh();
     },
@@ -82,10 +94,13 @@ export function useHabitDetail(habitId: number) {
       if (values.reminderTime !== undefined) columnMap.reminder_time = values.reminderTime;
       if (values.alarmEnabled !== undefined) columnMap.alarm_enabled = values.alarmEnabled ? 1 : 0;
 
+      columnMap.updated_at = new Date().toISOString();
+
       const keys = Object.keys(columnMap);
       if (keys.length === 0) return;
       const setClause = keys.map((key) => `${key} = ?`).join(', ');
       await db.runAsync(`UPDATE habits SET ${setClause} WHERE id = ?`, [...keys.map((key) => columnMap[key] as never), habitId]);
+      await pushLocalRow(db, 'habits', habitId);
       const updated = await db.getFirstAsync<Habit>('SELECT * FROM habits WHERE id = ?', [habitId]);
       // Best-effort — never block the save on notification scheduling.
       if (updated) syncHabitNotifications(updated).catch(() => {});
@@ -95,17 +110,23 @@ export function useHabitDetail(habitId: number) {
   );
 
   const archiveHabit = useCallback(async () => {
-    await db.runAsync('UPDATE habits SET archived = 1 WHERE id = ?', [habitId]);
+    await db.runAsync('UPDATE habits SET archived = 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), habitId]);
+    await pushLocalRow(db, 'habits', habitId);
     cancelHabitNotifications(habitId).catch(() => {});
   }, [db, habitId]);
 
   const deleteHabit = useCallback(async () => {
+    await recordDeleteBeforeRemoving(db, 'habits', habitId);
     await db.runAsync('DELETE FROM habits WHERE id = ?', [habitId]);
     cancelHabitNotifications(habitId).catch(() => {});
   }, [db, habitId]);
 
   // "Restart" clears history so streaks/stats start over, without deleting the habit itself.
   const restartProgress = useCallback(async () => {
+    const rows = await db.getAllAsync<{ id: number }>('SELECT id FROM habit_logs WHERE habit_id = ?', [habitId]);
+    for (const row of rows) {
+      await recordDeleteBeforeRemoving(db, 'habit_logs', row.id);
+    }
     await db.runAsync('DELETE FROM habit_logs WHERE habit_id = ?', [habitId]);
     await refresh();
   }, [db, habitId, refresh]);

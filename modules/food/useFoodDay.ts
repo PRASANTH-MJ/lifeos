@@ -1,7 +1,9 @@
+import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import { MEALS, type FoodLog, type Meal } from './types';
 
 export function useFoodDay(dateKey: string) {
@@ -33,9 +35,10 @@ export function useFoodDay(dateKey: string) {
       carbsG?: number | null;
       fatG?: number | null;
     }) => {
-      await db.runAsync(
-        `INSERT INTO food_logs (description, meal, calories, protein_g, carbs_g, fat_g, date, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      const now = new Date().toISOString();
+      const result = await db.runAsync(
+        `INSERT INTO food_logs (description, meal, calories, protein_g, carbs_g, fat_g, date, created_at, sync_id, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           values.description,
           values.meal,
@@ -44,9 +47,12 @@ export function useFoodDay(dateKey: string) {
           values.carbsG ?? null,
           values.fatG ?? null,
           dateKey,
-          new Date().toISOString(),
+          now,
+          Crypto.randomUUID(),
+          now,
         ]
       );
+      await pushLocalRow(db, 'food_logs', result.lastInsertRowId);
       await refresh();
     },
     [db, dateKey, refresh]
@@ -54,6 +60,7 @@ export function useFoodDay(dateKey: string) {
 
   const deleteLog = useCallback(
     async (id: number) => {
+      await recordDeleteBeforeRemoving(db, 'food_logs', id);
       await db.runAsync('DELETE FROM food_logs WHERE id = ?', [id]);
       await refresh();
     },
