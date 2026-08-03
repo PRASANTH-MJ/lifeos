@@ -16,6 +16,9 @@ export type ReminderCardState = {
 type Props = {
   state: ReminderCardState;
   onSave: (next: ReminderCardState) => void;
+  /** Shown as a trash icon in the header when provided — omit to hide it (e.g. a module's only
+   * remaining reminder shouldn't be removable, just turned off). */
+  onRemove?: () => void;
   color?: string;
 };
 
@@ -32,7 +35,7 @@ const WEEKDAYS = [
 /** A reminder's type (silent/Notification/Alarm-style sound) + schedule (every day or specific
  * weekdays) — the same shape wherever a module (Journal, Meditation, Breathing, Mind Training,
  * Workout, Food, Affirmations) offers one. */
-export function ReminderCard({ state, onSave, color }: Props) {
+export function ReminderCard({ state, onSave, onRemove, color }: Props) {
   const theme = useAppTheme();
   const accentColor = color ?? theme.colors.textSecondary;
   const { reminderType, time, scheduleType, scheduleDays } = state;
@@ -46,9 +49,14 @@ export function ReminderCard({ state, onSave, color }: Props) {
     <Card style={{ gap: theme.spacing.md }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
         <Ionicons name="alarm-outline" size={20} color={accentColor} />
-        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+        <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
           Reminder
         </Text>
+        {onRemove ? (
+          <Pressable onPress={onRemove} hitSlop={8}>
+            <Ionicons name="trash-outline" size={18} color={theme.colors.textTertiary} />
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>

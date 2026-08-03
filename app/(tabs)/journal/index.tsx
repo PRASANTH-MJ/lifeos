@@ -3,11 +3,11 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
-import { Card, EmptyState, ReminderCard, ScreenContainer, TextField, useTabSwipeNavigation } from '@/components';
+import { Button, Card, EmptyState, ReminderCard, ScreenContainer, TextField, useTabSwipeNavigation } from '@/components';
 import { formatDisplayDate, monthCursorOf, shiftMonth, toDateKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
-import { computeWeeklyStreak, JournalListItem, useJournal } from '@/modules/journal';
-import { useModuleReminder } from '@/modules/reminders';
+import { CheckinSheet, computeWeeklyStreak, JournalListItem, useCheckins, useJournal } from '@/modules/journal';
+import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function JournalScreen() {
@@ -18,8 +18,14 @@ export default function JournalScreen() {
   const [dateFilter, setDateFilter] = useState<string | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(toDateKey(new Date())));
+  const [checkinSheet, setCheckinSheet] = useState<'morning' | 'night' | null>(null);
   const { entries, loading, refresh } = useJournal(search);
-  const reminder = useModuleReminder('journal', 'Time to journal', "Write down what's on your mind today.");
+  const { morning, night, saveMorning, saveNight } = useCheckins();
+  const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders(
+    'journal',
+    'Time to journal',
+    "Write down what's on your mind today."
+  );
 
   const heatmapValues = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -74,11 +80,33 @@ export default function JournalScreen() {
           </Card>
         ) : null}
 
-        <ReminderCard
-          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
-          onSave={reminder.save}
-          color={theme.colors.moduleJournal}
-        />
+        <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
+          <CheckinButton
+            label="Morning check-in"
+            done={morning != null}
+            color={theme.colors.moduleJournal}
+            mutedColor={theme.colors.moduleJournalMuted}
+            onPress={() => setCheckinSheet('morning')}
+          />
+          <CheckinButton
+            label="Night check-in"
+            done={night != null}
+            color={theme.colors.moduleJournal}
+            mutedColor={theme.colors.moduleJournalMuted}
+            onPress={() => setCheckinSheet('night')}
+          />
+        </View>
+
+        {reminders.map((reminder) => (
+          <ReminderCard
+            key={reminder.id}
+            state={reminder}
+            onSave={(next) => saveReminder(reminder.id, next)}
+            onRemove={reminders.length > 1 ? () => removeReminder(reminder.id) : undefined}
+            color={theme.colors.moduleJournal}
+          />
+        ))}
+        <Button label={reminders.length > 0 ? 'Add another reminder' : 'Add a reminder'} variant="secondary" onPress={addReminder} />
 
         <TextField placeholder="Search entries" value={search} onChangeText={setSearch} />
 
@@ -145,6 +173,41 @@ export default function JournalScreen() {
         </View>
       </View>
     </Modal>
+
+    <CheckinSheet
+      visible={checkinSheet != null}
+      type={checkinSheet ?? 'morning'}
+      existing={checkinSheet === 'night' ? night : morning}
+      onClose={() => setCheckinSheet(null)}
+      onSaveMorning={saveMorning}
+      onSaveNight={saveNight}
+    />
     </View>
+  );
+}
+
+function CheckinButton({
+  label,
+  done,
+  color,
+  mutedColor,
+  onPress,
+}: {
+  label: string;
+  done: boolean;
+  color: string;
+  mutedColor: string;
+  onPress: () => void;
+}) {
+  const theme = useAppTheme();
+  return (
+    <Pressable onPress={onPress} style={{ flex: 1 }}>
+      <Card style={{ alignItems: 'center', gap: 4, backgroundColor: done ? mutedColor : theme.colors.surface }}>
+        <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={color} />
+        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium, textAlign: 'center' }}>
+          {label}
+        </Text>
+      </Card>
+    </Pressable>
   );
 }

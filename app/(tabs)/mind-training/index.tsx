@@ -3,17 +3,21 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, LogPastEntryModal, ReminderCard, ScreenContainer, TextField } from '@/components';
+import { Button, Card, LogPastEntryModal, ReminderCard, ScreenContainer, TextField } from '@/components';
 import { todayKey } from '@/lib/date';
 import { MIND_EXERCISES, useBestScores, useMindTrainingLogs } from '@/modules/mind-training';
-import { useModuleReminder } from '@/modules/reminders';
+import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function MindTrainingScreen() {
   const theme = useAppTheme();
   const { best, loading, refresh } = useBestScores(MIND_EXERCISES);
   const { logScore } = useMindTrainingLogs();
-  const reminder = useModuleReminder('mind-training', 'Time to train your mind', 'Take a couple minutes to practice.');
+  const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders(
+    'mind-training',
+    'Time to train your mind',
+    'Take a couple minutes to practice.'
+  );
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logExerciseKey, setLogExerciseKey] = useState<string | null>(null);
   const [logDate, setLogDate] = useState(todayKey());
@@ -32,11 +36,16 @@ export default function MindTrainingScreen() {
     <View style={{ flex: 1 }}>
     <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.md }}>
-        <ReminderCard
-          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
-          onSave={reminder.save}
-          color={theme.colors.primary}
-        />
+        {reminders.map((reminder) => (
+          <ReminderCard
+            key={reminder.id}
+            state={reminder}
+            onSave={(next) => saveReminder(reminder.id, next)}
+            onRemove={reminders.length > 1 ? () => removeReminder(reminder.id) : undefined}
+            color={theme.colors.primary}
+          />
+        ))}
+        <Button label={reminders.length > 0 ? 'Add another reminder' : 'Add a reminder'} variant="secondary" onPress={addReminder} />
 
         {MIND_EXERCISES.map((exercise) => (
           <Link key={exercise.key} href={{ pathname: '/mind-training/[exerciseKey]', params: { exerciseKey: exercise.key } }} asChild>

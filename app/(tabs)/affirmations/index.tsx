@@ -3,16 +3,20 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ImageBackground, Pressable, Text, View } from 'react-native';
 
-import { Card, LoadingState, ReminderCard, ScreenContainer } from '@/components';
+import { Button, Card, LoadingState, ReminderCard, ScreenContainer } from '@/components';
 import { backgroundFor, useAffirmations, type Affirmation } from '@/modules/affirmations';
-import { useModuleReminder } from '@/modules/reminders';
+import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function AffirmationsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { affirmations, loading, todaysAffirmation, favorites, toggleFavorite } = useAffirmations();
-  const reminder = useModuleReminder('affirmations', 'Your daily affirmation', 'Take a moment to reflect on something positive.');
+  const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders(
+    'affirmations',
+    'Your daily affirmation',
+    'Take a moment to reflect on something positive.'
+  );
   const [displayed, setDisplayed] = useState<Affirmation | null>(null);
 
   useEffect(() => {
@@ -76,11 +80,16 @@ export default function AffirmationsScreen() {
           </View>
         </ImageBackground>
 
-        <ReminderCard
-          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
-          onSave={reminder.save}
-          color={theme.colors.moduleJournal}
-        />
+        {reminders.map((reminder) => (
+          <ReminderCard
+            key={reminder.id}
+            state={reminder}
+            onSave={(next) => saveReminder(reminder.id, next)}
+            onRemove={reminders.length > 1 ? () => removeReminder(reminder.id) : undefined}
+            color={theme.colors.moduleJournal}
+          />
+        ))}
+        <Button label={reminders.length > 0 ? 'Add another reminder' : 'Add a reminder'} variant="secondary" onPress={addReminder} />
 
         {favorites.length > 0 ? (
           <View style={{ gap: theme.spacing.sm }}>

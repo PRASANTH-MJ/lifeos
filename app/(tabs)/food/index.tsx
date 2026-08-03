@@ -3,11 +3,11 @@ import { Link, Stack } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Modal, Pressable, Text, View } from 'react-native';
 
-import { Card, EmptyState, ReminderCard, ScreenContainer, StatCard } from '@/components';
+import { Button, Card, EmptyState, ReminderCard, ScreenContainer, StatCard } from '@/components';
 import { addDays, formatDisplayDate, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { MEALS, mealLabel, useFoodDay } from '@/modules/food';
-import { useModuleReminder } from '@/modules/reminders';
+import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function FoodScreen() {
@@ -16,7 +16,11 @@ export default function FoodScreen() {
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
   const { loading, totals, byMeal, deleteLog, refresh } = useFoodDay(date);
-  const reminder = useModuleReminder('food', 'Log your meals', "Don't forget to log what you've eaten today.");
+  const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders(
+    'food',
+    'Log your meals',
+    "Don't forget to log what you've eaten today."
+  );
 
   const onDelete = (id: number) => {
     Alert.alert('Remove entry?', undefined, [
@@ -68,11 +72,16 @@ export default function FoodScreen() {
           <StatCard label="Fat (g)" value={String(totals.fat)} />
         </View>
 
-        <ReminderCard
-          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
-          onSave={reminder.save}
-          color={theme.colors.primary}
-        />
+        {reminders.map((reminder) => (
+          <ReminderCard
+            key={reminder.id}
+            state={reminder}
+            onSave={(next) => saveReminder(reminder.id, next)}
+            onRemove={reminders.length > 1 ? () => removeReminder(reminder.id) : undefined}
+            color={theme.colors.primary}
+          />
+        ))}
+        <Button label={reminders.length > 0 ? 'Add another reminder' : 'Add a reminder'} variant="secondary" onPress={addReminder} />
 
         {isEmpty ? (
           <EmptyState icon="restaurant-outline" title="Nothing logged" subtitle="Tap + to log a meal or snack." />

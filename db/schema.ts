@@ -5,7 +5,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 22;
+const DATABASE_VERSION = 23;
 
 // Seeded once, in the v5 migration below — icon/color match the reference
 // category grid; every category is usable by both habits and tasks.
@@ -894,7 +894,52 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 22;
   }
 
-  // Future modules land here as `if (currentDbVersion === 22) { ... currentDbVersion = 23; }`
+  if (currentDbVersion === 22) {
+    // Morning/night check-ins — a separate, structured capability alongside the existing
+    // free-text journal entries, not a replacement for them. One row per day per type, enforced
+    // by the UNIQUE constraint (saving again the same day upserts rather than duplicating).
+    await db.execAsync(`
+      CREATE TABLE journal_checkins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('morning', 'night')),
+        energy INTEGER,
+        sleep_bucket TEXT,
+        stress INTEGER,
+        first_reached_for TEXT,
+        productivity INTEGER,
+        mood TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(date, type)
+      );
+    `);
+
+    // module_reminders.module_key was the PRIMARY KEY, capping every module at exactly one
+    // reminder — rebuilding with a surrogate id lets a module have several (e.g. a morning and
+    // an evening meditation reminder), same "create _new, copy, drop, rename" idiom as every
+    // other structural change in this file.
+    await db.execAsync(`
+      CREATE TABLE module_reminders_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        module_key TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        reminder_time TEXT,
+        reminder_type TEXT NOT NULL DEFAULT 'none',
+        schedule_type TEXT NOT NULL DEFAULT 'daily',
+        schedule_days TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO module_reminders_new (module_key, enabled, reminder_time, reminder_type, schedule_type, schedule_days, updated_at)
+        SELECT module_key, enabled, reminder_time, reminder_type, schedule_type, schedule_days, updated_at FROM module_reminders;
+      DROP TABLE module_reminders;
+      ALTER TABLE module_reminders_new RENAME TO module_reminders;
+    `);
+
+    currentDbVersion = 23;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 23) { ... currentDbVersion = 24; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

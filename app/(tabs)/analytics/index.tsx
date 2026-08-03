@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Card, Chip, DonutChart, LineChart, Legend, LoadingState, OverlayChart, ScreenContainer, StatCard, TrendChart } from '@/components';
+import { Card, Chip, DonutChart, LineChart, Legend, LoadingState, OverlayChart, ScreenContainer, Sparkline, StatCard, TrendChart } from '@/components';
 import {
   ActionableInsights,
   MetricGrid,
   generateActionableInsights,
   nearestMoodLabel,
   useAnalyticsDashboard,
+  useCheckinTrends,
   usePreviousPeriodStats,
   type MetricDomain,
+  type MetricTrend,
 } from '@/modules/analytics';
 import { formatCurrency, formatCurrencyCompact, useFinanceBudgets, useFinanceDailySpend, useFinanceSummary, useFinanceWeekSpend } from '@/modules/finance';
 import { todayKey } from '@/lib/date';
@@ -21,9 +23,18 @@ const RANGE_OPTIONS = [
   { key: 'day', label: 'Day', days: 1 },
   { key: 'week', label: 'Week', days: 7 },
   { key: 'month', label: 'Month', days: 30 },
+  { key: 'quarter', label: 'Quarter', days: 90 },
+  { key: 'halfYear', label: 'Half Year', days: 182 },
   { key: 'year', label: 'Year', days: 365 },
 ] as const;
 type RangeKey = (typeof RANGE_OPTIONS)[number]['key'];
+
+const TREND_METRICS: { key: 'stress' | 'energy' | 'joy' | 'productivity'; label: string; color: string; invert?: boolean }[] = [
+  { key: 'stress', label: 'Stress level', color: '#FF6259', invert: true },
+  { key: 'energy', label: 'Energy this morning', color: '#F5A623' },
+  { key: 'joy', label: 'How was today', color: '#3DDB6C' },
+  { key: 'productivity', label: 'Productivity', color: '#3D8BFF' },
+];
 
 export default function AnalyticsScreen() {
   const theme = useAppTheme();
@@ -33,6 +44,7 @@ export default function AnalyticsScreen() {
 
   const { data, loading } = useAnalyticsDashboard(days);
   const { stats: previousStats } = usePreviousPeriodStats(days);
+  const { trends } = useCheckinTrends(days);
 
   const today = todayKey();
   const monthPrefix = today.slice(0, 7);
@@ -147,6 +159,25 @@ export default function AnalyticsScreen() {
             <Chip key={option.key} label={option.label} selected={range === option.key} onPress={() => setRange(option.key)} />
           ))}
         </View>
+
+        {trends ? (
+          <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
+            <StatCard label="Check-ins" value={String(trends.stats.checkins)} color={theme.colors.moduleJournal} />
+            <StatCard label="Habit logs" value={String(trends.stats.habitLogs)} color={theme.colors.moduleHabits} />
+            <StatCard label="Reflections" value={String(trends.stats.reflections)} color={theme.colors.moduleTasks} />
+          </View>
+        ) : null}
+
+        {trends ? (
+          <Card style={{ gap: theme.spacing.lg }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Trends
+            </Text>
+            {TREND_METRICS.map((metric) => (
+              <TrendRow key={metric.key} label={metric.label} color={metric.color} invert={metric.invert} trend={trends[metric.key]} />
+            ))}
+          </Card>
+        ) : null}
 
         <ActionableInsights insights={insights} />
 
@@ -270,6 +301,28 @@ export default function AnalyticsScreen() {
         </Card>
       </View>
     </ScreenContainer>
+  );
+}
+
+function TrendRow({ label, color, invert, trend }: { label: string; color: string; invert?: boolean; trend: MetricTrend }) {
+  const theme = useAppTheme();
+  const delta = trend.average != null && trend.previousAverage != null ? trend.average - trend.previousAverage : null;
+  const improved = delta == null ? null : invert ? delta <= 0 : delta >= 0;
+  const deltaColor = improved == null ? theme.colors.textTertiary : improved ? theme.colors.success : theme.colors.danger;
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{label}</Text>
+        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
+          {trend.average != null ? trend.average.toFixed(1) : '—'}
+        </Text>
+      </View>
+      <Sparkline data={trend.series} color={color} />
+      <Text style={{ color: deltaColor, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold, minWidth: 44, textAlign: 'right' }}>
+        {delta != null ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}` : '—'}
+      </Text>
+    </View>
   );
 }
 

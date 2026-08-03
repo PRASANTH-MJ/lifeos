@@ -3,9 +3,9 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, Chip, LoadingState, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
+import { Button, Card, Chip, LoadingState, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
 import { dayOfYear, todayKey } from '@/lib/date';
-import { useModuleReminder } from '@/modules/reminders';
+import { useModuleReminders } from '@/modules/reminders';
 import {
   EQUIPMENT_OPTIONS,
   GOALS,
@@ -26,7 +26,7 @@ export default function WorkoutScreen() {
   const { preferences, loading, updatePreferences, refresh: refreshPreferences } = useWorkoutPreferences();
   const { completedThisWeek, logCompletion, refresh: refreshLogs } = useWorkoutLogs();
   const { workouts: customWorkouts, refresh: refreshCustom } = useCustomWorkouts();
-  const reminder = useModuleReminder('workout', 'Time to work out', "Let's get moving today.");
+  const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders('workout', 'Time to work out', "Let's get moving today.");
   const allWorkouts = useMemo(() => [...WORKOUTS, ...customWorkouts], [customWorkouts]);
   const refreshAll = async () => {
     await Promise.all([refreshPreferences(), refreshLogs(), refreshCustom()]);
@@ -71,11 +71,16 @@ export default function WorkoutScreen() {
           </Text>
         </Card>
 
-        <ReminderCard
-          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
-          onSave={reminder.save}
-          color={theme.colors.moduleTasks}
-        />
+        {reminders.map((reminder) => (
+          <ReminderCard
+            key={reminder.id}
+            state={reminder}
+            onSave={(next) => saveReminder(reminder.id, next)}
+            onRemove={reminders.length > 1 ? () => removeReminder(reminder.id) : undefined}
+            color={theme.colors.moduleTasks}
+          />
+        ))}
+        <Button label={reminders.length > 0 ? 'Add another reminder' : 'Add a reminder'} variant="secondary" onPress={addReminder} />
 
         {recommended ? (
           <View style={{ gap: theme.spacing.sm }}>

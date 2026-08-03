@@ -3,10 +3,10 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
+import { Button, Card, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
 import { todayKey } from '@/lib/date';
 import { BREATHING_PATTERNS, findPattern, useBreathingLogs } from '@/modules/breathing';
-import { useModuleReminder } from '@/modules/reminders';
+import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 const DEFAULT_CYCLES = 8;
@@ -14,7 +14,11 @@ const DEFAULT_CYCLES = 8;
 export default function BreathingScreen() {
   const theme = useAppTheme();
   const { sessionsThisWeek, refresh, logSession } = useBreathingLogs();
-  const reminder = useModuleReminder('breathing', 'Time to breathe', 'Take a moment for a breathing session.');
+  const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders(
+    'breathing',
+    'Time to breathe',
+    'Take a moment for a breathing session.'
+  );
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logPatternKey, setLogPatternKey] = useState<string | null>(null);
   const [logDate, setLogDate] = useState(todayKey());
@@ -38,11 +42,16 @@ export default function BreathingScreen() {
           </Text>
         </Card>
 
-        <ReminderCard
-          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
-          onSave={reminder.save}
-          color={theme.colors.moduleTasks}
-        />
+        {reminders.map((reminder) => (
+          <ReminderCard
+            key={reminder.id}
+            state={reminder}
+            onSave={(next) => saveReminder(reminder.id, next)}
+            onRemove={reminders.length > 1 ? () => removeReminder(reminder.id) : undefined}
+            color={theme.colors.moduleTasks}
+          />
+        ))}
+        <Button label={reminders.length > 0 ? 'Add another reminder' : 'Add a reminder'} variant="secondary" onPress={addReminder} />
 
         <View style={{ gap: theme.spacing.md }}>
           {BREATHING_PATTERNS.map((pattern) => (

@@ -3,6 +3,7 @@ export { Card } from './Card';
 export { StatCard } from './StatCard';
 export { TrendChart } from './TrendChart';
 export { LineChart } from './LineChart';
+export { Sparkline } from './Sparkline';
 export { Button } from './Button';
 export { TextField } from './TextField';
 export { TimeField } from './TimeField';

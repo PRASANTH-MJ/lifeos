@@ -3,16 +3,20 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
+import { Button, Card, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
 import { todayKey } from '@/lib/date';
 import { MEDITATION_SESSIONS, findSession, useMeditationLogs } from '@/modules/meditation';
-import { useModuleReminder } from '@/modules/reminders';
+import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function MeditationScreen() {
   const theme = useAppTheme();
   const { totalMinutesThisWeek, refresh, logSession } = useMeditationLogs();
-  const reminder = useModuleReminder('meditation', 'Time to meditate', 'Take a few minutes to settle your mind.');
+  const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders(
+    'meditation',
+    'Time to meditate',
+    'Take a few minutes to settle your mind.'
+  );
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logSessionKey, setLogSessionKey] = useState<string | null>(null);
   const [logDate, setLogDate] = useState(todayKey());
@@ -35,11 +39,16 @@ export default function MeditationScreen() {
           </Text>
         </Card>
 
-        <ReminderCard
-          state={{ reminderType: reminder.reminderType, time: reminder.time, scheduleType: reminder.scheduleType, scheduleDays: reminder.scheduleDays }}
-          onSave={reminder.save}
-          color={theme.colors.moduleJournal}
-        />
+        {reminders.map((reminder) => (
+          <ReminderCard
+            key={reminder.id}
+            state={reminder}
+            onSave={(next) => saveReminder(reminder.id, next)}
+            onRemove={reminders.length > 1 ? () => removeReminder(reminder.id) : undefined}
+            color={theme.colors.moduleJournal}
+          />
+        ))}
+        <Button label={reminders.length > 0 ? 'Add another reminder' : 'Add a reminder'} variant="secondary" onPress={addReminder} />
 
         <View style={{ gap: theme.spacing.md }}>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>

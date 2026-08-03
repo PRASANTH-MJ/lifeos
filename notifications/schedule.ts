@@ -103,6 +103,8 @@ export function habitAlarmId(habitId: number): string {
   return `habit-alarm-${habitId}`;
 }
 
-export function moduleReminderId(moduleKey: string): string {
-  return `module-reminder-${moduleKey}`;
+/** `id` is a module_reminders row id — a module can have several reminders, each scheduling
+ * independently under its own identifier. */
+export function moduleReminderId(moduleKey: string, id: number): string {
+  return `module-reminder-${moduleKey}-${id}`;
 }

@@ -17,6 +17,7 @@ import {
   type HabitLog,
 } from '@/modules/habits';
 import { CalendarMonthGrid } from '@/modules/calendar';
+import { CheckinSheet, useCheckins } from '@/modules/journal';
 import {
   TaskLogSheet,
   clearOneTimeTaskLog,
@@ -66,6 +67,8 @@ export default function TodayScreen() {
   const habitGate = useFreeTierGate('habits');
   const recurringGate = useFreeTierGate('recurringTasks');
   const [upsellKind, setUpsellKind] = useState<LimitKind | null>(null);
+  const { morning, night, saveMorning, saveNight } = useCheckins();
+  const [checkinSheet, setCheckinSheet] = useState<'morning' | 'night' | null>(null);
   const [monthCursor, setMonthCursor] = useState(() => monthCursorOf(selectedDate));
   const [markedDates, setMarkedDates] = useState<Set<string>>(new Set());
 
@@ -498,6 +501,8 @@ export default function TodayScreen() {
                     : setUpsellKind('recurringTasks'),
               },
               { label: 'Journal Entry', icon: 'book-outline', color: theme.colors.moduleJournal, onPress: () => router.push('/journal/new') },
+              { label: 'Morning check-in', icon: 'sunny-outline', color: theme.colors.moduleJournal, onPress: () => setCheckinSheet('morning') },
+              { label: 'Night check-in', icon: 'moon-outline', color: theme.colors.moduleJournal, onPress: () => setCheckinSheet('night') },
               { label: 'Expense', icon: 'cash-outline', color: theme.colors.primary, onPress: () => router.push('/finance/new') },
               { label: 'Food Log', icon: 'restaurant-outline', color: theme.colors.moduleTasks, onPress: () => router.push('/food/new') },
             ] as const
@@ -532,6 +537,15 @@ export default function TodayScreen() {
       resourceLabel={upsellKind ? LIMIT_LABELS[upsellKind] : ''}
       limit={upsellKind === 'habits' ? habitGate.limit : recurringGate.limit}
       onClose={() => setUpsellKind(null)}
+    />
+
+    <CheckinSheet
+      visible={checkinSheet != null}
+      type={checkinSheet ?? 'morning'}
+      existing={checkinSheet === 'night' ? night : morning}
+      onClose={() => setCheckinSheet(null)}
+      onSaveMorning={saveMorning}
+      onSaveNight={saveNight}
     />
     </View>
   );
