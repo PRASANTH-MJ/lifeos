@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button, Chip, ScreenContainer, TextField } from '@/components';
@@ -17,6 +17,17 @@ export default function NewDebtScreen() {
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Static route — expo-router reuses the same screen instance across repeated visits rather
+  // than mounting a fresh one each time, so a plain useState default only resets once, ever.
+  useFocusEffect(
+    useCallback(() => {
+      setPersonName('');
+      setDirection('lent');
+      setAmount('');
+      setNote('');
+    }, [])
+  );
 
   const numericAmount = Number(amount);
   const canSave = personName.trim().length > 0 && numericAmount > 0;

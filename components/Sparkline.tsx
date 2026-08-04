@@ -1,7 +1,8 @@
 import { View } from 'react-native';
-import Svg, { Polyline } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 
 import { subtleGlowStrokeLayers } from './charts/glow';
+import { smoothPath } from './charts/smoothPath';
 
 type Point = { date: string; value: number };
 
@@ -27,18 +28,18 @@ export function Sparkline({ data, color, height = 32, width = 80 }: Props) {
   const coords = data.map((point, index) => {
     const x = data.length > 1 ? (index / (data.length - 1)) * (width - 4) + 2 : width / 2;
     const y = height - ((point.value - min) / range) * (height - 6) - 3;
-    return `${x},${y}`;
+    return { x, y };
   });
-  const points = coords.join(' ');
+  const linePath = smoothPath(coords);
   const glowLayers = subtleGlowStrokeLayers(2);
 
   return (
     <View style={{ height, width }}>
       <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
         {glowLayers.map((layer, index) => (
-          <Polyline
+          <Path
             key={index}
-            points={points}
+            d={linePath}
             fill="none"
             stroke={color}
             strokeWidth={layer.strokeWidth}
@@ -47,7 +48,7 @@ export function Sparkline({ data, color, height = 32, width = 80 }: Props) {
             strokeLinecap="round"
           />
         ))}
-        <Polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <Path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
       </Svg>
     </View>
   );

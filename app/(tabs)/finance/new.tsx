@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
 import { Button, Chip, EmptyState, ScreenContainer, TextField } from '@/components';
@@ -33,6 +33,22 @@ export default function NewTransactionScreen() {
   const [saving, setSaving] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
+
+  // "New Transaction" is a static route — expo-router reuses the same screen instance across
+  // repeated visits rather than mounting a fresh one each time, so a plain useState default only
+  // resets once, ever. Re-blanking on every focus is what actually makes each visit start fresh.
+  useFocusEffect(
+    useCallback(() => {
+      setType('expense');
+      setAccountId(null);
+      setToAccountId(null);
+      setCategoryId(null);
+      setAmount('');
+      setDate(todayKey());
+      setNote('');
+      setSelectedLabelIds([]);
+    }, [])
+  );
 
   if (!loadingAccounts && accounts.length === 0) {
     return (

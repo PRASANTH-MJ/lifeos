@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button, ScreenContainer, TextField } from '@/components';
@@ -19,6 +19,17 @@ export default function NewEventScreen() {
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Static route — expo-router reuses the same screen instance across repeated visits rather
+  // than mounting a fresh one each time, so a plain useState default only resets once, ever.
+  useFocusEffect(
+    useCallback(() => {
+      setTitle('');
+      setNotes('');
+      setStartTime('');
+      setEndTime('');
+    }, [])
+  );
 
   const onSave = async () => {
     setSaving(true);

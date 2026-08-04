@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { Button, Chip, ScreenContainer, TextField } from '@/components';
@@ -26,6 +26,18 @@ export default function NewWorkoutScreen() {
   const [minutesText, setMinutesText] = useState('30');
   const [exercises, setExercises] = useState<string[]>(['', '']);
   const [saving, setSaving] = useState(false);
+
+  // Static route — expo-router reuses the same screen instance across repeated visits rather
+  // than mounting a fresh one each time, so a plain useState default only resets once, ever.
+  useFocusEffect(
+    useCallback(() => {
+      setTitle('');
+      setGoal('general');
+      setEquipment('none');
+      setMinutesText('30');
+      setExercises(['', '']);
+    }, [])
+  );
 
   const updateExercise = (index: number, text: string) => setExercises((items) => items.map((item, i) => (i === index ? text : item)));
   const addExercise = () => setExercises((items) => [...items, '']);

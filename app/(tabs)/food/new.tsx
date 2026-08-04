@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button, Chip, ScreenContainer, TextField } from '@/components';
@@ -21,6 +21,20 @@ export default function NewFoodLogScreen() {
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // "New Food Log" is a static route — expo-router reuses the same screen instance across
+  // repeated visits rather than mounting a fresh one each time, so a plain useState default only
+  // resets once, ever. Re-blanking on every focus is what actually makes each visit start fresh.
+  useFocusEffect(
+    useCallback(() => {
+      setDescription('');
+      setMeal('breakfast');
+      setCalories('');
+      setProtein('');
+      setCarbs('');
+      setFat('');
+    }, [])
+  );
 
   const parsedCalories = Number(calories);
   const canSave = description.trim().length > 0 && calories.trim().length > 0 && !Number.isNaN(parsedCalories);

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
 import { Button, ScreenContainer, TextField } from '@/components';
@@ -14,13 +14,26 @@ export default function NewJournalEntryScreen() {
   const router = useRouter();
   const { createEntry } = useJournal('');
 
-  const [prompt] = useState(() => JOURNAL_PROMPTS[Math.floor(Math.random() * JOURNAL_PROMPTS.length)]);
+  const [prompt, setPrompt] = useState(() => JOURNAL_PROMPTS[Math.floor(Math.random() * JOURNAL_PROMPTS.length)]);
   const [body, setBody] = useState('');
   const [mood, setMood] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dateKey, setDateKey] = useState(todayKey());
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
+
+  // "New Journal Entry" is a static route — expo-router reuses the same screen instance across
+  // repeated visits rather than mounting a fresh one each time, so a plain useState default only
+  // resets once, ever. Re-blanking (and re-rolling the prompt) on every focus is what actually
+  // makes each visit start fresh.
+  useFocusEffect(
+    useCallback(() => {
+      setPrompt(JOURNAL_PROMPTS[Math.floor(Math.random() * JOURNAL_PROMPTS.length)]);
+      setBody('');
+      setMood(null);
+      setDateKey(todayKey());
+    }, [])
+  );
 
   const onSave = async () => {
     setSaving(true);

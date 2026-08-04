@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Modal, Pressable, Switch, Text, View } from 'react-native';
 
 import { Button, Chip, TextField, TimeField } from '@/components';
@@ -93,6 +94,32 @@ export function TaskForm({
       setPrefilled(true);
     }
   }, [task, prefilled]);
+
+  // "New Task" is a static route (app/(tabs)/tasks/new.tsx) — expo-router reuses the same screen
+  // instance across repeated visits rather than mounting a fresh one each time, so a plain
+  // useState default only resets once, ever. Re-blanking on every focus (skipped in edit mode,
+  // where `task` is set) is what actually makes each "new task" session start empty.
+  useFocusEffect(
+    useCallback(() => {
+      if (task) return;
+      setTitle('');
+      setNotes('');
+      setPriority('medium');
+      setCategoryId(null);
+      setImportant(false);
+      setIsRecurring(initialRecurring);
+      setDueDate(todayKey());
+      setDueTime(null);
+      setReminderOffsetMinutes(null);
+      setAlarmEnabled(false);
+      setRecurrenceFrequency('daily');
+      setRecurrenceDays([1, 2, 3, 4, 5]);
+      setPeriodTargetCount('3');
+      setPeriodLengthDays('7');
+      setChecklistItems(['']);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [task, initialRecurring])
+  );
 
   const toggleRecurrenceDay = (day: number) => {
     setRecurrenceDays((days) => (days.includes(day) ? days.filter((d) => d !== day) : [...days, day].sort((a, b) => a - b)));

@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Modal, Pressable, Switch, Text, View } from 'react-native';
 
 import { Button, Card, Chip, EmptyState, ScreenContainer, TextField } from '@/components';
@@ -37,6 +37,22 @@ export default function NewPlannedPaymentScreen() {
   const [notify, setNotify] = useState(true);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Static route — expo-router reuses the same screen instance across repeated visits rather
+  // than mounting a fresh one each time, so a plain useState default only resets once, ever.
+  useFocusEffect(
+    useCallback(() => {
+      setType('expense');
+      setAccountId(null);
+      setCategoryId(null);
+      setAmount('');
+      setPayee('');
+      setFrequency('monthly');
+      setNextDate(todayKey());
+      setNotify(true);
+      setNote('');
+    }, [])
+  );
 
   if (!loadingAccounts && accounts.length === 0) {
     return (

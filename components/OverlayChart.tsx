@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Polyline, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { glowStrokeLayers, nextGradientId } from './charts/glow';
+import { smoothPath } from './charts/smoothPath';
 import { useAppTheme } from '@/theme';
 import { withAlpha } from '@/theme/withAlpha';
 import { Legend } from './StatsBits';
@@ -41,7 +42,7 @@ export function OverlayChart({ barSeries, lineSeries, barColor, lineColor, barLa
     x: xFor(index),
     y: height - (point.value / lineMax) * (height - 12) - 6,
   }));
-  const points = lineCoords.map((c) => `${c.x},${c.y}`).join(' ');
+  const linePath = smoothPath(lineCoords);
   const glowLayers = glowStrokeLayers(2.5);
 
   return (
@@ -69,9 +70,9 @@ export function OverlayChart({ barSeries, lineSeries, barColor, lineColor, barLa
             );
           })}
           {glowLayers.map((layer, index) => (
-            <Polyline
+            <Path
               key={index}
-              points={points}
+              d={linePath}
               fill="none"
               stroke={lineColor}
               strokeWidth={layer.strokeWidth}
@@ -80,7 +81,7 @@ export function OverlayChart({ barSeries, lineSeries, barColor, lineColor, barLa
               strokeLinecap="round"
             />
           ))}
-          <Polyline points={points} fill="none" stroke={lineColor} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+          <Path d={linePath} fill="none" stroke={lineColor} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
           {lineCoords.map((c, index) => (
             <Circle key={index} cx={c.x} cy={c.y} r={3} fill={lineColor} />
           ))}

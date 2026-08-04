@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, Switch, Text, View } from 'react-native';
 
 import { Button, Chip, TextField, TimeField } from '@/components';
@@ -81,6 +82,33 @@ export function HabitForm({ habit, onSave, submitLabel, autoFocusName = false, e
       setPrefilled(true);
     }
   }, [habit, prefilled]);
+
+  // "New Habit" is a static route (app/(tabs)/habits/new.tsx) — expo-router reuses the same
+  // screen instance across repeated visits rather than mounting a fresh one each time, so a
+  // plain useState default only resets once, ever. Re-blanking on every focus (skipped in edit
+  // mode, where `habit` is set) is what actually makes each "new habit" session start empty.
+  useFocusEffect(
+    useCallback(() => {
+      if (habit) return;
+      setTrackingType('yesno');
+      setName('');
+      setIcon(HABIT_ICONS[0]);
+      setCategoryId(null);
+      setTargetValue('');
+      setTargetUnit('');
+      setComparator('at_least');
+      setChecklistItems(['', '']);
+      setChecklistSuccessMode('all');
+      setChecklistMinCount('1');
+      setFrequency('daily');
+      setTargetDays([1, 2, 3, 4, 5]);
+      setMonthDays([1, 15]);
+      setPeriodTargetCount('3');
+      setPeriodLengthDays('7');
+      setReminderTime(null);
+      setAlarmEnabled(false);
+    }, [habit])
+  );
 
   const toggleDay = (day: number) => {
     setTargetDays((days) => (days.includes(day) ? days.filter((d) => d !== day) : [...days, day].sort()));

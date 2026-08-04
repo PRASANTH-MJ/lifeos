@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
 import { Button, Card, Chip, ScreenContainer, TextField } from '@/components';
@@ -22,6 +22,17 @@ export default function NewGoalScreen() {
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
   const [saving, setSaving] = useState(false);
+
+  // Static route — expo-router reuses the same screen instance across repeated visits rather
+  // than mounting a fresh one each time, so a plain useState default only resets once, ever.
+  useFocusEffect(
+    useCallback(() => {
+      setName('');
+      setColor(COLORS[0]);
+      setTargetAmount('');
+      setTargetDate(null);
+    }, [])
+  );
 
   const numericTarget = Number(targetAmount);
   const canSave = name.trim().length > 0 && numericTarget > 0;

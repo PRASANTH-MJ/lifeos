@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
 import { Button, Card, Chip, ScreenContainer, TextField } from '@/components';
@@ -26,6 +26,19 @@ export default function NewBudgetScreen() {
   const [pickerTarget, setPickerTarget] = useState<'start' | 'end' | null>(null);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
   const [saving, setSaving] = useState(false);
+
+  // Static route — expo-router reuses the same screen instance across repeated visits rather
+  // than mounting a fresh one each time, so a plain useState default only resets once, ever.
+  useFocusEffect(
+    useCallback(() => {
+      setName('');
+      setPeriod('monthly');
+      setAmount('');
+      setCategoryId(null);
+      setStartDate(todayKey());
+      setEndDate(todayKey());
+    }, [])
+  );
 
   const numericAmount = Number(amount);
   const canSave = name.trim().length > 0 && numericAmount > 0 && (period !== 'one_time' || startDate <= endDate);

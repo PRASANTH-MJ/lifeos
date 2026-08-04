@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Polygon, Polyline, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 
 import { glowStrokeLayers, nextGradientId } from './charts/glow';
+import { smoothAreaPath, smoothPath } from './charts/smoothPath';
 import { useAppTheme } from '@/theme';
 
 type Point = { date: string; value: number };
@@ -29,8 +30,8 @@ export function LineChart({ label, data, color, formatValue = (v) => String(Math
     const y = height - (point.value / maxValue) * (height - 12) - 6;
     return { x, y };
   });
-  const points = coords.map((c) => `${c.x},${c.y}`).join(' ');
-  const areaPoints = `0,${height} ${points} ${width},${height}`;
+  const linePath = smoothPath(coords);
+  const areaPath = smoothAreaPath(coords, height, width);
   const glowLayers = glowStrokeLayers(2.5);
   const selected = selectedIndex !== null ? data[selectedIndex] : null;
 
@@ -52,11 +53,11 @@ export function LineChart({ label, data, color, formatValue = (v) => String(Math
               <Stop offset="1" stopColor={color} stopOpacity={0} />
             </LinearGradient>
           </Defs>
-          <Polygon points={areaPoints} fill={`url(#${gradientId})`} />
+          <Path d={areaPath} fill={`url(#${gradientId})`} />
           {glowLayers.map((layer, index) => (
-            <Polyline
+            <Path
               key={index}
-              points={points}
+              d={linePath}
               fill="none"
               stroke={color}
               strokeWidth={layer.strokeWidth}
@@ -65,7 +66,7 @@ export function LineChart({ label, data, color, formatValue = (v) => String(Math
               strokeLinecap="round"
             />
           ))}
-          <Polyline points={points} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+          <Path d={linePath} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
           {coords.map((c, index) => (
             <Circle
               key={index}

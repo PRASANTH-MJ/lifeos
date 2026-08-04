@@ -13,7 +13,7 @@ import {
   requestNotificationPermissions,
 } from '@/notifications';
 import { useAuth } from '@/modules/auth';
-import { usePremium } from '@/modules/premium';
+import { PLANS, usePremium } from '@/modules/premium';
 import { useProfile } from '@/modules/profile';
 import { useSettings } from '@/modules/settings';
 import { useAppTheme } from '@/theme';
@@ -48,7 +48,7 @@ export default function SettingsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { premium } = usePremium();
+  const { premium, plan } = usePremium();
   const { settings, setTimeFormat } = useSettings();
   const { profile, setName, setAvatarUri, setPin, disablePin } = useProfile();
   const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
@@ -245,11 +245,11 @@ export default function SettingsScreen() {
         </View>
 
         <View style={{ gap: theme.spacing.sm }}>
-          <SectionHeader label="Premium" />
+          <SectionHeader label="Pro" />
           <Card glow={!premium} style={{ gap: theme.spacing.sm }}>
             {premium ? (
               <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
-                ✓ You're on Premium — every limit is lifted, for good.
+                ✓ You're on Pro{plan ? ` (${PLANS[plan].label})` : ''} — every limit is lifted.
               </Text>
             ) : (
               <>
@@ -257,7 +257,7 @@ export default function SettingsScreen() {
                   Free plan: up to 5 habits, 2 recurring tasks, 1 finance account.
                 </Text>
                 <View style={{ marginTop: theme.spacing.xs }}>
-                  <Button label="Go Premium — ₹500 lifetime" variant="gradient" onPress={() => router.push('/premium')} />
+                  <Button label="Upgrade to Pro" variant="gradient" onPress={() => router.push('/premium')} />
                 </View>
               </>
             )}
