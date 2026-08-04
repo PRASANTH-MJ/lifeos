@@ -1,10 +1,11 @@
 import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { useAuth } from '@/modules/auth/useAuth';
 import { uploadAvatar } from './avatarSync';
+import { subscribeToAvatarBroadcast } from './avatarBroadcast';
 import type { UserProfile } from './types';
 
 type ProfileRow = {
@@ -51,6 +52,15 @@ export function useProfile() {
       refresh();
     }, [refresh])
   );
+
+  // A remote avatar change lands in local SQLite the moment useAvatarSync's listener fires, even
+  // while this screen is already focused — useFocusEffect alone would miss that until the next
+  // focus. Updating state directly here (skipping a DB round trip) keeps it live either way.
+  useEffect(() => {
+    return subscribeToAvatarBroadcast((url) => {
+      setProfile((current) => (current ? { ...current, avatarUri: url } : current));
+    });
+  }, []);
 
   const setName = useCallback(
     async (name: string) => {

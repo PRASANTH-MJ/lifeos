@@ -5,13 +5,16 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { useAppTheme } from '@/theme';
 
-export type RazorpayResult = { paymentId: string; orderId: string; signature: string };
+export type RazorpayResult = { paymentId: string; orderId?: string; subscriptionId?: string; signature: string };
 
+/** Exactly one of orderId (one-time) / subscriptionId (recurring) must be set — Razorpay Checkout
+ * takes either `order_id` or `subscription_id`, never both. */
 type Props = {
   visible: boolean;
-  orderId: string;
+  orderId?: string;
+  subscriptionId?: string;
   keyId: string;
-  amountPaise: number;
+  amountPaise?: number;
   name: string;
   description: string;
   prefillEmail?: string;
@@ -22,31 +25,33 @@ type Props = {
 
 type RazorpayCheckoutConfig = {
   key: string;
-  amount: number;
-  currency: 'INR';
+  amount?: number;
+  currency?: 'INR';
   name: string;
   description: string;
-  order_id: string;
+  order_id?: string;
+  subscription_id?: string;
   prefill: { email: string };
   theme: { color: string };
 };
 
 function buildConfig(options: {
   keyId: string;
-  amountPaise: number;
+  amountPaise?: number;
   name: string;
   description: string;
-  orderId: string;
+  orderId?: string;
+  subscriptionId?: string;
   prefillEmail?: string;
   themeColor: string;
 }): RazorpayCheckoutConfig {
   return {
     key: options.keyId,
-    amount: options.amountPaise,
-    currency: 'INR',
+    ...(options.subscriptionId
+      ? { subscription_id: options.subscriptionId }
+      : { order_id: options.orderId, amount: options.amountPaise, currency: 'INR' as const }),
     name: options.name,
     description: options.description,
-    order_id: options.orderId,
     prefill: { email: options.prefillEmail ?? '' },
     theme: { color: options.themeColor },
   };
@@ -57,9 +62,21 @@ function buildConfig(options: {
  * Standard Checkout (checkout.js) in a WebView and relay its callbacks back to RN via
  * postMessage. On web there's no WebView to relay through — checkout.js runs directly in the
  * same page, so its callbacks call straight back into React state, no postMessage needed.
- * `orderId`/`keyId` must come from a server call either way (never generate an order or hold the
- * key secret client-side) — see functions/index.js's `createOrder`. */
-export function RazorpayCheckout({ visible, orderId, keyId, amountPaise, name, description, prefillEmail, onSuccess, onDismiss, onError }: Props) {
+ * `orderId`/`subscriptionId`/`keyId` must come from a server call either way (never generate an
+ * order/subscription or hold the key secret client-side) — see functions/index.js. */
+export function RazorpayCheckout({
+  visible,
+  orderId,
+  subscriptionId,
+  keyId,
+  amountPaise,
+  name,
+  description,
+  prefillEmail,
+  onSuccess,
+  onDismiss,
+  onError,
+}: Props) {
   const theme = useAppTheme();
 
   if (Platform.OS === 'web') {
@@ -67,6 +84,7 @@ export function RazorpayCheckout({ visible, orderId, keyId, amountPaise, name, d
       <WebRazorpayCheckout
         visible={visible}
         orderId={orderId}
+        subscriptionId={subscriptionId}
         keyId={keyId}
         amountPaise={amountPaise}
         name={name}
@@ -80,10 +98,12 @@ export function RazorpayCheckout({ visible, orderId, keyId, amountPaise, name, d
     );
   }
 
-  const html = buildCheckoutHtml(buildConfig({ keyId, amountPaise, name, description, orderId, prefillEmail, themeColor: theme.colors.primary }));
+  const html = buildCheckoutHtml(
+    buildConfig({ keyId, amountPaise, name, description, orderId, subscriptionId, prefillEmail, themeColor: theme.colors.primary })
+  );
 
   const onMessage = (event: WebViewMessageEvent) => {
-    let data: { status?: string; paymentId?: string; orderId?: string; signature?: string; error?: string };
+    let data: { status?: string; paymentId?: string; orderId?: string; subscriptionId?: string; signature?: string; error?: string };
     try {
       data = JSON.parse(event.nativeEvent.data);
     } catch {
@@ -91,8 +111,8 @@ export function RazorpayCheckout({ visible, orderId, keyId, amountPaise, name, d
       return;
     }
 
-    if (data.status === 'success' && data.paymentId && data.orderId && data.signature) {
-      onSuccess({ paymentId: data.paymentId, orderId: data.orderId, signature: data.signature });
+    if (data.status === 'success' && data.paymentId && data.signature && (data.orderId || data.subscriptionId)) {
+      onSuccess({ paymentId: data.paymentId, orderId: data.orderId, subscriptionId: data.subscriptionId, signature: data.signature });
     } else if (data.status === 'dismissed') {
       onDismiss();
     } else {
@@ -137,6 +157,7 @@ function loadRazorpayScript(): Promise<void> {
 function WebRazorpayCheckout({
   visible,
   orderId,
+  subscriptionId,
   keyId,
   amountPaise,
   name,
@@ -148,9 +169,10 @@ function WebRazorpayCheckout({
   onError,
 }: {
   visible: boolean;
-  orderId: string;
+  orderId?: string;
+  subscriptionId?: string;
   keyId: string;
-  amountPaise: number;
+  amountPaise?: number;
   name: string;
   description: string;
   prefillEmail?: string;
@@ -159,15 +181,16 @@ function WebRazorpayCheckout({
   onDismiss: () => void;
   onError: (message: string) => void;
 }) {
-  const openedForOrderId = useRef<string | null>(null);
+  const openedForId = useRef<string | null>(null);
+  const identity = orderId ?? subscriptionId ?? null;
 
   useEffect(() => {
-    if (!visible || openedForOrderId.current === orderId) return;
-    openedForOrderId.current = orderId;
+    if (!visible || !identity || openedForId.current === identity) return;
+    openedForId.current = identity;
 
     loadRazorpayScript()
       .then(() => {
-        const config = buildConfig({ keyId, amountPaise, name, description, orderId, prefillEmail, themeColor });
+        const config = buildConfig({ keyId, amountPaise, name, description, orderId, subscriptionId, prefillEmail, themeColor });
         type RazorpayInstance = { open: () => void; on: (event: string, handler: (response: unknown) => void) => void };
         type RazorpayConstructor = new (options: RazorpayCheckoutConfig & Record<string, unknown>) => RazorpayInstance;
         const RazorpayCtor = (window as unknown as { Razorpay: RazorpayConstructor }).Razorpay;
@@ -175,8 +198,8 @@ function WebRazorpayCheckout({
         const rzp = new RazorpayCtor({
           ...config,
           handler: (response: unknown) => {
-            const r = response as { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string };
-            onSuccess({ paymentId: r.razorpay_payment_id, orderId: r.razorpay_order_id, signature: r.razorpay_signature });
+            const r = response as { razorpay_payment_id: string; razorpay_order_id?: string; razorpay_subscription_id?: string; razorpay_signature: string };
+            onSuccess({ paymentId: r.razorpay_payment_id, orderId: r.razorpay_order_id, subscriptionId: r.razorpay_subscription_id, signature: r.razorpay_signature });
           },
           modal: { ondismiss: onDismiss },
         });
@@ -187,7 +210,7 @@ function WebRazorpayCheckout({
         rzp.open();
       })
       .catch(() => onError('Could not load the payment form — check your connection and try again.'));
-  }, [visible, orderId, keyId, amountPaise, name, description, prefillEmail, themeColor, onSuccess, onDismiss, onError]);
+  }, [visible, identity, orderId, subscriptionId, keyId, amountPaise, name, description, prefillEmail, themeColor, onSuccess, onDismiss, onError]);
 
   return null;
 }
@@ -202,7 +225,7 @@ function buildCheckoutHtml(config: RazorpayCheckoutConfig): string {
   function post(payload) { window.ReactNativeWebView.postMessage(JSON.stringify(payload)); }
   var rzp = new Razorpay(Object.assign(${JSON.stringify(config)}, {
     handler: function (response) {
-      post({ status: 'success', paymentId: response.razorpay_payment_id, orderId: response.razorpay_order_id, signature: response.razorpay_signature });
+      post({ status: 'success', paymentId: response.razorpay_payment_id, orderId: response.razorpay_order_id, subscriptionId: response.razorpay_subscription_id, signature: response.razorpay_signature });
     },
     modal: { ondismiss: function () { post({ status: 'dismissed' }); } }
   }));

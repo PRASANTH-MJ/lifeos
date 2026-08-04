@@ -1,32 +1,54 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
-import { Button, RazorpayCheckout, ScreenContainer } from '@/components';
+import { Button, Card, GlowSurface, RazorpayCheckout, ScreenContainer } from '@/components';
 import { useAuth } from '@/modules/auth';
-import { createPremiumOrder, FREE_LIMITS, PREMIUM_PRICE_INR, usePremium, verifyPremiumPayment, type CreateOrderResult } from '@/modules/premium';
+import {
+  createPremiumOrder,
+  createPremiumSubscription,
+  FREE_LIMITS,
+  PLANS,
+  usePremium,
+  verifyPremiumPayment,
+  verifyPremiumSubscription,
+  type CreateOrderResult,
+  type CreateSubscriptionResult,
+  type PlanKey,
+} from '@/modules/premium';
 import { useAppTheme } from '@/theme';
 
-const BENEFITS = [
-  `Unlimited habits (free plan: ${FREE_LIMITS.habits})`,
-  `Unlimited recurring tasks (free plan: ${FREE_LIMITS.recurringTasks})`,
-  `Unlimited finance accounts (free plan: ${FREE_LIMITS.financeAccounts})`,
+const FEATURES = [
+  { icon: 'flash-outline' as const, label: 'Unlimited Habits, Tasks & Finance Accounts', sub: `No more caps — free plan: ${FREE_LIMITS.habits} habits, ${FREE_LIMITS.recurringTasks} recurring tasks, ${FREE_LIMITS.financeAccounts} finance account` },
+  { icon: 'bar-chart-outline' as const, label: 'Advanced Insights', sub: 'The full Analytics picture across every module' },
+  { icon: 'heart-outline' as const, label: 'Support Future Development', sub: 'Keep new LifeOS features coming' },
 ];
+
+type PendingCheckout =
+  | { mode: 'order'; result: CreateOrderResult }
+  | { mode: 'subscription'; result: CreateSubscriptionResult };
 
 export default function PremiumScreen() {
   const theme = useAppTheme();
   const { user } = useAuth();
-  const { premium } = usePremium();
-  const [order, setOrder] = useState<CreateOrderResult | null>(null);
+  const { premium, plan: activePlan } = usePremium();
+  const [selectedPlan, setSelectedPlan] = useState<PlanKey>('yearly');
+  const [pending, setPending] = useState<PendingCheckout | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const onBuy = async () => {
+  const onContinue = async () => {
     setError(null);
     setLoading(true);
     try {
-      const result = await createPremiumOrder();
-      setOrder(result);
+      if (selectedPlan === 'lifetime') {
+        const result = await createPremiumOrder();
+        setPending({ mode: 'order', result });
+      } else {
+        const result = await createPremiumSubscription(selectedPlan);
+        setPending({ mode: 'subscription', result });
+      }
     } catch {
       setError('Could not start checkout — check your connection and try again.');
     } finally {
@@ -40,58 +62,100 @@ export default function PremiumScreen() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing.md, padding: theme.spacing.xl }}>
           <Text style={{ fontSize: 48 }}>✓</Text>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.xl, fontWeight: theme.typography.weight.bold, textAlign: 'center' }}>
-            You're on Premium
+            You're on LifeOS Pro
           </Text>
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm, textAlign: 'center' }}>
-            Thanks for supporting LifeOS — every limit is lifted, for good.
+            {activePlan && activePlan !== 'lifetime'
+              ? `${PLANS[activePlan].label} plan — thanks for supporting LifeOS.`
+              : 'Lifetime access — thanks for supporting LifeOS, for good.'}
           </Text>
         </View>
       </ScreenContainer>
     );
   }
 
+  const plan = PLANS[selectedPlan];
+
   return (
-    <ScreenContainer scroll={false}>
-      <View style={{ flex: 1, justifyContent: 'center', gap: theme.spacing.lg, padding: theme.spacing.xl }}>
-        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
-          LifeOS Premium
-        </Text>
-        <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.base }}>
-          One payment. No subscription. Yours for life.
-        </Text>
+    <ScreenContainer>
+      <View style={{ gap: theme.spacing.xl }}>
+        <View style={{ alignItems: 'center', gap: theme.spacing.xs }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
+            Upgrade to Pro
+          </Text>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, textAlign: 'center' }}>
+            Remove limits. Unlock every feature.
+          </Text>
+        </View>
+
+        <View style={{ gap: theme.spacing.md }}>
+          <PlanCard planKey="yearly" selected={selectedPlan === 'yearly'} onPress={() => setSelectedPlan('yearly')} badge="RECOMMENDED" />
+          <PlanCard planKey="monthly" selected={selectedPlan === 'monthly'} onPress={() => setSelectedPlan('monthly')} />
+          <PlanCard planKey="lifetime" selected={selectedPlan === 'lifetime'} onPress={() => setSelectedPlan('lifetime')} badge="BEST VALUE" />
+        </View>
 
         <View style={{ gap: theme.spacing.sm }}>
-          {BENEFITS.map((benefit) => (
-            <View key={benefit} style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-              <Text style={{ color: theme.colors.primary }}>✓</Text>
-              <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.sm }}>{benefit}</Text>
-            </View>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.semibold, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Included in Pro
+          </Text>
+          {FEATURES.map((feature) => (
+            <Card key={feature.label} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: theme.radius.md,
+                  backgroundColor: theme.colors.primaryMuted,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <Ionicons name={feature.icon} size={18} color={theme.colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+                  {feature.label}
+                </Text>
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{feature.sub}</Text>
+              </View>
+            </Card>
           ))}
         </View>
 
-        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>
-          ₹{PREMIUM_PRICE_INR}
-        </Text>
-
         {error ? <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.sm }}>{error}</Text> : null}
 
-        {loading ? <ActivityIndicator /> : <Button label="Buy Premium" onPress={onBuy} />}
+        {loading ? (
+          <ActivityIndicator />
+        ) : (
+          <Button
+            label={plan.recurring ? `Subscribe — ₹${plan.priceInr} ${plan.billing}` : `Buy Lifetime — ₹${plan.priceInr}`}
+            variant="gradient"
+            onPress={onContinue}
+          />
+        )}
+
+        {plan.recurring ? (
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, lineHeight: 18 }}>
+            Subscription details: payment will be charged to your Razorpay-linked payment method upon confirmation.
+            Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current billing
+            period. You can cancel any time from Settings.
+          </Text>
+        ) : null}
       </View>
 
-      {order ? (
+      {pending?.mode === 'order' ? (
         <RazorpayCheckout
           visible
-          orderId={order.orderId}
-          keyId={order.keyId}
-          amountPaise={order.amount}
-          name="LifeOS Premium"
+          orderId={pending.result.orderId}
+          keyId={pending.result.keyId}
+          amountPaise={pending.result.amount}
+          name="LifeOS Pro"
           description="Lifetime access"
           prefillEmail={user?.email ?? undefined}
           onSuccess={async ({ paymentId, orderId, signature }) => {
-            setOrder(null);
+            setPending(null);
             setLoading(true);
             try {
-              const result = await verifyPremiumPayment({ orderId, paymentId, signature });
+              const result = await verifyPremiumPayment({ orderId: orderId!, paymentId, signature });
               if (result.ok) setSuccess(true);
               else setError('Payment could not be verified — if you were charged, contact support and we’ll sort it out.');
             } catch {
@@ -100,13 +164,95 @@ export default function PremiumScreen() {
               setLoading(false);
             }
           }}
-          onDismiss={() => setOrder(null)}
+          onDismiss={() => setPending(null)}
           onError={(message) => {
-            setOrder(null);
+            setPending(null);
+            setError(message);
+          }}
+        />
+      ) : null}
+
+      {pending?.mode === 'subscription' ? (
+        <RazorpayCheckout
+          visible
+          subscriptionId={pending.result.subscriptionId}
+          keyId={pending.result.keyId}
+          name="LifeOS Pro"
+          description={`${PLANS[pending.result.planKey].label} subscription`}
+          prefillEmail={user?.email ?? undefined}
+          onSuccess={async ({ paymentId, subscriptionId, signature }) => {
+            setPending(null);
+            setLoading(true);
+            try {
+              const result = await verifyPremiumSubscription({ subscriptionId: subscriptionId!, paymentId, signature });
+              if (result.ok) setSuccess(true);
+              else setError('Payment could not be verified — if you were charged, contact support and we’ll sort it out.');
+            } catch {
+              setError('Payment received but verification failed — if you were charged, contact support and we’ll sort it out.');
+            } finally {
+              setLoading(false);
+            }
+          }}
+          onDismiss={() => setPending(null)}
+          onError={(message) => {
+            setPending(null);
             setError(message);
           }}
         />
       ) : null}
     </ScreenContainer>
+  );
+}
+
+function PlanCard({ planKey, selected, onPress, badge }: { planKey: PlanKey; selected: boolean; onPress: () => void; badge?: string }) {
+  const theme = useAppTheme();
+  const plan = PLANS[planKey];
+
+  const card = (
+    <Card
+      style={{
+        borderColor: selected ? theme.colors.primary : theme.colors.border,
+        borderWidth: selected ? 2 : 1,
+        gap: 4,
+      }}>
+      {badge ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: -10,
+            left: theme.spacing.lg,
+            backgroundColor: theme.colors.primary,
+            paddingHorizontal: theme.spacing.sm,
+            paddingVertical: 2,
+            borderRadius: theme.radius.full,
+          }}>
+          <Text style={{ color: '#fff', fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.bold }}>{badge}</Text>
+        </View>
+      ) : null}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
+            {plan.label}
+          </Text>
+          {plan.savingsLabel ? (
+            <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.semibold }}>
+              {plan.savingsLabel}
+            </Text>
+          ) : null}
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.xl, fontWeight: theme.typography.weight.bold }}>
+            ₹{plan.priceInr}
+          </Text>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{plan.billing}</Text>
+        </View>
+      </View>
+    </Card>
+  );
+
+  return (
+    <Pressable onPress={onPress}>
+      {selected ? <GlowSurface borderRadius={theme.radius.lg}>{card}</GlowSurface> : card}
+    </Pressable>
   );
 }
