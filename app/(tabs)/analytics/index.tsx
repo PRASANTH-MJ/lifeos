@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import { Card, Chip, DonutChart, LineChart, Legend, LoadingState, OverlayChart, ScreenContainer, Sparkline, StatCard, TrendChart } from '@/components';
 import {
@@ -154,11 +154,11 @@ export default function AnalyticsScreen() {
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Across every module</Text>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: theme.spacing.sm }}>
           {RANGE_OPTIONS.map((option) => (
             <Chip key={option.key} label={option.label} selected={range === option.key} onPress={() => setRange(option.key)} />
           ))}
-        </View>
+        </ScrollView>
 
         {trends ? (
           <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>

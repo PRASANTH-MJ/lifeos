@@ -3,7 +3,7 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Button, Card, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
+import { Button, Card, FAB_BOTTOM_OFFSET, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
 import { todayKey } from '@/lib/date';
 import { MEDITATION_SESSIONS, findSession, useMeditationLogs } from '@/modules/meditation';
 import { useModuleReminders } from '@/modules/reminders';
@@ -139,7 +139,7 @@ export default function MeditationScreen() {
       style={{
         position: 'absolute',
         right: theme.spacing.xl,
-        bottom: theme.spacing.xl,
+        bottom: FAB_BOTTOM_OFFSET,
         width: 56,
         height: 56,
         borderRadius: theme.radius.full,

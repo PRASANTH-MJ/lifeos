@@ -4,7 +4,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { Card, Chip, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
+import { Card, Chip, FAB_BOTTOM_OFFSET, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
 import { addDays, buildMonthGrid, monthCursorOf, shiftMonth, todayKey, weekdayOf } from '@/lib/date';
 import { useCategories } from '@/modules/categories';
 import { LIMIT_LABELS, useFreeTierGate, type LimitKind } from '@/modules/premium';
@@ -452,7 +452,7 @@ export default function TodayScreen() {
       style={{
         position: 'absolute',
         right: theme.spacing.xl,
-        bottom: theme.spacing.xl,
+        bottom: FAB_BOTTOM_OFFSET,
         width: 56,
         height: 56,
         borderRadius: theme.radius.full,

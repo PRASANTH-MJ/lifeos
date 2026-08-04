@@ -3,7 +3,7 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Button, Card, LogPastEntryModal, ReminderCard, ScreenContainer, TextField } from '@/components';
+import { Button, Card, FAB_BOTTOM_OFFSET, LogPastEntryModal, ReminderCard, ScreenContainer, TextField } from '@/components';
 import { todayKey } from '@/lib/date';
 import { MIND_EXERCISES, useBestScores, useMindTrainingLogs } from '@/modules/mind-training';
 import { useModuleReminders } from '@/modules/reminders';
@@ -132,7 +132,7 @@ export default function MindTrainingScreen() {
       style={{
         position: 'absolute',
         right: theme.spacing.xl,
-        bottom: theme.spacing.xl,
+        bottom: FAB_BOTTOM_OFFSET,
         width: 56,
         height: 56,
         borderRadius: theme.radius.full,

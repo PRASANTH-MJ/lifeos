@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
-import { Chip, EmptyState, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
+import { Chip, EmptyState, FAB_BOTTOM_OFFSET, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
 import { todayKey } from '@/lib/date';
 import { useCategories } from '@/modules/categories';
 import { HabitListItem, HabitLogSheet, useHabits } from '@/modules/habits';
@@ -108,7 +108,7 @@ export default function HabitsScreen() {
           style={{
             position: 'absolute',
             right: theme.spacing.xl,
-            bottom: theme.spacing.xl,
+            bottom: FAB_BOTTOM_OFFSET,
             width: 56,
             height: 56,
             borderRadius: theme.radius.full,
