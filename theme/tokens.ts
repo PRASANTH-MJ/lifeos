@@ -59,80 +59,167 @@ export const typography = {
   },
 };
 
-const palette = {
-  purple: '#6C63FF',
-  purpleMuted: '#EDECFF',
-  blue: '#3D8BFF',
-  blueMuted: '#E7F1FF',
-  amber: '#F5A623',
-  amberMuted: '#FCEFD9',
-  green: '#34C759',
-  greenMuted: '#E4F8EA',
-  red: '#FF3B30',
-  redMuted: '#FFE7E5',
-  gray: {
-    50: '#F9FAFB',
-    100: '#F1F2F4',
-    200: '#E4E6EA',
-    300: '#D3D6DB',
-    400: '#9AA0AC',
-    500: '#6B7280',
-    600: '#4B5563',
-    700: '#374151',
-    800: '#1F2430',
-    900: '#14171F',
-    950: '#0B0D12',
-  },
+/**
+ * Every screen/component reads colors exclusively through this shape via useAppTheme() — adding
+ * a theme is just adding one more object below that satisfies it, no call-site changes needed
+ * anywhere else. `glow` is the one new field: the color components/GlowSurface.tsx layers to fake
+ * an ambient glow (Android has no native colored-shadow/blur support, so every "glow" and "glass"
+ * effect in this app is a layered-color approximation, not a real blur — see the redesign plan).
+ */
+export type ColorTokens = {
+  background: string;
+  surface: string;
+  surfaceElevated: string;
+  border: string;
+  textPrimary: string;
+  textSecondary: string;
+  textTertiary: string;
+  primary: string;
+  primaryMuted: string;
+  success: string;
+  successMuted: string;
+  warning: string;
+  warningMuted: string;
+  danger: string;
+  dangerMuted: string;
+  overlay: string;
+  moduleHabits: string;
+  moduleHabitsMuted: string;
+  moduleTasks: string;
+  moduleTasksMuted: string;
+  moduleJournal: string;
+  moduleJournalMuted: string;
+  glow: string;
 };
 
-export const lightColors = {
-  background: palette.gray[50],
+/** Dark default — deep obsidian base, vibrant cyan/violet/neon-green accents. */
+export const cyberpunkColors: ColorTokens = {
+  background: '#0D0F17',
+  surface: '#12151F',
+  surfaceElevated: '#191D2B',
+  border: 'rgba(140,255,234,0.14)',
+  textPrimary: '#F2F6FF',
+  textSecondary: '#9AA6C4',
+  textTertiary: '#626E8C',
+  primary: '#22D3EE',
+  primaryMuted: 'rgba(34,211,238,0.16)',
+  success: '#39FF88',
+  successMuted: 'rgba(57,255,136,0.16)',
+  warning: '#FFC145',
+  warningMuted: 'rgba(255,193,69,0.16)',
+  danger: '#FF3D71',
+  dangerMuted: 'rgba(255,61,113,0.16)',
+  overlay: 'rgba(3,4,8,0.75)',
+  moduleHabits: '#A855F7',
+  moduleHabitsMuted: 'rgba(168,85,247,0.16)',
+  moduleTasks: '#22D3EE',
+  moduleTasksMuted: 'rgba(34,211,238,0.16)',
+  moduleJournal: '#39FF88',
+  moduleJournalMuted: 'rgba(57,255,136,0.16)',
+  glow: '#22D3EE',
+};
+
+/** OLED-friendly pure black, kept deliberately restrained — only violet/white highlights. */
+export const midnightGlassColors: ColorTokens = {
+  background: '#000000',
+  surface: '#0A0A0D',
+  surfaceElevated: '#14141A',
+  border: 'rgba(255,255,255,0.08)',
+  textPrimary: '#FFFFFF',
+  textSecondary: 'rgba(255,255,255,0.6)',
+  textTertiary: 'rgba(255,255,255,0.38)',
+  primary: '#A78BFA',
+  primaryMuted: 'rgba(167,139,250,0.14)',
+  success: '#6EE7B7',
+  successMuted: 'rgba(110,231,183,0.14)',
+  warning: '#FCD34D',
+  warningMuted: 'rgba(252,211,77,0.14)',
+  danger: '#F87171',
+  dangerMuted: 'rgba(248,113,113,0.14)',
+  overlay: 'rgba(0,0,0,0.8)',
+  moduleHabits: '#A78BFA',
+  moduleHabitsMuted: 'rgba(167,139,250,0.14)',
+  moduleTasks: '#C4B5FD',
+  moduleTasksMuted: 'rgba(196,181,253,0.14)',
+  moduleJournal: '#E5E7EB',
+  moduleJournalMuted: 'rgba(229,231,235,0.12)',
+  glow: '#A78BFA',
+};
+
+/** Light default — crisp off-white, soft indigo/lavender accents. Glow is used sparingly here;
+ * a bright neon glow reads as a mistake on a light background, not a feature. */
+export const minimalCleanColors: ColorTokens = {
+  background: '#F8FAFC',
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
-  border: palette.gray[200],
-  textPrimary: palette.gray[900],
-  textSecondary: palette.gray[600],
-  textTertiary: palette.gray[400],
-  primary: palette.purple,
-  primaryMuted: palette.purpleMuted,
-  success: palette.green,
-  successMuted: palette.greenMuted,
-  warning: palette.amber,
-  warningMuted: palette.amberMuted,
-  danger: palette.red,
-  dangerMuted: palette.redMuted,
-  overlay: 'rgba(11,13,18,0.4)',
-  moduleHabits: palette.purple,
-  moduleHabitsMuted: palette.purpleMuted,
-  moduleTasks: palette.blue,
-  moduleTasksMuted: palette.blueMuted,
-  moduleJournal: palette.amber,
-  moduleJournalMuted: palette.amberMuted,
+  border: '#E2E8F0',
+  textPrimary: '#1E293B',
+  textSecondary: '#64748B',
+  textTertiary: '#94A3B8',
+  primary: '#6366F1',
+  primaryMuted: '#EEF0FF',
+  success: '#22C55E',
+  successMuted: '#E7F9EE',
+  warning: '#F59E0B',
+  warningMuted: '#FEF3DE',
+  danger: '#EF4444',
+  dangerMuted: '#FDE8E8',
+  overlay: 'rgba(30,41,59,0.35)',
+  moduleHabits: '#6366F1',
+  moduleHabitsMuted: '#EEF0FF',
+  moduleTasks: '#3B82F6',
+  moduleTasksMuted: '#E7F1FF',
+  moduleJournal: '#F59E0B',
+  moduleJournalMuted: '#FEF3DE',
+  glow: '#A5B4FC',
 };
 
-export const darkColors = {
-  background: palette.gray[950],
-  surface: palette.gray[900],
-  surfaceElevated: palette.gray[800],
-  border: palette.gray[700],
-  textPrimary: '#F5F6F8',
-  textSecondary: palette.gray[400],
-  textTertiary: palette.gray[500],
-  primary: '#8C85FF',
-  primaryMuted: 'rgba(140,133,255,0.16)',
-  success: '#3DDB6C',
-  successMuted: 'rgba(61,219,108,0.16)',
-  warning: '#F7B94D',
-  warningMuted: 'rgba(247,185,77,0.16)',
-  danger: '#FF6259',
-  dangerMuted: 'rgba(255,98,89,0.16)',
-  overlay: 'rgba(0,0,0,0.6)',
-  moduleHabits: '#8C85FF',
-  moduleHabitsMuted: 'rgba(140,133,255,0.16)',
-  moduleTasks: '#6BA8FF',
-  moduleTasksMuted: 'rgba(107,168,255,0.16)',
-  moduleJournal: '#F7B94D',
-  moduleJournalMuted: 'rgba(247,185,77,0.16)',
+/** Dark bronze/slate base, glowing warm amber and gold accents. */
+export const solarFlareColors: ColorTokens = {
+  background: '#1C1410',
+  surface: '#241A13',
+  surfaceElevated: '#2E2117',
+  border: 'rgba(245,166,35,0.16)',
+  textPrimary: '#FBEEDD',
+  textSecondary: '#C9A788',
+  textTertiary: '#8C7160',
+  primary: '#FFB020',
+  primaryMuted: 'rgba(255,176,32,0.18)',
+  success: '#7CD992',
+  successMuted: 'rgba(124,217,146,0.16)',
+  warning: '#FFA726',
+  warningMuted: 'rgba(255,167,38,0.16)',
+  danger: '#FF6B4A',
+  dangerMuted: 'rgba(255,107,74,0.16)',
+  overlay: 'rgba(20,12,6,0.75)',
+  moduleHabits: '#FFB020',
+  moduleHabitsMuted: 'rgba(255,176,32,0.18)',
+  moduleTasks: '#FF8C42',
+  moduleTasksMuted: 'rgba(255,140,66,0.16)',
+  moduleJournal: '#FFD166',
+  moduleJournalMuted: 'rgba(255,209,102,0.16)',
+  glow: '#FFB020',
 };
 
-export type ColorTokens = typeof lightColors;
+export type ThemeName = 'cyberpunk' | 'midnightGlass' | 'minimalClean' | 'solarFlare';
+
+export const THEME_COLORS: Record<ThemeName, ColorTokens> = {
+  cyberpunk: cyberpunkColors,
+  midnightGlass: midnightGlassColors,
+  minimalClean: minimalCleanColors,
+  solarFlare: solarFlareColors,
+};
+
+export const THEME_LABELS: Record<ThemeName, string> = {
+  cyberpunk: 'Cyberpunk Neon',
+  midnightGlass: 'Midnight Glass',
+  minimalClean: 'Minimal Clean',
+  solarFlare: 'Solar Flare',
+};
+
+/** The theme each OS appearance setting starts a fresh install on — still overridable afterward
+ * via Settings, this is only the one-time default. */
+export const DEFAULT_THEME_FOR_SCHEME: Record<'light' | 'dark', ThemeName> = {
+  light: 'minimalClean',
+  dark: 'cyberpunk',
+};

@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useCallback, useEffect, useState } from 'react';
-import { AppState, Image, Modal, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
-import { Button, Card, Chip, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Card, GlowSurface, LoadingState, ScreenContainer, SegmentedControl, TextField } from '@/components';
 import {
   getNotificationPermissionSnapshot,
   type NotificationPermissionSnapshot,
@@ -17,6 +17,32 @@ import { usePremium } from '@/modules/premium';
 import { useProfile } from '@/modules/profile';
 import { useSettings } from '@/modules/settings';
 import { useAppTheme } from '@/theme';
+import { THEME_COLORS, THEME_LABELS, type ThemeName } from '@/theme/tokens';
+
+const THEME_NAMES = Object.keys(THEME_COLORS) as ThemeName[];
+
+function SectionHeader({ label }: { label: string }) {
+  const theme = useAppTheme();
+  return (
+    <Text
+      style={{
+        color: theme.colors.textTertiary,
+        fontSize: theme.typography.size.xs,
+        fontWeight: theme.typography.weight.semibold,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+      }}>
+      {label}
+    </Text>
+  );
+}
+
+function daysSinceSignup(creationTime: string | undefined): number | null {
+  if (!creationTime) return null;
+  const created = new Date(creationTime).getTime();
+  if (Number.isNaN(created)) return null;
+  return Math.max(1, Math.floor((Date.now() - created) / 86_400_000) + 1);
+}
 
 export default function SettingsScreen() {
   const theme = useAppTheme();
@@ -42,6 +68,8 @@ export default function SettingsScreen() {
     });
     return () => sub.remove();
   }, [refreshPermissionSnapshot]);
+
+  const daysActive = useMemo(() => daysSinceSignup(user?.metadata.creationTime), [user]);
 
   if (!settings || !profile) {
     return (
@@ -71,145 +99,170 @@ export default function SettingsScreen() {
           Settings
         </Text>
 
-        <Card style={{ gap: theme.spacing.md }}>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            Profile
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-            <Pressable onPress={onPickAvatar}>
-              {profile.avatarUri ? (
-                <Image source={{ uri: profile.avatarUri }} style={{ width: 64, height: 64, borderRadius: 32 }} />
-              ) : (
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Profile" />
+          <Card glow style={{ gap: theme.spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <Pressable onPress={onPickAvatar}>
+                <GlowSurface intensity="md" borderRadius={32}>
+                  {profile.avatarUri ? (
+                    <Image source={{ uri: profile.avatarUri }} style={{ width: 64, height: 64, borderRadius: 32 }} />
+                  ) : (
+                    <View
+                      style={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: 32,
+                        backgroundColor: theme.colors.primaryMuted,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                      <Ionicons name="person" size={28} color={theme.colors.primary} />
+                    </View>
+                  )}
+                </GlowSurface>
                 <View
                   style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: 32,
-                    backgroundColor: theme.colors.primaryMuted,
+                    position: 'absolute',
+                    bottom: -2,
+                    right: -2,
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    backgroundColor: theme.colors.primary,
                     alignItems: 'center',
                     justifyContent: 'center',
+                    borderWidth: 2,
+                    borderColor: theme.colors.surfaceElevated,
                   }}>
-                  <Ionicons name="person" size={28} color={theme.colors.primary} />
+                  <Ionicons name="camera" size={11} color="#fff" />
                 </View>
-              )}
-              <View
-                style={{
-                  position: 'absolute',
-                  bottom: -2,
-                  right: -2,
-                  width: 22,
-                  height: 22,
-                  borderRadius: 11,
-                  backgroundColor: theme.colors.primary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 2,
-                  borderColor: theme.colors.surfaceElevated,
-                }}>
-                <Ionicons name="camera" size={11} color="#fff" />
+              </Pressable>
+              <View style={{ flex: 1, gap: theme.spacing.xs }}>
+                <TextField placeholder="Your name" value={nameDraft} onChangeText={setNameDraft} onBlur={onSaveName} />
+                {daysActive !== null ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="flame" size={13} color={theme.colors.warning} />
+                    <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                      Day {daysActive} with LifeOS
+                    </Text>
+                  </View>
+                ) : null}
               </View>
-            </Pressable>
-            <View style={{ flex: 1 }}>
-              <TextField placeholder="Your name" value={nameDraft} onChangeText={setNameDraft} onBlur={onSaveName} />
             </View>
-          </View>
-        </Card>
 
-        <Card style={{ gap: theme.spacing.sm }}>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            Account
-          </Text>
-          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{user?.email}</Text>
-          <View style={{ marginTop: theme.spacing.xs }}>
-            <Button label="Log out" variant="danger" onPress={signOut} />
-          </View>
-        </Card>
+            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border }} />
 
-        <Card style={{ gap: theme.spacing.sm }}>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            Premium
-          </Text>
-          {premium ? (
-            <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
-              ✓ You're on Premium — every limit is lifted, for good.
+            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{user?.email}</Text>
+            <View>
+              <Button label="Log out" variant="danger" onPress={signOut} />
+            </View>
+          </Card>
+        </View>
+
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Appearance" />
+          <Card style={{ gap: theme.spacing.md }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Pick the look of the whole app.</Text>
+            <View style={{ flexDirection: 'row', gap: theme.spacing.md, flexWrap: 'wrap' }}>
+              {THEME_NAMES.map((name) => (
+                <ThemeSwatch key={name} name={name} selected={theme.themeName === name} onPress={() => theme.setThemeName(name)} />
+              ))}
+            </View>
+          </Card>
+        </View>
+
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="App Lock & Security" />
+          <Card style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              A PIN required to open the app on this device — not an account, just a local lock.
             </Text>
-          ) : (
-            <>
-              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-                Free plan: up to 5 habits, 2 recurring tasks, 1 finance account.
-              </Text>
-              <View style={{ marginTop: theme.spacing.xs }}>
-                <Button label="Go Premium — ₹500 lifetime" onPress={() => router.push('/premium')} />
+            {profile.pinEnabled ? (
+              <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
+                <Button label="Change PIN" variant="secondary" onPress={() => setPinModalVisible(true)} />
+                <Button label="Turn off" variant="danger" onPress={disablePin} />
               </View>
-            </>
-          )}
-        </Card>
-
-        <Card style={{ gap: theme.spacing.sm }}>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            App lock
-          </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-            A PIN required to open the app on this device — not an account, just a local lock.
-          </Text>
-          {profile.pinEnabled ? (
-            <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
-              <Button label="Change PIN" variant="secondary" onPress={() => setPinModalVisible(true)} />
-              <Button label="Turn off" variant="danger" onPress={disablePin} />
-            </View>
-          ) : (
-            <View style={{ marginTop: theme.spacing.xs }}>
-              <Button label="Set up PIN lock" variant="secondary" onPress={() => setPinModalVisible(true)} />
-            </View>
-          )}
-        </Card>
+            ) : (
+              <View style={{ marginTop: theme.spacing.xs }}>
+                <Button label="Set up PIN lock" variant="secondary" onPress={() => setPinModalVisible(true)} />
+              </View>
+            )}
+          </Card>
+        </View>
 
         {permissionSnapshot && permissionSnapshot.notifications !== 'unsupported' ? (
-          <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Notifications & alarms
-            </Text>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-              Required for reminders and alarms in every module to actually go off.
-            </Text>
+          <View style={{ gap: theme.spacing.sm }}>
+            <SectionHeader label="Notifications" />
+            <Card style={{ gap: theme.spacing.sm }}>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                Required for reminders and alarms in every module to actually go off.
+              </Text>
 
-            <PermissionRow
-              label="Notifications"
-              state={permissionSnapshot.notifications}
-              onFix={async () => {
-                if (permissionSnapshot.canAskAgain) {
-                  await requestNotificationPermissions();
-                  refreshPermissionSnapshot();
-                } else {
-                  await openNotificationSettings();
-                }
-              }}
-              fixLabel={permissionSnapshot.canAskAgain ? 'Enable' : 'Open settings'}
-            />
-
-            {Platform.OS === 'android' && permissionSnapshot.alarms !== 'unsupported' ? (
               <PermissionRow
-                label="Alarms & reminders access"
-                state={permissionSnapshot.alarms}
-                onFix={openAlarmSettings}
-                fixLabel="Open settings"
+                label="Notifications"
+                state={permissionSnapshot.notifications}
+                onFix={async () => {
+                  if (permissionSnapshot.canAskAgain) {
+                    await requestNotificationPermissions();
+                    refreshPermissionSnapshot();
+                  } else {
+                    await openNotificationSettings();
+                  }
+                }}
+                fixLabel={permissionSnapshot.canAskAgain ? 'Enable' : 'Open settings'}
               />
-            ) : null}
-          </Card>
+
+              {Platform.OS === 'android' && permissionSnapshot.alarms !== 'unsupported' ? (
+                <PermissionRow
+                  label="Alarms & reminders access"
+                  state={permissionSnapshot.alarms}
+                  onFix={openAlarmSettings}
+                  fixLabel="Open settings"
+                />
+              ) : null}
+            </Card>
+          </View>
         ) : null}
 
-        <Card style={{ gap: theme.spacing.sm }}>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            Time format
-          </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-            Applies everywhere a time is shown or entered, e.g. task due times.
-          </Text>
-          <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
-            <Chip label="24-hour" selected={settings.timeFormat === '24h'} onPress={() => setTimeFormat('24h')} />
-            <Chip label="12-hour (AM/PM)" selected={settings.timeFormat === '12h'} onPress={() => setTimeFormat('12h')} />
-          </View>
-        </Card>
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Time Format" />
+          <Card style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              Applies everywhere a time is shown or entered, e.g. task due times.
+            </Text>
+            <View style={{ marginTop: theme.spacing.xs }}>
+              <SegmentedControl
+                options={[
+                  { value: '24h', label: '24-hour' },
+                  { value: '12h', label: '12-hour (AM/PM)' },
+                ]}
+                value={settings.timeFormat}
+                onChange={setTimeFormat}
+              />
+            </View>
+          </Card>
+        </View>
+
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Premium" />
+          <Card glow={!premium} style={{ gap: theme.spacing.sm }}>
+            {premium ? (
+              <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+                ✓ You're on Premium — every limit is lifted, for good.
+              </Text>
+            ) : (
+              <>
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                  Free plan: up to 5 habits, 2 recurring tasks, 1 finance account.
+                </Text>
+                <View style={{ marginTop: theme.spacing.xs }}>
+                  <Button label="Go Premium — ₹500 lifetime" variant="gradient" onPress={() => router.push('/premium')} />
+                </View>
+              </>
+            )}
+          </Card>
+        </View>
       </View>
 
       <PinSetupModal
@@ -221,6 +274,50 @@ export default function SettingsScreen() {
         }}
       />
     </ScreenContainer>
+  );
+}
+
+function ThemeSwatch({ name, selected, onPress }: { name: ThemeName; selected: boolean; onPress: () => void }) {
+  const theme = useAppTheme();
+  const palette = THEME_COLORS[name];
+
+  return (
+    <Pressable onPress={onPress} style={{ alignItems: 'center', gap: 6, width: 78 }}>
+      <View
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: theme.radius.lg,
+          backgroundColor: palette.background,
+          borderWidth: selected ? 2 : 1,
+          borderColor: selected ? palette.primary : theme.colors.border,
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: palette.primary }} />
+          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: palette.success }} />
+          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: palette.moduleHabits }} />
+        </View>
+        {selected ? (
+          <View style={{ position: 'absolute', top: 4, right: 4 }}>
+            <Ionicons name="checkmark-circle" size={16} color={palette.primary} />
+          </View>
+        ) : null}
+      </View>
+      <Text
+        numberOfLines={2}
+        style={{
+          color: selected ? theme.colors.textPrimary : theme.colors.textSecondary,
+          fontSize: theme.typography.size.xs,
+          lineHeight: theme.typography.size.xs + 2,
+          fontWeight: selected ? theme.typography.weight.semibold : theme.typography.weight.regular,
+          textAlign: 'center',
+        }}>
+        {THEME_LABELS[name]}
+      </Text>
+    </Pressable>
   );
 }
 

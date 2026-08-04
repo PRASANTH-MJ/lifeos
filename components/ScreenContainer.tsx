@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FLOATING_TAB_BAR_CLEARANCE } from './tabBarMetrics';
 import { useAppTheme } from '@/theme';
 
 type Props = {
@@ -15,7 +16,7 @@ type Props = {
 
 export function ScreenContainer({ children, scroll = true, padded = true, onRefresh }: Props) {
   const theme = useAppTheme();
-  const contentStyle = [padded && { padding: theme.spacing.lg }];
+  const contentStyle = [padded && { padding: theme.spacing.lg, paddingBottom: theme.spacing.lg + FLOATING_TAB_BAR_CLEARANCE }];
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = onRefresh

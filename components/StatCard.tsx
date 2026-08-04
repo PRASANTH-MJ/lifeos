@@ -7,13 +7,15 @@ type Props = {
   label: string;
   value: string;
   color?: string;
+  glass?: boolean;
 };
 
-export function StatCard({ label, value, color }: Props) {
+export function StatCard({ label, value, color, glass }: Props) {
   const theme = useAppTheme();
 
   return (
     <Card
+      glass={glass}
       style={{
         flex: 1,
         alignItems: 'center',

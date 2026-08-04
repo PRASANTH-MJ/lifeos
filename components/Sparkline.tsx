@@ -1,6 +1,8 @@
 import { View } from 'react-native';
 import Svg, { Polyline } from 'react-native-svg';
 
+import { subtleGlowStrokeLayers } from './charts/glow';
+
 type Point = { date: string; value: number };
 
 type Props = {
@@ -27,11 +29,25 @@ export function Sparkline({ data, color, height = 32, width = 80 }: Props) {
     const y = height - ((point.value - min) / range) * (height - 6) - 3;
     return `${x},${y}`;
   });
+  const points = coords.join(' ');
+  const glowLayers = subtleGlowStrokeLayers(2);
 
   return (
     <View style={{ height, width }}>
       <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-        <Polyline points={coords.join(' ')} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {glowLayers.map((layer, index) => (
+          <Polyline
+            key={index}
+            points={points}
+            fill="none"
+            stroke={color}
+            strokeWidth={layer.strokeWidth}
+            strokeOpacity={layer.opacity}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        ))}
+        <Polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
       </Svg>
     </View>
   );

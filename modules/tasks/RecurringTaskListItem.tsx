@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Card, RowActionsMenu } from '@/components';
+import { Card, CompletionPulse, RowActionsMenu } from '@/components';
 import type { Category } from '@/modules/categories';
 import { useAppTheme } from '@/theme';
 import { PriorityChip } from './PriorityChip';
@@ -78,23 +78,25 @@ export function RecurringTaskListItem({
         </Pressable>
       </Link>
       {due ? (
-        <Pressable
-          onPress={onOpenLogSheet}
-          hitSlop={8}
-          style={[
-            styles.checkbox,
-            {
-              borderRadius: theme.radius.full,
-              borderColor: todayLog?.status === 'done' ? theme.colors.success : todayLog?.status === 'fail' ? theme.colors.danger : theme.colors.border,
-              backgroundColor: todayLog?.status === 'done' ? theme.colors.success : todayLog?.status === 'fail' ? theme.colors.danger : 'transparent',
-            },
-          ]}>
-          <Ionicons
-            name={todayLog?.status === 'done' ? 'checkmark' : todayLog?.status === 'fail' ? 'close' : todayLog?.status === 'skip' ? 'remove' : 'ellipse-outline'}
-            size={16}
-            color={todayLog ? '#fff' : theme.colors.textTertiary}
-          />
-        </Pressable>
+        <CompletionPulse active={todayLog?.status === 'done'} size={30}>
+          <Pressable
+            onPress={onOpenLogSheet}
+            hitSlop={8}
+            style={[
+              styles.checkbox,
+              {
+                borderRadius: theme.radius.full,
+                borderColor: todayLog?.status === 'done' ? theme.colors.success : todayLog?.status === 'fail' ? theme.colors.danger : theme.colors.border,
+                backgroundColor: todayLog?.status === 'done' ? theme.colors.success : todayLog?.status === 'fail' ? theme.colors.danger : 'transparent',
+              },
+            ]}>
+            <Ionicons
+              name={todayLog?.status === 'done' ? 'checkmark' : todayLog?.status === 'fail' ? 'close' : todayLog?.status === 'skip' ? 'remove' : 'ellipse-outline'}
+              size={16}
+              color={todayLog ? '#fff' : theme.colors.textTertiary}
+            />
+          </Pressable>
+        </CompletionPulse>
       ) : null}
       {onDelete ? (
         <RowActionsMenu

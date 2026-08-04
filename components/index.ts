@@ -1,5 +1,9 @@
 export { ScreenContainer } from './ScreenContainer';
 export { Card } from './Card';
+export { GlowSurface } from './GlowSurface';
+export { CompletionPulse } from './CompletionPulse';
+export { SegmentedControl } from './SegmentedControl';
+export { FLOATING_TAB_BAR_HEIGHT, FLOATING_TAB_BAR_MARGIN, FLOATING_TAB_BAR_CLEARANCE } from './tabBarMetrics';
 export { StatCard } from './StatCard';
 export { TrendChart } from './TrendChart';
 export { LineChart } from './LineChart';

@@ -162,9 +162,9 @@ export default function AnalyticsScreen() {
 
         {trends ? (
           <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-            <StatCard label="Check-ins" value={String(trends.stats.checkins)} color={theme.colors.moduleJournal} />
-            <StatCard label="Habit logs" value={String(trends.stats.habitLogs)} color={theme.colors.moduleHabits} />
-            <StatCard label="Reflections" value={String(trends.stats.reflections)} color={theme.colors.moduleTasks} />
+            <StatCard label="Check-ins" value={String(trends.stats.checkins)} color={theme.colors.moduleJournal} glass />
+            <StatCard label="Habit logs" value={String(trends.stats.habitLogs)} color={theme.colors.moduleHabits} glass />
+            <StatCard label="Reflections" value={String(trends.stats.reflections)} color={theme.colors.moduleTasks} glass />
           </View>
         ) : null}
 

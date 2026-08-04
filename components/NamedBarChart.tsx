@@ -1,6 +1,9 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text, View } from 'react-native';
 
+import { GlowSurface } from './GlowSurface';
 import { useAppTheme } from '@/theme';
+import { withAlpha } from '@/theme/withAlpha';
 
 type Bar = { label: string; value: number; color: string };
 
@@ -24,14 +27,22 @@ export function NamedBarChart({ bars, formatValue, height = 140 }: Props) {
             {formatValue(bar.value)}
           </Text>
           <View style={{ height, justifyContent: 'flex-end', width: '100%', alignItems: 'center' }}>
-            <View
-              style={{
-                width: '60%',
-                height: Math.max((Math.abs(bar.value) / maxValue) * height, 3),
-                backgroundColor: bar.color,
-                borderRadius: 4,
-              }}
-            />
+            <GlowSurface color={bar.color} intensity="sm" borderRadius={theme.radius.md} style={{ width: '60%' }}>
+              <View
+                style={{
+                  width: '100%',
+                  height: Math.max((Math.abs(bar.value) / maxValue) * height, 3),
+                  borderRadius: theme.radius.md,
+                  overflow: 'hidden',
+                }}>
+                <LinearGradient
+                  colors={[bar.color, withAlpha(bar.color, 0.55)]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </GlowSurface>
           </View>
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, textAlign: 'center' }}>{bar.label}</Text>
         </View>

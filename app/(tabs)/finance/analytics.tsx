@@ -198,9 +198,9 @@ function CashFlowSection({ days }: { days: number }) {
   return (
     <View style={{ gap: theme.spacing.xl }}>
       <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-        <StatCard label="Income" value={formatCurrencyCompact(current.income)} color={theme.colors.success} />
-        <StatCard label="Expenses" value={formatCurrencyCompact(current.expense)} color={theme.colors.danger} />
-        <StatCard label="Cash flow" value={formatCurrencyCompact(current.cashFlow)} color={current.cashFlow >= 0 ? theme.colors.success : theme.colors.danger} />
+        <StatCard label="Income" value={formatCurrencyCompact(current.income)} color={theme.colors.success} glass />
+        <StatCard label="Expenses" value={formatCurrencyCompact(current.expense)} color={theme.colors.danger} glass />
+        <StatCard label="Cash flow" value={formatCurrencyCompact(current.cashFlow)} color={current.cashFlow >= 0 ? theme.colors.success : theme.colors.danger} glass />
       </View>
 
       <Card style={{ gap: theme.spacing.md }}>

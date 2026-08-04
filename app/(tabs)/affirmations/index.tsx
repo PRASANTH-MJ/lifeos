@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, Stack, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ImageBackground, Pressable, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, ImageBackground, PanResponder, Pressable, Text, View } from 'react-native';
 
-import { Button, Card, LoadingState, ReminderCard, ScreenContainer } from '@/components';
-import { backgroundFor, useAffirmations, type Affirmation } from '@/modules/affirmations';
+import { Button, Card, GlowSurface, LoadingState, ReminderCard, ScreenContainer } from '@/components';
+import { backgroundFor, useAffirmations } from '@/modules/affirmations';
 import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
+
+const SLIDE_DISTANCE = 36;
+const TRANSITION_MS = 260;
 
 export default function AffirmationsScreen() {
   const theme = useAppTheme();
@@ -17,30 +20,82 @@ export default function AffirmationsScreen() {
     'Your daily affirmation',
     'Take a moment to reflect on something positive.'
   );
-  const [displayed, setDisplayed] = useState<Affirmation | null>(null);
+
+  const [index, setIndex] = useState<number | null>(null);
+  const fade = useRef(new Animated.Value(1)).current;
+  const slide = useRef(new Animated.Value(0)).current;
+
+  // Breathing pacer — a slow, endless scale pulse behind the affirmation text.
+  const breath = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breath, { toValue: 1, duration: 3200, useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 0, duration: 3200, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [breath]);
+  const breathScale = breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] });
 
   useEffect(() => {
-    if (todaysAffirmation && !displayed) {
-      setDisplayed(todaysAffirmation);
+    if (todaysAffirmation && index === null) {
+      const startIndex = affirmations.findIndex((a) => a.id === todaysAffirmation.id);
+      setIndex(startIndex >= 0 ? startIndex : 0);
     }
-  }, [todaysAffirmation, displayed]);
+  }, [todaysAffirmation, affirmations, index]);
 
-  const onShuffle = () => {
-    if (affirmations.length < 2) return;
-    let next = displayed;
-    while (!next || next.id === displayed?.id) {
-      next = affirmations[Math.floor(Math.random() * affirmations.length)];
-    }
-    setDisplayed(next);
+  const goTo = (nextIndex: number, incomingFrom: 'left' | 'right') => {
+    if (affirmations.length === 0) return;
+    const wrapped = ((nextIndex % affirmations.length) + affirmations.length) % affirmations.length;
+    fade.setValue(0);
+    slide.setValue(incomingFrom === 'right' ? SLIDE_DISTANCE : -SLIDE_DISTANCE);
+    setIndex(wrapped);
+    Animated.parallel([
+      Animated.timing(fade, { toValue: 1, duration: TRANSITION_MS, useNativeDriver: true }),
+      Animated.timing(slide, { toValue: 0, duration: TRANSITION_MS, useNativeDriver: true }),
+    ]).start();
   };
 
-  if (loading || !displayed) {
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_evt, gesture) => Math.abs(gesture.dx) > 24 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 2,
+        onPanResponderMove: () => {},
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderRelease: (_evt, gesture) => {
+          if (index === null) return;
+          if (gesture.dx < 0) {
+            goTo(index + 1, 'right');
+          } else if (gesture.dx > 0) {
+            goTo(index - 1, 'left');
+          }
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [index, affirmations.length]
+  );
+
+  const onShuffle = () => {
+    if (affirmations.length < 2 || index === null) return;
+    let next = index;
+    while (next === index) {
+      next = Math.floor(Math.random() * affirmations.length);
+    }
+    goTo(next, 'right');
+  };
+
+  if (loading || index === null || affirmations.length === 0) {
     return (
       <ScreenContainer>
         <LoadingState />
       </ScreenContainer>
     );
   }
+
+  const displayed = affirmations[index];
 
   return (
     <ScreenContainer>
@@ -56,29 +111,69 @@ export default function AffirmationsScreen() {
         }}
       />
       <View style={{ gap: theme.spacing.xl }}>
-        <ImageBackground
-          source={backgroundFor(displayed.id, displayed.text)}
-          imageStyle={{ borderRadius: theme.radius.lg }}
-          style={{ borderRadius: theme.radius.lg, overflow: 'hidden' }}>
-          <View style={{ backgroundColor: 'rgba(0,0,0,0.28)', padding: theme.spacing.lg, gap: theme.spacing.lg }}>
-            <Text style={{ color: '#fff', fontSize: theme.typography.size.xl, fontWeight: theme.typography.weight.semibold, lineHeight: 30 }}>
-              “{displayed.text}”
-            </Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Pressable onPress={onShuffle} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Ionicons name="shuffle" size={18} color="#fff" />
-                <Text style={{ color: '#fff', fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>Shuffle</Text>
-              </Pressable>
-              <Pressable onPress={() => toggleFavorite(displayed)} hitSlop={8}>
-                <Ionicons
-                  name={displayed.is_favorite ? 'heart' : 'heart-outline'}
-                  size={22}
-                  color={displayed.is_favorite ? theme.colors.danger : '#fff'}
-                />
-              </Pressable>
+        <View {...panResponder.panHandlers}>
+          <ImageBackground
+            source={backgroundFor(displayed.id, displayed.text)}
+            imageStyle={{ borderRadius: theme.radius.lg }}
+            style={{ borderRadius: theme.radius.lg, overflow: 'hidden' }}>
+            <View style={{ backgroundColor: 'rgba(0,0,0,0.28)', padding: theme.spacing.lg, gap: theme.spacing.lg }}>
+              <View style={{ position: 'relative' }}>
+                <Animated.View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    alignSelf: 'center',
+                    top: '50%',
+                    marginTop: -70,
+                    transform: [{ scale: breathScale }],
+                  }}>
+                  <GlowSurface color={theme.colors.glow} intensity="lg" borderRadius={70}>
+                    <View style={{ width: 140, height: 140 }} />
+                  </GlowSurface>
+                </Animated.View>
+                <Animated.Text
+                  style={{
+                    color: '#fff',
+                    fontSize: theme.typography.size.xl,
+                    fontWeight: theme.typography.weight.semibold,
+                    lineHeight: 30,
+                    opacity: fade,
+                    transform: [{ translateX: slide }],
+                  }}>
+                  “{displayed.text}”
+                </Animated.Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Pressable onPress={onShuffle} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="shuffle" size={18} color="#fff" />
+                  <Text style={{ color: '#fff', fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>Shuffle</Text>
+                </Pressable>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  {affirmations.length > 1
+                    ? affirmations.slice(0, 8).map((a, i) => (
+                        <View
+                          key={a.id}
+                          style={{
+                            width: i === index ? 14 : 5,
+                            height: 5,
+                            borderRadius: 3,
+                            backgroundColor: i === index ? '#fff' : 'rgba(255,255,255,0.4)',
+                          }}
+                        />
+                      ))
+                    : null}
+                </View>
+                <Pressable onPress={() => toggleFavorite(displayed)} hitSlop={8}>
+                  <Ionicons
+                    name={displayed.is_favorite ? 'heart' : 'heart-outline'}
+                    size={22}
+                    color={displayed.is_favorite ? theme.colors.danger : '#fff'}
+                  />
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </ImageBackground>
+          </ImageBackground>
+        </View>
 
         {reminders.map((reminder) => (
           <ReminderCard

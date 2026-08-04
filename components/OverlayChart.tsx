@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, Polyline, Rect } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Polyline, Rect, Stop } from 'react-native-svg';
 
+import { glowStrokeLayers, nextGradientId } from './charts/glow';
 import { useAppTheme } from '@/theme';
+import { withAlpha } from '@/theme/withAlpha';
 import { Legend } from './StatsBits';
 
 type Point = { date: string; value: number };
@@ -25,6 +28,7 @@ type Props = {
  * this shows shape/timing correlation, not absolute magnitude comparison. */
 export function OverlayChart({ barSeries, lineSeries, barColor, lineColor, barLabel, lineLabel, height = 120 }: Props) {
   const theme = useAppTheme();
+  const [gradientId] = useState(() => nextGradientId('overlay-bar'));
   const n = barSeries.length;
   const barMax = Math.max(...barSeries.map((p) => p.value), 1);
   const lineMax = Math.max(...lineSeries.map((p) => p.value), 1);
@@ -38,11 +42,18 @@ export function OverlayChart({ barSeries, lineSeries, barColor, lineColor, barLa
     y: height - (point.value / lineMax) * (height - 12) - 6,
   }));
   const points = lineCoords.map((c) => `${c.x},${c.y}`).join(' ');
+  const glowLayers = glowStrokeLayers(2.5);
 
   return (
     <View style={{ gap: theme.spacing.sm }}>
       <View style={{ height, width: '100%' }}>
         <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+          <Defs>
+            <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={barColor} stopOpacity={0.65} />
+              <Stop offset="1" stopColor={withAlpha(barColor, 0.25)} stopOpacity={1} />
+            </LinearGradient>
+          </Defs>
           {barSeries.map((point, index) => {
             const barHeight = Math.max((point.value / barMax) * (height - 6), point.value > 0 ? 3 : 0);
             return (
@@ -52,12 +63,23 @@ export function OverlayChart({ barSeries, lineSeries, barColor, lineColor, barLa
                 y={height - barHeight}
                 width={barWidth}
                 height={barHeight}
-                rx={2}
-                fill={barColor}
-                opacity={0.5}
+                rx={barWidth / 2}
+                fill={`url(#${gradientId})`}
               />
             );
           })}
+          {glowLayers.map((layer, index) => (
+            <Polyline
+              key={index}
+              points={points}
+              fill="none"
+              stroke={lineColor}
+              strokeWidth={layer.strokeWidth}
+              strokeOpacity={layer.opacity}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          ))}
           <Polyline points={points} fill="none" stroke={lineColor} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
           {lineCoords.map((c, index) => (
             <Circle key={index} cx={c.x} cy={c.y} r={3} fill={lineColor} />

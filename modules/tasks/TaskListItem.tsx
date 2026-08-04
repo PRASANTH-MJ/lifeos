@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Card, RowActionsMenu } from '@/components';
+import { Card, CompletionPulse, RowActionsMenu } from '@/components';
 import { useAppTheme } from '@/theme';
 import { formatDisplayDate } from '@/lib/date';
 import type { Category } from '@/modules/categories';
@@ -27,20 +27,22 @@ export function TaskListItem({ task, subtaskCount, category, onToggle, onArchive
 
   return (
     <Card style={styles.row}>
-      <Pressable
-        accessibilityLabel={completed ? `Mark ${task.title} incomplete` : `Mark ${task.title} complete`}
-        onPress={onToggle}
-        hitSlop={8}
-        style={[
-          styles.checkbox,
-          {
-            borderRadius: theme.radius.full,
-            borderColor: completed ? theme.colors.success : theme.colors.border,
-            backgroundColor: completed ? theme.colors.success : 'transparent',
-          },
-        ]}>
-        {completed ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
-      </Pressable>
+      <CompletionPulse active={completed} size={26}>
+        <Pressable
+          accessibilityLabel={completed ? `Mark ${task.title} incomplete` : `Mark ${task.title} complete`}
+          onPress={onToggle}
+          hitSlop={8}
+          style={[
+            styles.checkbox,
+            {
+              borderRadius: theme.radius.full,
+              borderColor: completed ? theme.colors.success : theme.colors.border,
+              backgroundColor: completed ? theme.colors.success : 'transparent',
+            },
+          ]}>
+          {completed ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+        </Pressable>
+      </CompletionPulse>
       <Link href={{ pathname: '/tasks/[id]', params: { id: String(task.id) } }} asChild>
         <Pressable style={styles.info}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>

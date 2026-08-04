@@ -11,7 +11,7 @@ import { LoginScreen, useAuth } from '@/modules/auth';
 import { PinLockScreen, useAvatarSync, useProfile } from '@/modules/profile';
 import { usePremium } from '@/modules/premium';
 import { useSyncEngine } from '@/modules/sync';
-import { ThemeProvider } from '@/theme';
+import { ThemeProvider, useAppTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 configureNotificationHandler();
@@ -79,7 +79,7 @@ export default function RootLayout() {
 }
 
 function RootNavigation() {
-  const colorScheme = useColorScheme();
+  const theme = useAppTheme();
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading, verifyPin } = useProfile();
   const [unlocked, setUnlocked] = useState(false);
@@ -108,7 +108,7 @@ function RootNavigation() {
   }
 
   return (
-    <RouterThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <RouterThemeProvider value={theme.scheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="alarm-ringing" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />

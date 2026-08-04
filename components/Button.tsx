@@ -1,8 +1,10 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 
 import { useAppTheme } from '@/theme';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'gradient';
+type SolidVariant = Exclude<Variant, 'gradient'>;
 
 type Props = {
   label: string;
@@ -15,8 +17,9 @@ type Props = {
 export function Button({ label, onPress, variant = 'primary', loading, disabled }: Props) {
   const theme = useAppTheme();
   const isDisabled = disabled || loading;
+  const isGradient = variant === 'gradient';
 
-  const backgrounds: Record<Variant, string> = {
+  const backgrounds: Record<SolidVariant, string> = {
     primary: theme.colors.primary,
     secondary: theme.colors.primaryMuted,
     ghost: 'transparent',
@@ -27,9 +30,10 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
     secondary: theme.colors.primary,
     ghost: theme.colors.textPrimary,
     danger: '#FFFFFF',
+    gradient: '#FFFFFF',
   };
 
-  const elevated = variant === 'primary' || variant === 'danger';
+  const elevated = variant === 'primary' || variant === 'danger' || isGradient;
 
   return (
     <Pressable
@@ -39,14 +43,23 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
         styles.base,
         elevated && !isDisabled ? theme.shadow.sm : null,
         {
-          backgroundColor: backgrounds[variant],
+          backgroundColor: isGradient ? undefined : backgrounds[variant as SolidVariant],
           borderRadius: theme.radius.md,
           paddingVertical: theme.spacing.md,
           paddingHorizontal: theme.spacing.xl,
           opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1,
           transform: [{ scale: pressed && !isDisabled ? 0.98 : 1 }],
+          overflow: isGradient ? 'hidden' : 'visible',
         },
       ]}>
+      {isGradient && (
+        <LinearGradient
+          colors={[theme.colors.primary, theme.colors.glow]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
       {loading ? (
         <ActivityIndicator color={textColors[variant]} />
       ) : (
