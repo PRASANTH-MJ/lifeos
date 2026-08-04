@@ -8,7 +8,7 @@ import { SQLiteProvider } from 'expo-sqlite';
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db';
 import { configureNotificationHandler, ensureAlarmChannel, requestNotificationPermissions } from '@/notifications';
 import { LoginScreen, useAuth } from '@/modules/auth';
-import { PinLockScreen, useProfile } from '@/modules/profile';
+import { PinLockScreen, useAvatarSync, useProfile } from '@/modules/profile';
 import { usePremium } from '@/modules/premium';
 import { useSyncEngine } from '@/modules/sync';
 import { ThemeProvider } from '@/theme';
@@ -85,6 +85,7 @@ function RootNavigation() {
   const [unlocked, setUnlocked] = useState(false);
   usePremium();
   useSyncEngine();
+  useAvatarSync();
   useAlarmNotificationRouting();
   useRequestNotificationPermissionOnLaunch();
 

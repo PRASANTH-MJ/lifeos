@@ -3,6 +3,8 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
+import { useAuth } from '@/modules/auth/useAuth';
+import { uploadAvatar } from './avatarSync';
 import type { UserProfile } from './types';
 
 type ProfileRow = {
@@ -31,6 +33,7 @@ async function hashPin(pin: string): Promise<string> {
 
 export function useProfile() {
   const db = useSQLiteContext();
+  const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -61,8 +64,17 @@ export function useProfile() {
     async (avatarUri: string | null) => {
       await db.runAsync('UPDATE user_profile SET avatar_uri = ?, updated_at = ? WHERE id = 1', [avatarUri, new Date().toISOString()]);
       await refresh();
+
+      // Upload in the background so picking a photo feels instant — once it's up, the local row
+      // is updated to point at the same URL other devices will see, and this doc's listener
+      // (see useAvatarSync, mounted at root) is how a *different* device picks up the change.
+      if (avatarUri && user) {
+        uploadAvatar(user.uid, avatarUri)
+          .then((url) => db.runAsync('UPDATE user_profile SET avatar_uri = ? WHERE id = 1', [url]).then(refresh))
+          .catch(() => {});
+      }
     },
-    [db, refresh]
+    [db, refresh, user]
   );
 
   const setPin = useCallback(
