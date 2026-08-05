@@ -3,16 +3,19 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
-import { Button, ScreenContainer, TextField } from '@/components';
+import { Button, ScreenContainer, TextField, UpsellModal } from '@/components';
 import { formatDisplayDate, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { JOURNAL_PROMPTS, MoodPicker, useJournal } from '@/modules/journal';
+import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
 import { useAppTheme } from '@/theme';
 
 export default function NewJournalEntryScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { createEntry } = useJournal('');
+  const journalGate = useFreeTierGate('journalEntries');
+  const [showUpsell, setShowUpsell] = useState(false);
 
   const [prompt, setPrompt] = useState(() => JOURNAL_PROMPTS[Math.floor(Math.random() * JOURNAL_PROMPTS.length)]);
   const [body, setBody] = useState('');
@@ -36,6 +39,10 @@ export default function NewJournalEntryScreen() {
   );
 
   const onSave = async () => {
+    if (!journalGate.allowed) {
+      setShowUpsell(true);
+      return;
+    }
     setSaving(true);
     await createEntry({ body: body.trim(), mood, prompt, dateKey });
     setSaving(false);
@@ -101,6 +108,8 @@ export default function NewJournalEntryScreen() {
           </View>
         </View>
       </Modal>
+
+      <UpsellModal visible={showUpsell} resourceLabel={LIMIT_LABELS.journalEntries} limit={journalGate.limit} onClose={() => setShowUpsell(false)} />
     </ScreenContainer>
   );
 }

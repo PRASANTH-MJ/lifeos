@@ -66,6 +66,8 @@ export default function TodayScreen() {
   const [createMenuVisible, setCreateMenuVisible] = useState(false);
   const habitGate = useFreeTierGate('habits');
   const recurringGate = useFreeTierGate('recurringTasks');
+  const taskGate = useFreeTierGate('tasks');
+  const journalGate = useFreeTierGate('journalEntries');
   const [upsellKind, setUpsellKind] = useState<LimitKind | null>(null);
   const { morning, night, saveMorning, saveNight } = useCheckins();
   const [checkinSheet, setCheckinSheet] = useState<'morning' | 'night' | null>(null);
@@ -490,7 +492,12 @@ export default function TodayScreen() {
                 color: theme.colors.moduleHabits,
                 onPress: () => (habitGate.allowed ? router.push('/habits/new') : setUpsellKind('habits')),
               },
-              { label: 'Task', icon: 'checkbox-outline', color: theme.colors.moduleTasks, onPress: () => router.push('/tasks/new') },
+              {
+                label: 'Task',
+                icon: 'checkbox-outline',
+                color: theme.colors.moduleTasks,
+                onPress: () => (taskGate.allowed ? router.push('/tasks/new') : setUpsellKind('tasks')),
+              },
               {
                 label: 'Recurring Task',
                 icon: 'repeat-outline',
@@ -500,7 +507,12 @@ export default function TodayScreen() {
                     ? router.push({ pathname: '/tasks/new', params: { recurring: '1' } })
                     : setUpsellKind('recurringTasks'),
               },
-              { label: 'Journal Entry', icon: 'book-outline', color: theme.colors.moduleJournal, onPress: () => router.push('/journal/new') },
+              {
+                label: 'Journal Entry',
+                icon: 'book-outline',
+                color: theme.colors.moduleJournal,
+                onPress: () => (journalGate.allowed ? router.push('/journal/new') : setUpsellKind('journalEntries')),
+              },
               { label: 'Morning check-in', icon: 'sunny-outline', color: theme.colors.moduleJournal, onPress: () => setCheckinSheet('morning') },
               { label: 'Night check-in', icon: 'moon-outline', color: theme.colors.moduleJournal, onPress: () => setCheckinSheet('night') },
               { label: 'Expense', icon: 'cash-outline', color: theme.colors.primary, onPress: () => router.push('/finance/new') },
@@ -535,7 +547,15 @@ export default function TodayScreen() {
     <UpsellModal
       visible={upsellKind != null}
       resourceLabel={upsellKind ? LIMIT_LABELS[upsellKind] : ''}
-      limit={upsellKind === 'habits' ? habitGate.limit : recurringGate.limit}
+      limit={
+        upsellKind === 'habits'
+          ? habitGate.limit
+          : upsellKind === 'recurringTasks'
+            ? recurringGate.limit
+            : upsellKind === 'journalEntries'
+              ? journalGate.limit
+              : taskGate.limit
+      }
       onClose={() => setUpsellKind(null)}
     />
 

@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AppState, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, AppState, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
-import { Button, Card, GlowSurface, LoadingState, ScreenContainer, SegmentedControl, TextField } from '@/components';
+import { Button, Card, GlowSurface, LoadingState, ScreenContainer, SegmentedControl, TextField, UpsellModal } from '@/components';
+import { formatDisplayDateTime } from '@/lib/date';
 import {
   getNotificationPermissionSnapshot,
   type NotificationPermissionSnapshot,
@@ -12,6 +13,8 @@ import {
   openNotificationSettings,
   requestNotificationPermissions,
 } from '@/notifications';
+import { useCloudBackup } from '@/modules/backup';
+import { useDataExport } from '@/modules/export';
 import { useAuth } from '@/modules/auth';
 import { PLANS, usePremium } from '@/modules/premium';
 import { useProfile } from '@/modules/profile';
@@ -53,6 +56,11 @@ export default function SettingsScreen() {
   const { profile, setName, setAvatarUri, setPin, disablePin } = useProfile();
   const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
   const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [themeUpsellVisible, setThemeUpsellVisible] = useState(false);
+  const [backupUpsellVisible, setBackupUpsellVisible] = useState(false);
+  const [exportUpsellVisible, setExportUpsellVisible] = useState(false);
+  const { backingUp, restoring, lastBackupAt, error: backupError, backupNow, restoreLatest, refreshLastBackupAt } = useCloudBackup();
+  const { exporting, error: exportError, exportPdf, exportExcel } = useDataExport();
   const [permissionSnapshot, setPermissionSnapshot] = useState<NotificationPermissionSnapshot | null>(null);
 
   const refreshPermissionSnapshot = useCallback(() => {
@@ -68,6 +76,12 @@ export default function SettingsScreen() {
     });
     return () => sub.remove();
   }, [refreshPermissionSnapshot]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshLastBackupAt();
+    }, [refreshLastBackupAt])
+  );
 
   const daysActive = useMemo(() => daysSinceSignup(user?.metadata.creationTime), [user]);
 
@@ -173,10 +187,18 @@ export default function SettingsScreen() {
         <View style={{ gap: theme.spacing.sm }}>
           <SectionHeader label="Appearance" />
           <Card style={{ gap: theme.spacing.md }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Pick the look of the whole app.</Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              {premium ? 'Pick the look of the whole app.' : "You're on the default theme for your device — Pro unlocks switching between all 4."}
+            </Text>
             <View style={{ flexDirection: 'row', gap: theme.spacing.md, flexWrap: 'wrap' }}>
               {THEME_NAMES.map((name) => (
-                <ThemeSwatch key={name} name={name} selected={theme.themeName === name} onPress={() => theme.setThemeName(name)} />
+                <ThemeSwatch
+                  key={name}
+                  name={name}
+                  selected={theme.themeName === name}
+                  locked={!premium && theme.themeName !== name}
+                  onPress={() => (premium ? theme.setThemeName(name) : setThemeUpsellVisible(true))}
+                />
               ))}
             </View>
           </Card>
@@ -264,13 +286,79 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-                  Free plan: up to 5 habits, 2 recurring tasks, 1 finance account.
+                  Free plan: up to 5 habits, 20 active tasks, 2 recurring tasks, 15 journal entries, 1 finance account.
                 </Text>
                 <View style={{ marginTop: theme.spacing.xs }}>
                   <Button label="Upgrade to Pro" variant="gradient" onPress={() => router.push('/premium')} />
                 </View>
               </>
             )}
+          </Card>
+        </View>
+
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Cloud Backup" />
+          <Card style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              Back up your habits, tasks, journal, and finance data — restore it any time, even on a new device.
+            </Text>
+            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs }}>
+              {lastBackupAt ? `Last backed up ${formatDisplayDateTime(lastBackupAt)}` : 'No backup yet'}
+            </Text>
+            {backupError ? <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.xs }}>{backupError}</Text> : null}
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
+              <Button
+                label="Back up now"
+                variant="secondary"
+                loading={backingUp}
+                onPress={() => (premium ? backupNow() : setBackupUpsellVisible(true))}
+              />
+              <Button
+                label="Restore"
+                variant="danger"
+                loading={restoring}
+                onPress={() => {
+                  if (!premium) {
+                    setBackupUpsellVisible(true);
+                    return;
+                  }
+                  Alert.alert(
+                    'Restore backup?',
+                    'This replaces all habits, tasks, journal entries, and finance data on this device with your last backup. This can\'t be undone.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Restore', style: 'destructive', onPress: () => restoreLatest() },
+                    ]
+                  );
+                }}
+              />
+            </View>
+          </Card>
+        </View>
+
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Export Data" />
+          <Card style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              Take your habits, tasks, journal, and finance data with you as a PDF or spreadsheet.
+            </Text>
+            {exportError ? <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.xs }}>{exportError}</Text> : null}
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
+              <Button
+                label="Export PDF"
+                variant="secondary"
+                loading={exporting === 'pdf'}
+                disabled={exporting !== null}
+                onPress={() => (premium ? exportPdf() : setExportUpsellVisible(true))}
+              />
+              <Button
+                label="Export Excel"
+                variant="secondary"
+                loading={exporting === 'excel'}
+                disabled={exporting !== null}
+                onPress={() => (premium ? exportExcel() : setExportUpsellVisible(true))}
+              />
+            </View>
           </Card>
         </View>
 
@@ -293,11 +381,39 @@ export default function SettingsScreen() {
           setPinModalVisible(false);
         }}
       />
+
+      <UpsellModal
+        visible={themeUpsellVisible}
+        message="Switching between themes is a Pro feature — you're on the default theme for your device's light/dark setting."
+        onClose={() => setThemeUpsellVisible(false)}
+      />
+
+      <UpsellModal
+        visible={backupUpsellVisible}
+        message="Cloud backup and restore is a Pro feature — never lose your habits, tasks, journal, and finance data."
+        onClose={() => setBackupUpsellVisible(false)}
+      />
+
+      <UpsellModal
+        visible={exportUpsellVisible}
+        message="Exporting to PDF and Excel is a Pro feature — take your data with you any time."
+        onClose={() => setExportUpsellVisible(false)}
+      />
     </ScreenContainer>
   );
 }
 
-function ThemeSwatch({ name, selected, onPress }: { name: ThemeName; selected: boolean; onPress: () => void }) {
+function ThemeSwatch({
+  name,
+  selected,
+  locked,
+  onPress,
+}: {
+  name: ThemeName;
+  selected: boolean;
+  locked: boolean;
+  onPress: () => void;
+}) {
   const theme = useAppTheme();
   const palette = THEME_COLORS[name];
 
@@ -314,6 +430,7 @@ function ThemeSwatch({ name, selected, onPress }: { name: ThemeName; selected: b
           overflow: 'hidden',
           alignItems: 'center',
           justifyContent: 'center',
+          opacity: locked ? 0.55 : 1,
         }}>
         <View style={{ flexDirection: 'row', gap: 4 }}>
           <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: palette.primary }} />
@@ -323,6 +440,11 @@ function ThemeSwatch({ name, selected, onPress }: { name: ThemeName; selected: b
         {selected ? (
           <View style={{ position: 'absolute', top: 4, right: 4 }}>
             <Ionicons name="checkmark-circle" size={16} color={palette.primary} />
+          </View>
+        ) : null}
+        {locked ? (
+          <View style={{ position: 'absolute', top: 4, right: 4 }}>
+            <Ionicons name="lock-closed" size={14} color={theme.colors.textPrimary} />
           </View>
         ) : null}
       </View>

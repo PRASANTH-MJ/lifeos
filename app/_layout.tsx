@@ -12,7 +12,6 @@ import { LoginScreen, useAuth } from '@/modules/auth';
 import { OnboardingGate, useUserDetails } from '@/modules/onboarding';
 import { PinLockScreen, useAvatarSync, useProfile } from '@/modules/profile';
 import { usePremium } from '@/modules/premium';
-import { useSyncEngine } from '@/modules/sync';
 import { ThemeProvider, useAppTheme } from '@/theme';
 
 const ALARM_PROMPT_SHOWN_KEY = 'flowsy-alarm-prompt-shown';
@@ -121,11 +120,10 @@ export default function RootLayout() {
 function RootNavigation() {
   const theme = useAppTheme();
   const { user, loading: authLoading } = useAuth();
-  const { profile, loading: profileLoading, verifyPin } = useProfile();
+  const { profile, loading: profileLoading, verifyPin, setName } = useProfile();
   const { details: userDetails, loading: detailsLoading, save: saveUserDetails, skipOnboarding } = useUserDetails();
   const [unlocked, setUnlocked] = useState(false);
   usePremium();
-  useSyncEngine();
   useAvatarSync();
   useAlarmNotificationRouting();
   useRequestNotificationPermissionOnLaunch();
@@ -150,7 +148,16 @@ function RootNavigation() {
   }
 
   if (userDetails && !userDetails.onboardingDone) {
-    return <OnboardingGate details={userDetails} onSave={saveUserDetails} onSkip={skipOnboarding} />;
+    return (
+      <OnboardingGate
+        details={userDetails}
+        name={profile?.name ?? ''}
+        email={user.email}
+        onSave={saveUserDetails}
+        onSaveName={setName}
+        onSkip={skipOnboarding}
+      />
+    );
   }
 
   return (

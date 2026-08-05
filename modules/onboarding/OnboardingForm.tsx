@@ -36,7 +36,10 @@ function composeDob(day: string, month: string, year: string): string | null {
 
 type Props = {
   initial: UserDetails | null;
+  name: string;
+  email: string | null;
   onSave: (input: UserDetailsInput) => Promise<void>;
+  onSaveName: (name: string) => void;
   onSkip?: () => void;
   saveLabel?: string;
 };
@@ -60,8 +63,10 @@ function SectionLabel({ label }: { label: string }) {
 /** Shared field content for both the first-run onboarding gate (app/_layout.tsx) and the
  * "edit personal details" screen reachable later from Settings — same form, different chrome
  * (the gate adds a Skip option and full-screen wrapper; Settings wraps it in ScreenContainer). */
-export function OnboardingForm({ initial, onSave, onSkip, saveLabel = 'Save' }: Props) {
+export function OnboardingForm({ initial, name, email, onSave, onSaveName, onSkip, saveLabel = 'Save' }: Props) {
   const theme = useAppTheme();
+  const [nameDraft, setNameDraft] = useState(name);
+  const [phoneText, setPhoneText] = useState(initial?.phoneNumber ?? '');
   const initialDob = parseDob(initial?.dateOfBirth ?? null);
   const [dobDay, setDobDay] = useState(initialDob.day);
   const [dobMonth, setDobMonth] = useState(initialDob.month);
@@ -85,7 +90,9 @@ export function OnboardingForm({ initial, onSave, onSkip, saveLabel = 'Save' }: 
 
     setSaving(true);
     try {
+      if (nameDraft.trim() !== name) onSaveName(nameDraft.trim());
       await onSave({
+        phoneNumber: phoneText.trim() ? phoneText.trim() : undefined,
         dateOfBirth: dateOfBirth ?? undefined,
         heightCm: heightText.trim() ? Number(heightText) : undefined,
         weightKg: weightText.trim() ? Number(weightText) : undefined,
@@ -100,6 +107,22 @@ export function OnboardingForm({ initial, onSave, onSkip, saveLabel = 'Save' }: 
 
   return (
     <View style={{ gap: theme.spacing.xl }}>
+      <Card style={{ gap: theme.spacing.md }}>
+        <SectionLabel label="Contact Details" />
+
+        <TextField label="Name" placeholder="Your name" value={nameDraft} onChangeText={setNameDraft} />
+        <TextField label="Mobile number" placeholder="e.g. 98765 43210" value={phoneText} onChangeText={setPhoneText} keyboardType="phone-pad" />
+
+        {email ? (
+          <View style={{ gap: 4 }}>
+            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+              Email
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>{email}</Text>
+          </View>
+        ) : null}
+      </Card>
+
       <Card style={{ gap: theme.spacing.md }}>
         <SectionLabel label="About you" />
 

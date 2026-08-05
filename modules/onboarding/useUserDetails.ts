@@ -6,6 +6,7 @@ import { onSyncMerge, pushLocalRow } from '@/modules/sync';
 import type { FinancialGoal, HealthGoal, IncomeBracket, UserDetails, UserDetailsInput } from './types';
 
 type Row = {
+  phone_number: string | null;
   date_of_birth: string | null;
   height_cm: number | null;
   weight_kg: number | null;
@@ -17,6 +18,7 @@ type Row = {
 
 function toUserDetails(row: Row | null): UserDetails {
   return {
+    phoneNumber: row?.phone_number ?? null,
     dateOfBirth: row?.date_of_birth ?? null,
     heightCm: row?.height_cm ?? null,
     weightKg: row?.weight_kg ?? null,
@@ -35,7 +37,7 @@ export function useUserDetails() {
   const refresh = useCallback(async () => {
     setLoading(true);
     const row = await db.getFirstAsync<Row>(
-      'SELECT date_of_birth, height_cm, weight_kg, health_goal, income_bracket, financial_goal, onboarding_done FROM user_details WHERE id = 1'
+      'SELECT phone_number, date_of_birth, height_cm, weight_kg, health_goal, income_bracket, financial_goal, onboarding_done FROM user_details WHERE id = 1'
     );
     setDetails(toUserDetails(row));
     setLoading(false);
@@ -61,6 +63,7 @@ export function useUserDetails() {
     async (input: UserDetailsInput, markOnboardingDone = true) => {
       await db.runAsync(
         `UPDATE user_details SET
+           phone_number = COALESCE(?, phone_number),
            date_of_birth = COALESCE(?, date_of_birth),
            height_cm = COALESCE(?, height_cm),
            weight_kg = COALESCE(?, weight_kg),
@@ -71,6 +74,7 @@ export function useUserDetails() {
            updated_at = ?
          WHERE id = 1`,
         [
+          input.phoneNumber ?? null,
           input.dateOfBirth ?? null,
           input.heightCm ?? null,
           input.weightKg ?? null,

@@ -1,62 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { Button, Card, GlowSurface, RazorpayCheckout, ScreenContainer } from '@/components';
-import { useAuth } from '@/modules/auth';
-import {
-  createPremiumOrder,
-  createPremiumSubscription,
-  FREE_LIMITS,
-  PLANS,
-  usePremium,
-  verifyPremiumPayment,
-  verifyPremiumSubscription,
-  type CreateOrderResult,
-  type CreateSubscriptionResult,
-  type PlanKey,
-} from '@/modules/premium';
+import { Button, Card, GlowSurface, ScreenContainer } from '@/components';
+import { FREE_LIMITS, PLANS, purchasingAvailable, usePremium, type PlanKey } from '@/modules/premium';
 import { useAppTheme } from '@/theme';
 
 const FEATURES = [
-  { icon: 'flash-outline' as const, label: 'Unlimited Habits, Tasks & Finance Accounts', sub: `No more caps — free plan: ${FREE_LIMITS.habits} habits, ${FREE_LIMITS.recurringTasks} recurring tasks, ${FREE_LIMITS.financeAccounts} finance account` },
+  {
+    icon: 'flash-outline' as const,
+    label: 'Unlimited Habits, Tasks & Accounts',
+    sub: `No more caps — free plan: ${FREE_LIMITS.habits} habits, ${FREE_LIMITS.tasks} tasks, ${FREE_LIMITS.recurringTasks} recurring tasks, ${FREE_LIMITS.journalEntries} journal entries, ${FREE_LIMITS.financeAccounts} finance account`,
+  },
   { icon: 'bar-chart-outline' as const, label: 'Advanced Insights', sub: 'The full Analytics picture across every module' },
-  { icon: 'heart-outline' as const, label: 'Support Future Development', sub: 'Keep new Flowsy features coming' },
+  { icon: 'cloud-upload-outline' as const, label: 'Cloud Backup', sub: 'Back up your data and restore it any time' },
+  { icon: 'download-outline' as const, label: 'Export to PDF & Excel', sub: 'Take your data with you' },
+  { icon: 'color-palette-outline' as const, label: 'All 4 Themes', sub: 'Cyberpunk Neon, Midnight Glass, Minimal Clean, Solar Flare' },
 ];
-
-type PendingCheckout =
-  | { mode: 'order'; result: CreateOrderResult }
-  | { mode: 'subscription'; result: CreateSubscriptionResult };
 
 export default function PremiumScreen() {
   const theme = useAppTheme();
-  const { user } = useAuth();
   const { premium, plan: activePlan } = usePremium();
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>('yearly');
-  const [pending, setPending] = useState<PendingCheckout | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
-  const onContinue = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      if (selectedPlan === 'lifetime') {
-        const result = await createPremiumOrder();
-        setPending({ mode: 'order', result });
-      } else {
-        const result = await createPremiumSubscription(selectedPlan);
-        setPending({ mode: 'subscription', result });
-      }
-    } catch {
-      setError('Could not start checkout — check your connection and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (premium || success) {
+  if (premium) {
     return (
       <ScreenContainer scroll={false}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing.md, padding: theme.spacing.xl }}>
@@ -95,7 +62,14 @@ export default function PremiumScreen() {
         </View>
 
         <View style={{ gap: theme.spacing.sm }}>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.semibold, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          <Text
+            style={{
+              color: theme.colors.textTertiary,
+              fontSize: theme.typography.size.xs,
+              fontWeight: theme.typography.weight.semibold,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+            }}>
             Included in Pro
           </Text>
           {FEATURES.map((feature) => (
@@ -121,85 +95,19 @@ export default function PremiumScreen() {
           ))}
         </View>
 
-        {error ? <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.sm }}>{error}</Text> : null}
-
-        {loading ? (
-          <ActivityIndicator />
+        {purchasingAvailable() ? (
+          <Button label={plan.recurring ? `Subscribe — ₹${plan.priceInr} ${plan.billing}` : `Buy Lifetime — ₹${plan.priceInr}`} variant="gradient" onPress={() => {}} />
         ) : (
-          <Button
-            label={plan.recurring ? `Subscribe — ₹${plan.priceInr} ${plan.billing}` : `Buy Lifetime — ₹${plan.priceInr}`}
-            variant="gradient"
-            onPress={onContinue}
-          />
+          <Card style={{ gap: theme.spacing.xs }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+              Purchasing is coming soon
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              Pro is launching via Google Play Billing — this screen will let you subscribe directly once it's live.
+            </Text>
+          </Card>
         )}
-
-        {plan.recurring ? (
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, lineHeight: 18 }}>
-            Subscription details: payment will be charged to your Razorpay-linked payment method upon confirmation.
-            Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current billing
-            period. You can cancel any time from Settings.
-          </Text>
-        ) : null}
       </View>
-
-      {pending?.mode === 'order' ? (
-        <RazorpayCheckout
-          visible
-          orderId={pending.result.orderId}
-          keyId={pending.result.keyId}
-          amountPaise={pending.result.amount}
-          name="Flowsy Pro"
-          description="Lifetime access"
-          prefillEmail={user?.email ?? undefined}
-          onSuccess={async ({ paymentId, orderId, signature }) => {
-            setPending(null);
-            setLoading(true);
-            try {
-              const result = await verifyPremiumPayment({ orderId: orderId!, paymentId, signature });
-              if (result.ok) setSuccess(true);
-              else setError('Payment could not be verified — if you were charged, contact support and we’ll sort it out.');
-            } catch {
-              setError('Payment received but verification failed — if you were charged, contact support and we’ll sort it out.');
-            } finally {
-              setLoading(false);
-            }
-          }}
-          onDismiss={() => setPending(null)}
-          onError={(message) => {
-            setPending(null);
-            setError(message);
-          }}
-        />
-      ) : null}
-
-      {pending?.mode === 'subscription' ? (
-        <RazorpayCheckout
-          visible
-          subscriptionId={pending.result.subscriptionId}
-          keyId={pending.result.keyId}
-          name="Flowsy Pro"
-          description={`${PLANS[pending.result.planKey].label} subscription`}
-          prefillEmail={user?.email ?? undefined}
-          onSuccess={async ({ paymentId, subscriptionId, signature }) => {
-            setPending(null);
-            setLoading(true);
-            try {
-              const result = await verifyPremiumSubscription({ subscriptionId: subscriptionId!, paymentId, signature });
-              if (result.ok) setSuccess(true);
-              else setError('Payment could not be verified — if you were charged, contact support and we’ll sort it out.');
-            } catch {
-              setError('Payment received but verification failed — if you were charged, contact support and we’ll sort it out.');
-            } finally {
-              setLoading(false);
-            }
-          }}
-          onDismiss={() => setPending(null)}
-          onError={(message) => {
-            setPending(null);
-            setError(message);
-          }}
-        />
-      ) : null}
     </ScreenContainer>
   );
 }

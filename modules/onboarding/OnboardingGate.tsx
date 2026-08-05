@@ -6,7 +6,10 @@ import type { UserDetails, UserDetailsInput } from './types';
 
 type Props = {
   details: UserDetails | null;
+  name: string;
+  email: string | null;
   onSave: (input: UserDetailsInput) => Promise<void>;
+  onSaveName: (name: string) => void;
   onSkip: () => Promise<void>;
 };
 
@@ -17,7 +20,7 @@ type Props = {
  * two independent hook instances would each hold their own stale state, so a save from this
  * screen would never be seen by the gate check in app/_layout.tsx that's deciding whether to
  * keep rendering this screen (same reason PinLockScreen takes verifyPin as a prop). */
-export function OnboardingGate({ details, onSave, onSkip }: Props) {
+export function OnboardingGate({ details, name, email, onSave, onSaveName, onSkip }: Props) {
   const theme = useAppTheme();
 
   return (
@@ -32,7 +35,15 @@ export function OnboardingGate({ details, onSave, onSkip }: Props) {
           </Text>
         </View>
 
-        <OnboardingForm initial={details} saveLabel="Save & continue" onSave={onSave} onSkip={onSkip} />
+        <OnboardingForm
+          initial={details}
+          name={name}
+          email={email}
+          saveLabel="Save & continue"
+          onSave={onSave}
+          onSaveName={onSaveName}
+          onSkip={onSkip}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );

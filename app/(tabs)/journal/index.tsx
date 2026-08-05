@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link, Stack, useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
-import { Button, Card, EmptyState, ReminderCard, ScreenContainer, TextField, useTabSwipeNavigation } from '@/components';
+import { Button, Card, EmptyState, ReminderCard, ScreenContainer, TextField, UpsellModal, useTabSwipeNavigation } from '@/components';
 import { formatDisplayDate, monthCursorOf, shiftMonth, toDateKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { CheckinSheet, computeWeeklyStreak, JournalListItem, useCheckins, useJournal } from '@/modules/journal';
+import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
 import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
@@ -19,6 +20,8 @@ export default function JournalScreen() {
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(toDateKey(new Date())));
   const [checkinSheet, setCheckinSheet] = useState<'morning' | 'night' | null>(null);
+  const journalGate = useFreeTierGate('journalEntries');
+  const [showUpsell, setShowUpsell] = useState(false);
   const { entries, loading, refresh } = useJournal(search);
   const { morning, night, saveMorning, saveNight } = useCheckins();
   const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders(
@@ -59,11 +62,11 @@ export default function JournalScreen() {
                 }}>
                 <Ionicons name="calendar-outline" size={24} color={theme.colors.moduleJournal} />
               </Pressable>
-              <Link href="/journal/new" asChild>
-                <Pressable hitSlop={8}>
-                  <Ionicons name="add-circle" size={28} color={theme.colors.moduleJournal} />
-                </Pressable>
-              </Link>
+              <Pressable
+                hitSlop={8}
+                onPress={() => (journalGate.allowed ? router.push('/journal/new') : setShowUpsell(true))}>
+                <Ionicons name="add-circle" size={28} color={theme.colors.moduleJournal} />
+              </Pressable>
             </View>
           ),
         }}
@@ -136,7 +139,7 @@ export default function JournalScreen() {
             title={search ? 'No matching entries' : dateFilter ? 'No entries on this day' : 'No journal entries yet'}
             subtitle={search ? 'Try a different search term.' : dateFilter ? 'Pick another date, or write one now.' : 'Write your first entry to start your history.'}
             ctaLabel={search ? undefined : 'Write an entry'}
-            onPressCta={search ? undefined : () => router.push('/journal/new')}
+            onPressCta={search ? undefined : () => (journalGate.allowed ? router.push('/journal/new') : setShowUpsell(true))}
           />
         ) : (
           <View style={{ gap: theme.spacing.md }}>
@@ -182,6 +185,8 @@ export default function JournalScreen() {
       onSaveMorning={saveMorning}
       onSaveNight={saveNight}
     />
+
+    <UpsellModal visible={showUpsell} resourceLabel={LIMIT_LABELS.journalEntries} limit={journalGate.limit} onClose={() => setShowUpsell(false)} />
     </View>
   );
 }

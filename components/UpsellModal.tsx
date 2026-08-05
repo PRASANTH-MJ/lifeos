@@ -6,16 +6,25 @@ import { Button } from './Button';
 
 type Props = {
   visible: boolean;
-  resourceLabel: string;
-  limit: number;
   onClose: () => void;
+  /** Count-based cap message, e.g. "up to 5 habits". Omit both and pass `message` instead for a
+   * plain feature gate (e.g. theme switching) that isn't about a count. */
+  resourceLabel?: string;
+  limit?: number;
+  message?: string;
 };
 
-/** Shown instead of letting a free-tier user create one more than their cap allows — never
- * shown for existing items, only at the point of creating something new. */
-export function UpsellModal({ visible, resourceLabel, limit, onClose }: Props) {
+/** Shown instead of letting a free-tier user create one more than their cap allows (or use a
+ * Pro-only feature) — never shown for existing items, only at the point of hitting the gate. */
+export function UpsellModal({ visible, resourceLabel, limit, message, onClose }: Props) {
   const theme = useAppTheme();
   const router = useRouter();
+
+  const body =
+    message ??
+    (resourceLabel != null && limit != null
+      ? `The free plan includes up to ${limit} ${resourceLabel}. Go Pro for unlimited ${resourceLabel}.`
+      : 'Go Pro to unlock this.');
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -31,13 +40,11 @@ export function UpsellModal({ visible, resourceLabel, limit, onClose }: Props) {
           }}>
           <Text style={{ fontSize: 40 }}>✨</Text>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
-            Free plan limit reached
+            {resourceLabel != null && limit != null ? 'Free plan limit reached' : 'That\'s a Pro feature'}
           </Text>
-          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.base }}>
-            The free plan includes up to {limit} {resourceLabel}. Go Premium for unlimited {resourceLabel} — ₹500, once, forever.
-          </Text>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.base }}>{body}</Text>
           <Button
-            label="Go Premium"
+            label="Go Pro"
             onPress={() => {
               onClose();
               router.push('/premium');

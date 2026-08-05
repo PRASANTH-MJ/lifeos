@@ -1125,6 +1125,7 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     await db.execAsync(`
       CREATE TABLE user_details (
         id INTEGER PRIMARY KEY CHECK (id = 1),
+        phone_number TEXT,
         date_of_birth TEXT,
         height_cm REAL,
         weight_kg REAL,

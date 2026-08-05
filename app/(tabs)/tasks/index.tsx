@@ -32,7 +32,8 @@ export default function TasksScreen() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [sheetTaskId, setSheetTaskId] = useState<number | null>(null);
   const recurringGate = useFreeTierGate('recurringTasks');
-  const [showUpsell, setShowUpsell] = useState(false);
+  const taskGate = useFreeTierGate('tasks');
+  const [upsellKind, setUpsellKind] = useState<'tasks' | 'recurringTasks' | null>(null);
 
   const sheetEntry = recurringTasks.find((entry) => entry.task.id === sheetTaskId);
   const refreshAll = async () => {
@@ -42,7 +43,11 @@ export default function TasksScreen() {
   const onAddTask = (forceRecurring?: boolean) => {
     const wantsRecurring = forceRecurring ?? tab === 'recurring';
     if (wantsRecurring && !recurringGate.allowed) {
-      setShowUpsell(true);
+      setUpsellKind('recurringTasks');
+      return;
+    }
+    if (!wantsRecurring && !taskGate.allowed) {
+      setUpsellKind('tasks');
       return;
     }
     router.push({ pathname: '/tasks/new', params: wantsRecurring ? { recurring: '1' } : {} });
@@ -164,10 +169,10 @@ export default function TasksScreen() {
       ) : null}
 
       <UpsellModal
-        visible={showUpsell}
-        resourceLabel={LIMIT_LABELS.recurringTasks}
-        limit={recurringGate.limit}
-        onClose={() => setShowUpsell(false)}
+        visible={upsellKind !== null}
+        resourceLabel={upsellKind ? LIMIT_LABELS[upsellKind] : ''}
+        limit={upsellKind === 'tasks' ? taskGate.limit : recurringGate.limit}
+        onClose={() => setUpsellKind(null)}
       />
     </ScreenContainer>
     </View>

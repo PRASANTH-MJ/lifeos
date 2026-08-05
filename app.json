@@ -61,7 +61,8 @@
         {
           "photosPermission": "Allow Flowsy to access your photos to set a profile picture."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true

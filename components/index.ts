@@ -26,4 +26,3 @@ export { LogPastEntryModal } from './LogPastEntryModal';
 export { RowActionsMenu } from './RowActionsMenu';
 export { ReminderCard } from './ReminderCard';
 export { UpsellModal } from './UpsellModal';
-export { RazorpayCheckout } from './RazorpayCheckout';

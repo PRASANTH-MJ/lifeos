@@ -13,7 +13,8 @@ export default function TaskFormScreen() {
   const isEdit = Boolean(taskId);
   const initialRecurring = recurring === '1';
   const recurringGate = useFreeTierGate('recurringTasks');
-  const [showUpsell, setShowUpsell] = useState(false);
+  const taskGate = useFreeTierGate('tasks');
+  const [upsellKind, setUpsellKind] = useState<'recurringTasks' | 'tasks' | null>(null);
 
   const { createTask } = useTasks();
   const { createRecurringTask } = useRecurringTasks();
@@ -39,8 +40,13 @@ export default function TaskFormScreen() {
         submitLabel={isEdit ? 'Save changes' : 'Save task'}
         onSave={async (values, checklistItems) => {
           const addsANewRecurringTask = values.isRecurring && (!isEdit || !existingTask?.is_recurring);
+          const addsANewPlainTask = !isEdit && !values.isRecurring;
           if (addsANewRecurringTask && !recurringGate.allowed) {
-            setShowUpsell(true);
+            setUpsellKind('recurringTasks');
+            return;
+          }
+          if (addsANewPlainTask && !taskGate.allowed) {
+            setUpsellKind('tasks');
             return;
           }
 
@@ -98,10 +104,10 @@ export default function TaskFormScreen() {
       />
 
       <UpsellModal
-        visible={showUpsell}
-        resourceLabel={LIMIT_LABELS.recurringTasks}
-        limit={recurringGate.limit}
-        onClose={() => setShowUpsell(false)}
+        visible={upsellKind !== null}
+        resourceLabel={upsellKind ? LIMIT_LABELS[upsellKind] : ''}
+        limit={upsellKind === 'tasks' ? taskGate.limit : recurringGate.limit}
+        onClose={() => setUpsellKind(null)}
       />
     </ScreenContainer>
   );

@@ -25,6 +25,7 @@ export const FINANCIAL_GOAL_LABELS: Record<FinancialGoal, string> = {
 };
 
 export type UserDetails = {
+  phoneNumber: string | null;
   dateOfBirth: string | null;
   heightCm: number | null;
   weightKg: number | null;
@@ -35,5 +36,5 @@ export type UserDetails = {
 };
 
 export type UserDetailsInput = Partial<
-  Pick<UserDetails, 'dateOfBirth' | 'heightCm' | 'weightKg' | 'healthGoal' | 'incomeBracket' | 'financialGoal'>
+  Pick<UserDetails, 'phoneNumber' | 'dateOfBirth' | 'heightCm' | 'weightKg' | 'healthGoal' | 'incomeBracket' | 'financialGoal'>
 >;
