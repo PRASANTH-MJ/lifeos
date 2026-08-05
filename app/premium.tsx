@@ -21,7 +21,7 @@ import { useAppTheme } from '@/theme';
 const FEATURES = [
   { icon: 'flash-outline' as const, label: 'Unlimited Habits, Tasks & Finance Accounts', sub: `No more caps — free plan: ${FREE_LIMITS.habits} habits, ${FREE_LIMITS.recurringTasks} recurring tasks, ${FREE_LIMITS.financeAccounts} finance account` },
   { icon: 'bar-chart-outline' as const, label: 'Advanced Insights', sub: 'The full Analytics picture across every module' },
-  { icon: 'heart-outline' as const, label: 'Support Future Development', sub: 'Keep new LifeOS features coming' },
+  { icon: 'heart-outline' as const, label: 'Support Future Development', sub: 'Keep new Flowsy features coming' },
 ];
 
 type PendingCheckout =
@@ -62,12 +62,12 @@ export default function PremiumScreen() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: theme.spacing.md, padding: theme.spacing.xl }}>
           <Text style={{ fontSize: 48 }}>✓</Text>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.xl, fontWeight: theme.typography.weight.bold, textAlign: 'center' }}>
-            You're on LifeOS Pro
+            You're on Flowsy Pro
           </Text>
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm, textAlign: 'center' }}>
             {activePlan && activePlan !== 'lifetime'
-              ? `${PLANS[activePlan].label} plan — thanks for supporting LifeOS.`
-              : 'Lifetime access — thanks for supporting LifeOS, for good.'}
+              ? `${PLANS[activePlan].label} plan — thanks for supporting Flowsy.`
+              : 'Lifetime access — thanks for supporting Flowsy, for good.'}
           </Text>
         </View>
       </ScreenContainer>
@@ -148,7 +148,7 @@ export default function PremiumScreen() {
           orderId={pending.result.orderId}
           keyId={pending.result.keyId}
           amountPaise={pending.result.amount}
-          name="LifeOS Pro"
+          name="Flowsy Pro"
           description="Lifetime access"
           prefillEmail={user?.email ?? undefined}
           onSuccess={async ({ paymentId, orderId, signature }) => {
@@ -177,7 +177,7 @@ export default function PremiumScreen() {
           visible
           subscriptionId={pending.result.subscriptionId}
           keyId={pending.result.keyId}
-          name="LifeOS Pro"
+          name="Flowsy Pro"
           description={`${PLANS[pending.result.planKey].label} subscription`}
           prefillEmail={user?.email ?? undefined}
           onSuccess={async ({ paymentId, subscriptionId, signature }) => {

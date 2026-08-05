@@ -144,7 +144,7 @@ export default function SettingsScreen() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Ionicons name="flame" size={13} color={theme.colors.warning} />
                     <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-                      Day {daysActive} with LifeOS
+                      Day {daysActive} with Flowsy
                     </Text>
                   </View>
                 ) : null}

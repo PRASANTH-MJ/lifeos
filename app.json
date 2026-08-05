@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "LifeOS",
+    "name": "Flowsy",
     "slug": "LifeOS",
     "scheme": "lifeos",
     "version": "1.0.0",
@@ -13,7 +13,7 @@
     "android": {
       "package": "com.lifeos.app",
       "adaptiveIcon": {
-        "backgroundColor": "#031F59",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -52,14 +52,14 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#6C63FF"
+          "color": "#145AFC"
         }
       ],
       "expo-document-picker",
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow LifeOS to access your photos to set a profile picture."
+          "photosPermission": "Allow Flowsy to access your photos to set a profile picture."
         }
       ]
     ],

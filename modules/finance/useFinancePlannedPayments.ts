@@ -116,7 +116,7 @@ export function useFinancePlannedPayments() {
   );
 
   /** Records the actual transaction this planned payment represents, then either advances it to
-   * its next occurrence (recurring) or deactivates it (one-time) — a manual action, since LifeOS
+   * its next occurrence (recurring) or deactivates it (one-time) — a manual action, since Flowsy
    * has no background scheduler to post transactions on its own. Returns the new next_date (for
    * the caller to reschedule its reminder) or null if the payment is now fully done. */
   const markPaid = useCallback(

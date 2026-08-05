@@ -12,7 +12,7 @@ export type FinanceForecast = {
 };
 
 /** Projects net worth `days` forward by assuming the trailing `days` window's income/expense
- * totals repeat — a simple continuation forecast, not a schedule of known future bills (LifeOS
+ * totals repeat — a simple continuation forecast, not a schedule of known future bills (Flowsy
  * has no recurring-payment data model). */
 export function useFinanceForecast(days: number) {
   const db = useSQLiteContext();

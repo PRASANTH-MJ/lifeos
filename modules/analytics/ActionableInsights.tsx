@@ -11,7 +11,7 @@ import type { PreviousPeriodStats } from './usePreviousPeriodStats';
 /**
  * Generates a handful of short, plain-language coaching lines from real computed data — every
  * claim here traces back to an actual comparison or correlation in `data`/`previous`, never a
- * fabricated goal or streak LifeOS doesn't actually track.
+ * fabricated goal or streak Flowsy doesn't actually track.
  */
 export function generateActionableInsights(
   data: DashboardData,

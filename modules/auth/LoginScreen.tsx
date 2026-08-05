@@ -53,7 +53,7 @@ export function LoginScreen() {
             {mode === 'signin' ? 'Welcome back' : 'Create your account'}
           </Text>
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
-            {mode === 'signin' ? 'Sign in to continue to LifeOS.' : 'Takes a few seconds — just an email and password.'}
+            {mode === 'signin' ? 'Sign in to continue to Flowsy.' : 'Takes a few seconds — just an email and password.'}
           </Text>
         </View>
 
