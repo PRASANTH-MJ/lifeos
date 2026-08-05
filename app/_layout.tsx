@@ -1,17 +1,21 @@
 import notifee, { EventType } from '@notifee/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as RouterThemeProvider, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { Suspense, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, useColorScheme, View } from 'react-native';
 import { SQLiteProvider } from 'expo-sqlite';
 
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db';
-import { configureNotificationHandler, ensureAlarmChannel, requestNotificationPermissions } from '@/notifications';
+import { configureNotificationHandler, ensureAlarmChannel, getNotificationPermissionSnapshot, openAlarmSettings, requestNotificationPermissions } from '@/notifications';
 import { LoginScreen, useAuth } from '@/modules/auth';
+import { OnboardingGate, useUserDetails } from '@/modules/onboarding';
 import { PinLockScreen, useAvatarSync, useProfile } from '@/modules/profile';
 import { usePremium } from '@/modules/premium';
 import { useSyncEngine } from '@/modules/sync';
 import { ThemeProvider, useAppTheme } from '@/theme';
+
+const ALARM_PROMPT_SHOWN_KEY = 'flowsy-alarm-prompt-shown';
 
 SplashScreen.preventAutoHideAsync();
 configureNotificationHandler();
@@ -66,6 +70,42 @@ function useRequestNotificationPermissionOnLaunch() {
   }, []);
 }
 
+/** Android's "Alarms & reminders" special access has no OS request dialog — the only way to
+ * grant it is a deep link to Settings, so a hard redirect on cold launch (before the user has
+ * even seen the app) would be jarring. Instead, offer once via a plain confirm dialog; "Not now"
+ * or "Open Settings" both mark it shown so this never nags on every launch — Settings' own
+ * permission row is still there if the user wants to revisit it later. */
+function useOfferAlarmPermissionOnLaunch() {
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const timer = setTimeout(async () => {
+      const alreadyShown = await AsyncStorage.getItem(ALARM_PROMPT_SHOWN_KEY);
+      if (alreadyShown) return;
+
+      const snapshot = await getNotificationPermissionSnapshot();
+      if (snapshot.alarms !== 'denied') return;
+
+      Alert.alert(
+        'One more permission',
+        'For alarms to ring reliably, Flowsy needs the "Alarms & reminders" permission. You can enable it now or later from Settings.',
+        [
+          { text: 'Not now', style: 'cancel', onPress: () => AsyncStorage.setItem(ALARM_PROMPT_SHOWN_KEY, '1') },
+          {
+            text: 'Open Settings',
+            onPress: () => {
+              AsyncStorage.setItem(ALARM_PROMPT_SHOWN_KEY, '1');
+              openAlarmSettings();
+            },
+          },
+        ]
+      );
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, []);
+}
+
 export default function RootLayout() {
   return (
     <Suspense fallback={<LoadingScreen />}>
@@ -82,14 +122,16 @@ function RootNavigation() {
   const theme = useAppTheme();
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading, verifyPin } = useProfile();
+  const { details: userDetails, loading: detailsLoading, save: saveUserDetails, skipOnboarding } = useUserDetails();
   const [unlocked, setUnlocked] = useState(false);
   usePremium();
   useSyncEngine();
   useAvatarSync();
   useAlarmNotificationRouting();
   useRequestNotificationPermissionOnLaunch();
+  useOfferAlarmPermissionOnLaunch();
 
-  const loading = authLoading || profileLoading;
+  const loading = authLoading || profileLoading || detailsLoading;
 
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync();
@@ -107,12 +149,18 @@ function RootNavigation() {
     return <PinLockScreen verifyPin={verifyPin} onUnlock={() => setUnlocked(true)} />;
   }
 
+  if (userDetails && !userDetails.onboardingDone) {
+    return <OnboardingGate details={userDetails} onSave={saveUserDetails} onSkip={skipOnboarding} />;
+  }
+
   return (
     <RouterThemeProvider value={theme.scheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="alarm-ringing" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Screen name="premium" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="onboarding" options={{ presentation: 'modal', headerShown: true, title: 'Personal Details' }} />
+        <Stack.Screen name="feedback" options={{ presentation: 'modal', headerShown: true, title: 'Send Feedback' }} />
       </Stack>
     </RouterThemeProvider>
   );

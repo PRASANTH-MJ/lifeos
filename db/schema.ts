@@ -6,7 +6,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 24;
+const DATABASE_VERSION = 25;
 
 /** A deterministic, non-random id derived from a fixed string — used only for seed rows (built-in
  * categories, starter affirmations) so every fresh install gets the exact same sync_id for "the
@@ -1116,7 +1116,38 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 24;
   }
 
-  // Future modules land here as `if (currentDbVersion === 24) { ... currentDbVersion = 25; }`
+  if (currentDbVersion === 24) {
+    // Optional, skippable onboarding profile data (DOB, height/weight + a health goal, income
+    // bracket + a financial goal) — its own singleton table rather than folding into
+    // `user_profile`, since user_profile is deliberately excluded from sync (see
+    // modules/sync/syncSchema.ts) for its device-specific PIN, and this data should follow the
+    // account across devices like any other synced table.
+    await db.execAsync(`
+      CREATE TABLE user_details (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        date_of_birth TEXT,
+        height_cm REAL,
+        weight_kg REAL,
+        health_goal TEXT,
+        income_bracket TEXT,
+        financial_goal TEXT,
+        onboarding_done INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        sync_id TEXT
+      );
+      CREATE INDEX idx_user_details_sync_id ON user_details(sync_id);
+    `);
+    // Deliberately NOT `new Date().toISOString()` — the sync engine's merge is last-write-wins by
+    // `updated_at` (see modules/sync/syncEngine.ts's mergeRemoteRecord), so seeding this fresh
+    // placeholder row with "now" would make it look newer than a real onboarding_done update from
+    // days ago on another device, and the merge would wrongly keep this blank row instead of
+    // pulling down the real one. An epoch timestamp guarantees any real remote update wins.
+    await db.runAsync("INSERT INTO user_details (id, onboarding_done, updated_at, sync_id) VALUES (1, 0, '1970-01-01T00:00:00.000Z', 'singleton')");
+
+    currentDbVersion = 25;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 25) { ... currentDbVersion = 26; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

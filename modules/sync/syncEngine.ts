@@ -180,6 +180,18 @@ async function mergeRemoteRecord(db: SQLiteDatabase, record: SyncRecord): Promis
   }
 }
 
+/** Most screens pick up a remote merge naturally via useFocusEffect the next time they're
+ * navigated to. That doesn't work for a table read once at the root layout and never revisited
+ * through navigation (e.g. an onboarding-complete flag gating which screen even renders) — those
+ * consumers subscribe here instead of polling. */
+type MergeListener = (tables: ReadonlySet<string>) => void;
+const mergeListeners = new Set<MergeListener>();
+
+export function onSyncMerge(listener: MergeListener): () => void {
+  mergeListeners.add(listener);
+  return () => mergeListeners.delete(listener);
+}
+
 async function mergeBatch(db: SQLiteDatabase, records: SyncRecord[]): Promise<void> {
   const order = SYNC_TABLES.map((config) => config.table);
   const byTable = new Map<string, SyncRecord[]>();
@@ -205,6 +217,9 @@ async function mergeBatch(db: SQLiteDatabase, records: SyncRecord[]): Promise<vo
       await mergeRemoteRecord(db, record).catch(() => {});
     }
   }
+
+  const touchedTables = new Set(byTable.keys());
+  for (const listener of mergeListeners) listener(touchedTables);
 }
 
 /** Mounted once near the root (see app/_layout.tsx) — keeps a single Firestore listener alive

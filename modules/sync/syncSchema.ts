@@ -68,6 +68,7 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   { table: 'custom_workouts' },
   { table: 'app_settings' },
   { table: 'module_reminders' },
+  { table: 'user_details' },
 ];
 
 export function syncConfigFor(table: string): SyncTableConfig | undefined {

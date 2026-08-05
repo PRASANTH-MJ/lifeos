@@ -1,0 +1,39 @@
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+
+import { useAppTheme } from '@/theme';
+import { OnboardingForm } from './OnboardingForm';
+import type { UserDetails, UserDetailsInput } from './types';
+
+type Props = {
+  details: UserDetails | null;
+  onSave: (input: UserDetailsInput) => Promise<void>;
+  onSkip: () => Promise<void>;
+};
+
+/** Shown once, right after signup/PIN unlock, before the main tabs — optional and skippable
+ * (both Save and Skip mark onboarding_done so this never blocks a returning user). Fields stay
+ * editable later from Settings via app/onboarding.tsx. Takes `details`/`onSave`/`onSkip` as props
+ * from RootNavigation's single useUserDetails() call rather than calling the hook itself here —
+ * two independent hook instances would each hold their own stale state, so a save from this
+ * screen would never be seen by the gate check in app/_layout.tsx that's deciding whether to
+ * keep rendering this screen (same reason PinLockScreen takes verifyPin as a prop). */
+export function OnboardingGate({ details, onSave, onSkip }: Props) {
+  const theme = useAppTheme();
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={{ padding: theme.spacing.xl, gap: theme.spacing.xl }} keyboardShouldPersistTaps="handled">
+        <View style={{ gap: theme.spacing.xs }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
+            Tell us about yourself
+          </Text>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
+            This helps personalize Flowsy. Skip anytime — you can fill this in later from Settings.
+          </Text>
+        </View>
+
+        <OnboardingForm initial={details} saveLabel="Save & continue" onSave={onSave} onSkip={onSkip} />
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}

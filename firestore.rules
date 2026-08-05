@@ -21,5 +21,13 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow read, write: if false;
     }
+
+    // In-app feedback — write-only from the client (submitted once, never edited); read happens
+    // from the Firebase console / an admin tool, never the app itself. `uid` must match the
+    // submitter so one account can't be spoofed as the author of another's feedback.
+    match /feedback/{feedbackId} {
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if false;
+    }
   }
 }

@@ -161,6 +161,16 @@ export default function SettingsScreen() {
         </View>
 
         <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Personal Details" />
+          <Card style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              Height, weight, date of birth, and your health/financial goals — used to personalize the app.
+            </Text>
+            <Button label="Edit personal details" variant="secondary" onPress={() => router.push('/onboarding')} />
+          </Card>
+        </View>
+
+        <View style={{ gap: theme.spacing.sm }}>
           <SectionHeader label="Appearance" />
           <Card style={{ gap: theme.spacing.md }}>
             <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Pick the look of the whole app.</Text>
@@ -261,6 +271,16 @@ export default function SettingsScreen() {
                 </View>
               </>
             )}
+          </Card>
+        </View>
+
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Feedback" />
+          <Card style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              Bug reports, feature ideas, anything on your mind — it goes straight to the developer.
+            </Text>
+            <Button label="Send feedback" variant="secondary" onPress={() => router.push('/feedback')} />
           </Card>
         </View>
       </View>
