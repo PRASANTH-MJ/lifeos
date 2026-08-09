@@ -49,9 +49,18 @@ export default function PlannedPaymentsScreen() {
     );
   };
 
-  const onRemove = async (id: string) => {
-    await cancelPlannedPaymentNotification(id);
-    await removePlannedPayment(id);
+  const onRemove = (id: string) => {
+    Alert.alert('Delete planned payment?', 'This removes the schedule.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await cancelPlannedPaymentNotification(id);
+          await removePlannedPayment(id);
+        },
+      },
+    ]);
   };
 
   return (
@@ -89,7 +98,9 @@ export default function PlannedPaymentsScreen() {
               const account = accounts.find((a) => a.id === payment.account_id);
               const isIncome = payment.type === 'income';
               return (
-                <Card key={payment.id} style={{ gap: theme.spacing.sm }}>
+                <Link key={payment.id} href={{ pathname: '/finance/planned/[id]', params: { id: payment.id } }} asChild>
+                <Pressable>
+                <Card style={{ gap: theme.spacing.sm }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
                     <Ionicons
                       name={isIncome ? 'arrow-down-circle' : 'arrow-up-circle'}
@@ -133,6 +144,8 @@ export default function PlannedPaymentsScreen() {
                     </Pressable>
                   </View>
                 </Card>
+                </Pressable>
+                </Link>
               );
             })}
           </View>

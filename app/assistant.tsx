@@ -1,0 +1,225 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+
+import { Card } from '@/components';
+import { dayOfYear, todayKey } from '@/lib/date';
+import { findPattern } from '@/modules/breathing';
+import { useBudgetAlert } from '@/modules/finance';
+import { useFoodDay } from '@/modules/food';
+import { moodEmoji } from '@/modules/journal';
+import { findSession } from '@/modules/meditation';
+import { findExercise } from '@/modules/mind-training';
+import { useUserDetails } from '@/modules/onboarding';
+import {
+  FINANCE_GOAL_TIPS,
+  GOAL_TIPS,
+  HEALTH_GOAL_TO_WORKOUT_GOAL,
+  useMoodRecommendation,
+  type FinancialGoalKey,
+  type HealthGoalKey,
+} from '@/modules/recommendations';
+import { pickRecommendedWorkout, useWorkoutLogs, useWorkoutPreferences, WORKOUTS } from '@/modules/workout';
+import { suggestedWaterGoalMl, useWaterDay } from '@/modules/water';
+import { useAppTheme } from '@/theme';
+
+const WIDGETS: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; href: string; color: 'primary' | 'tasks' | 'journal' }[] = [
+  { key: 'habits', label: 'Habits', icon: 'flame', href: '/habits', color: 'primary' },
+  { key: 'tasks', label: 'Tasks', icon: 'checkbox', href: '/tasks', color: 'primary' },
+  { key: 'journal', label: 'Journal', icon: 'book', href: '/journal', color: 'journal' },
+  { key: 'water', label: 'Water', icon: 'water', href: '/water', color: 'tasks' },
+  { key: 'food', label: 'Food', icon: 'restaurant', href: '/food', color: 'tasks' },
+  { key: 'workout', label: 'Workout', icon: 'barbell', href: '/workout', color: 'tasks' },
+  { key: 'affirmations', label: 'Affirmations', icon: 'sparkles', href: '/affirmations', color: 'journal' },
+  { key: 'mind-training', label: 'Mind Training', icon: 'bulb', href: '/mind-training', color: 'primary' },
+  { key: 'stretch', label: 'Stretch', icon: 'body', href: '/workout/session/full-body-stretch', color: 'tasks' },
+];
+
+export default function AssistantScreen() {
+  const theme = useAppTheme();
+  const router = useRouter();
+  const { alert: budgetAlert } = useBudgetAlert();
+  const { mood, recommendation } = useMoodRecommendation();
+  const { details } = useUserDetails();
+  const { totalMl, goalMl, addLog } = useWaterDay(todayKey());
+  const { totals: foodTotals } = useFoodDay(todayKey());
+  const { completedThisWeek } = useWorkoutLogs();
+  const { preferences: workoutPreferences } = useWorkoutPreferences();
+
+  const goalTip = details?.healthGoal ? GOAL_TIPS[details.healthGoal as HealthGoalKey] : null;
+  const financeTip = details?.financialGoal ? FINANCE_GOAL_TIPS[details.financialGoal as FinancialGoalKey] : null;
+  const effectiveWaterGoal = goalMl === 2000 && details?.weightKg ? suggestedWaterGoalMl(details.weightKg) : goalMl;
+  const waterRemaining = Math.max(effectiveWaterGoal - totalMl, 0);
+
+  const recommendedWorkout = useMemo(() => {
+    if (!details?.healthGoal || !workoutPreferences) return null;
+    const goal = HEALTH_GOAL_TO_WORKOUT_GOAL[details.healthGoal as HealthGoalKey];
+    return pickRecommendedWorkout(WORKOUTS, { ...workoutPreferences, goal }, dayOfYear(new Date()));
+  }, [details?.healthGoal, workoutPreferences]);
+
+  const pattern = mood && recommendation ? findPattern(recommendation.breathingPatternKey) : null;
+  const session = mood && recommendation ? findSession(recommendation.meditationSessionKey) : null;
+  const exercise = mood && recommendation?.mindExerciseKey ? findExercise(recommendation.mindExerciseKey) : null;
+
+  const widgetStat = (key: string): string | null => {
+    if (key === 'water') return `${totalMl}/${effectiveWaterGoal} ml`;
+    if (key === 'food') return `${foodTotals.calories} cal today`;
+    if (key === 'workout') return `${completedThisWeek} this week`;
+    return null;
+  };
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: theme.spacing.xl, gap: theme.spacing.xl }} style={{ backgroundColor: theme.colors.background }}>
+      <View style={{ gap: theme.spacing.xs }}>
+        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
+          For You
+        </Text>
+        <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
+          Quick access, and suggestions based on your mood, goals, and budget.
+        </Text>
+      </View>
+
+      <View style={{ gap: theme.spacing.sm }}>
+        <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+          Quick access
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+        {WIDGETS.map((widget) => {
+          const stat = widgetStat(widget.key);
+          const color = widget.color === 'primary' ? theme.colors.primary : widget.color === 'journal' ? theme.colors.moduleJournal : theme.colors.moduleTasks;
+          const mutedColor = widget.color === 'primary' ? theme.colors.primaryMuted : widget.color === 'journal' ? theme.colors.moduleJournalMuted : theme.colors.moduleTasksMuted;
+          return (
+            <Pressable key={widget.key} onPress={() => router.push(widget.href as never)} style={{ width: '31%' }}>
+              <Card style={{ alignItems: 'center', gap: 6, paddingVertical: theme.spacing.md }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: mutedColor,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                  <Ionicons name={widget.icon} size={20} color={color} />
+                </View>
+                <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.semibold }}>
+                  {widget.label}
+                </Text>
+                {stat ? <Text style={{ color: theme.colors.textTertiary, fontSize: 10 }}>{stat}</Text> : null}
+              </Card>
+            </Pressable>
+          );
+        })}
+        </View>
+      </View>
+
+      {budgetAlert ? (
+        <Pressable onPress={() => router.push('/finance')}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, backgroundColor: theme.colors.dangerMuted }}>
+            <Ionicons name="alert-circle" size={20} color={theme.colors.danger} />
+            <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold, flex: 1 }}>
+              You're at {budgetAlert.percent}% of your {budgetAlert.label} budget
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.danger} />
+          </Card>
+        </Pressable>
+      ) : null}
+
+      {mood && recommendation ? (
+        <Card style={{ gap: theme.spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+            <Text style={{ fontSize: theme.typography.size.lg }}>{moodEmoji(mood)}</Text>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold, flex: 1 }}>
+              {recommendation.message}
+            </Text>
+          </View>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontStyle: 'italic' }}>
+            “{recommendation.affirmation}”
+          </Text>
+        </Card>
+      ) : null}
+
+      <View style={{ gap: theme.spacing.sm }}>
+        <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+          Suggested for you
+        </Text>
+
+        {pattern ? (
+          <Pressable onPress={() => router.push({ pathname: '/breathing/[patternKey]', params: { patternKey: pattern.key } })}>
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+              <Ionicons name="pulse-outline" size={18} color={theme.colors.moduleJournal} />
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, flex: 1 }}>{pattern.title}</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+            </Card>
+          </Pressable>
+        ) : null}
+        {session ? (
+          <Pressable onPress={() => router.push({ pathname: '/meditation/[sessionKey]', params: { sessionKey: session.key } })}>
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+              <Ionicons name="moon-outline" size={18} color={theme.colors.moduleJournal} />
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, flex: 1 }}>{session.title}</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+            </Card>
+          </Pressable>
+        ) : null}
+        {exercise ? (
+          <Pressable onPress={() => router.push({ pathname: '/mind-training/[exerciseKey]', params: { exerciseKey: exercise.key } })}>
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+              <Ionicons name="bulb-outline" size={18} color={theme.colors.moduleJournal} />
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, flex: 1 }}>{exercise.title}</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+            </Card>
+          </Pressable>
+        ) : null}
+
+        <Pressable onPress={() => addLog(250)}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+            <Ionicons name="water-outline" size={18} color={theme.colors.moduleTasks} />
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, flex: 1 }}>
+              {waterRemaining > 0 ? `${waterRemaining} ml of water left today — tap to log 250ml` : 'Water goal reached today 🎉'}
+            </Text>
+          </Card>
+        </Pressable>
+
+        {goalTip ? (
+          <Card style={{ gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.sm }}>
+              <Ionicons name="restaurant-outline" size={18} color={theme.colors.moduleTasks} />
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, flex: 1 }}>{goalTip.foodTip}</Text>
+            </View>
+            {recommendedWorkout ? (
+              <Pressable
+                onPress={() => router.push({ pathname: '/workout/[workoutKey]', params: { workoutKey: recommendedWorkout.key } })}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, paddingTop: theme.spacing.xs, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                <Ionicons name="barbell-outline" size={18} color={theme.colors.moduleTasks} />
+                <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, flex: 1 }}>Try: {recommendedWorkout.title}</Text>
+                <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+              </Pressable>
+            ) : goalTip.exerciseCategory ? (
+              <Pressable
+                onPress={() => router.push({ pathname: '/workout/exercises', params: { category: goalTip.exerciseCategory! } })}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, paddingTop: theme.spacing.xs, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                <Ionicons name="barbell-outline" size={18} color={theme.colors.moduleTasks} />
+                <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, flex: 1 }}>
+                  Try some {goalTip.exerciseCategory} exercises
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+              </Pressable>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {financeTip ? (
+          <Pressable onPress={() => router.push(financeTip.link)}>
+            <Card style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.sm }}>
+              <Ionicons name="cash-outline" size={18} color={theme.colors.moduleTasks} />
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, flex: 1 }}>{financeTip.tip}</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+            </Card>
+          </Pressable>
+        ) : null}
+      </View>
+    </ScrollView>
+  );
+}

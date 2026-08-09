@@ -11,9 +11,9 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.lifeos.app",
+      "package": "com.flowsy.app",
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
+        "backgroundColor": "#08192A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -24,7 +24,8 @@
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.VIBRATE",
         "android.permission.WAKE_LOCK"
-      ]
+      ],
+      "versionCode": 3
     },
     "web": {
       "bundler": "metro",
@@ -38,9 +39,8 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/icon.png",
-          "imageWidth": 160,
-          "resizeMode": "contain",
+          "image": "./assets/splash-blank.png",
+          "imageWidth": 1,
           "backgroundColor": "#F9FAFB",
           "dark": {
             "backgroundColor": "#0B0D12"
@@ -62,7 +62,14 @@
           "photosPermission": "Allow Flowsy to access your photos to set a profile picture."
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Flowsy to use your camera to scan food barcodes."
+        }
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

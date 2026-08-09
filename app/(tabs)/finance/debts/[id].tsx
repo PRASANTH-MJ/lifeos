@@ -1,23 +1,42 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 
-import { Button, Card, EmptyState, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Card, Chip, EmptyState, LoadingState, ScreenContainer, TextField } from '@/components';
 import { formatDisplayDate, todayKey } from '@/lib/date';
-import { formatCurrency, useDebtPayments, useFinanceDebts } from '@/modules/finance';
+import { formatCurrency, useDebtPayments, useFinanceDebts, type DebtDirection } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 export default function DebtDetailScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { debts, remainingById, refresh: refreshDebts, setClosed, removeDebt } = useFinanceDebts();
+  const { debts, remainingById, refresh: refreshDebts, editDebt, setClosed, removeDebt } = useFinanceDebts();
   const { payments, addPayment, removePayment } = useDebtPayments(id);
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const [editing, setEditing] = useState(false);
+  const [personName, setPersonName] = useState('');
+  const [direction, setDirection] = useState<DebtDirection>('lent');
+  const [editAmount, setEditAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const debt = debts.find((d) => d.id === id);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (debt && !editing) {
+        setPersonName(debt.person_name);
+        setDirection(debt.direction);
+        setEditAmount(String(debt.amount));
+        setNote(debt.note ?? '');
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debt?.id])
+  );
 
   if (!debt) {
     return (
@@ -30,6 +49,18 @@ export default function DebtDetailScreen() {
   const remaining = remainingById[debt.id] ?? debt.amount;
   const isLent = debt.direction === 'lent';
   const numericAmount = Number(amount);
+  const numericEditAmount = Number(editAmount);
+  const canSaveEdit = personName.trim().length > 0 && numericEditAmount > 0;
+
+  const onSaveEdit = async () => {
+    setSavingEdit(true);
+    try {
+      await editDebt(debt.id, { personName: personName.trim(), direction, amount: numericEditAmount, note: note.trim() || null });
+      setEditing(false);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   // Remaining balance is derived in the sibling useFinanceDebts() hook, which only refetches on
   // focus — nudge it here too so logging a payment updates the total on this same screen.
@@ -61,8 +92,42 @@ export default function DebtDetailScreen() {
 
   return (
     <ScreenContainer>
-      <Stack.Screen options={{ title: debt.person_name }} />
+      <Stack.Screen
+        options={{
+          title: debt.person_name,
+          headerRight: () => (
+            <Pressable onPress={() => setEditing((v) => !v)} hitSlop={8}>
+              <Ionicons name={editing ? 'close' : 'create-outline'} size={22} color={theme.colors.primary} />
+            </Pressable>
+          ),
+        }}
+      />
       <View style={{ gap: theme.spacing.xl }}>
+        {editing ? (
+          <Card style={{ gap: theme.spacing.lg }}>
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              <Chip
+                label="I lent money"
+                selected={direction === 'lent'}
+                onPress={() => setDirection('lent')}
+                color={theme.colors.success}
+                mutedColor={theme.colors.successMuted}
+              />
+              <Chip
+                label="I borrowed money"
+                selected={direction === 'borrowed'}
+                onPress={() => setDirection('borrowed')}
+                color={theme.colors.danger}
+                mutedColor={theme.colors.dangerMuted}
+              />
+            </View>
+            <TextField label="Person" value={personName} onChangeText={setPersonName} />
+            <TextField label="Amount" value={editAmount} onChangeText={setEditAmount} keyboardType="decimal-pad" />
+            <TextField label="Note (optional)" value={note} onChangeText={setNote} />
+            <Button label="Save changes" onPress={onSaveEdit} disabled={!canSaveEdit} loading={savingEdit} />
+          </Card>
+        ) : null}
+
         <Card style={{ gap: theme.spacing.sm }}>
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
             {isLent ? `${debt.person_name} owes you` : `You owe ${debt.person_name}`}

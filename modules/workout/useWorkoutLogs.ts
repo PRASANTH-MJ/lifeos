@@ -4,9 +4,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, dateKeyToTimestamp, toDateKey, todayKey } from '@/lib/date';
-import { pushLocalRow } from '@/modules/sync';
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
-type WorkoutLog = { id: number; workout_key: string; completed_at: string };
+type WorkoutLog = { id: number; workout_key: string; completed_at: string; duration_seconds: number | null };
 
 export function useWorkoutLogs() {
   const db = useSQLiteContext();
@@ -27,13 +27,22 @@ export function useWorkoutLogs() {
   );
 
   const logCompletion = useCallback(
-    async (workoutKey: string, dateKey?: string) => {
+    async (workoutKey: string, dateKey?: string, durationSeconds?: number) => {
       const completedAt = dateKey ? dateKeyToTimestamp(dateKey) : new Date().toISOString();
       const result = await db.runAsync(
-        'INSERT INTO workout_logs (workout_key, completed_at, sync_id, updated_at) VALUES (?, ?, ?, ?)',
-        [workoutKey, completedAt, Crypto.randomUUID(), completedAt]
+        'INSERT INTO workout_logs (workout_key, completed_at, duration_seconds, sync_id, updated_at) VALUES (?, ?, ?, ?, ?)',
+        [workoutKey, completedAt, durationSeconds ?? null, Crypto.randomUUID(), completedAt]
       );
       await pushLocalRow(db, 'workout_logs', result.lastInsertRowId);
+      await refresh();
+    },
+    [db, refresh]
+  );
+
+  const removeLog = useCallback(
+    async (id: number) => {
+      await recordDeleteBeforeRemoving(db, 'workout_logs', id);
+      await db.runAsync('DELETE FROM workout_logs WHERE id = ?', [id]);
       await refresh();
     },
     [db, refresh]
@@ -44,5 +53,5 @@ export function useWorkoutLogs() {
     return logs.filter((log) => toDateKey(new Date(log.completed_at)) >= weekAgo).length;
   }, [logs]);
 
-  return { logs, loading, logCompletion, completedThisWeek, refresh };
+  return { logs, loading, logCompletion, removeLog, completedThisWeek, refresh };
 }

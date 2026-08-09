@@ -5,6 +5,7 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { Button, Card, DonutChart, Legend, LoadingState, RangeChip, ScreenContainer, TextField, TrendChart } from '@/components';
+import { FLOATING_TAB_BAR_CLEARANCE } from '@/components/tabBarMetrics';
 import { addDays, buildMonthGrid, formatDisplayDate, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { useCategories } from '@/modules/categories';
@@ -32,7 +33,7 @@ export default function TaskDetailScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const db = useSQLiteContext();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab: initialTab } = useLocalSearchParams<{ id: string; tab?: DetailTab }>();
   const taskId = Number(id);
   const {
     task,
@@ -55,7 +56,7 @@ export default function TaskDetailScreen() {
   const { categories } = useCategories('task');
   const { settings } = useSettings();
 
-  const [tab, setTab] = useState<DetailTab>('calendar');
+  const [tab, setTab] = useState<DetailTab>(initialTab ?? 'calendar');
   const [newSubtask, setNewSubtask] = useState('');
   const [sheetDate, setSheetDate] = useState<string | null>(null);
   const [monthCursor, setMonthCursor] = useState(() => monthCursorOf(todayKey()));
@@ -298,7 +299,14 @@ export default function TaskDetailScreen() {
           ) : null}
         </ScrollView>
 
-        <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.surface }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.border,
+            backgroundColor: theme.colors.surface,
+            marginBottom: FLOATING_TAB_BAR_CLEARANCE,
+          }}>
           {(
             [
               { key: 'calendar', label: 'Calendar', icon: 'calendar-outline' },

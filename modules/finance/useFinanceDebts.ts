@@ -80,6 +80,37 @@ export function useFinanceDebts() {
     [db, refresh]
   );
 
+  const editDebt = useCallback(
+    async (id: string, values: Partial<{ personName: string; direction: DebtDirection; amount: number; note: string | null }>) => {
+      const updates: string[] = [];
+      const params: (string | number | null)[] = [];
+      if (values.personName !== undefined) {
+        updates.push('person_name = ?');
+        params.push(values.personName);
+      }
+      if (values.direction !== undefined) {
+        updates.push('direction = ?');
+        params.push(values.direction);
+      }
+      if (values.amount !== undefined) {
+        updates.push('amount = ?');
+        params.push(values.amount);
+      }
+      if (values.note !== undefined) {
+        updates.push('note = ?');
+        params.push(values.note);
+      }
+      if (updates.length === 0) return;
+      updates.push('updated_at = ?');
+      params.push(new Date().toISOString());
+      params.push(Number(id));
+      await db.runAsync(`UPDATE finance_debts SET ${updates.join(', ')} WHERE id = ?`, params);
+      await pushLocalRow(db, 'finance_debts', Number(id));
+      await refresh();
+    },
+    [db, refresh]
+  );
+
   const setClosed = useCallback(
     async (id: string, isClosed: boolean) => {
       const now = new Date().toISOString();
@@ -104,7 +135,7 @@ export function useFinanceDebts() {
     [db, refresh]
   );
 
-  return { debts, remainingById, loading, refresh, addDebt, setClosed, removeDebt };
+  return { debts, remainingById, loading, refresh, addDebt, editDebt, setClosed, removeDebt };
 }
 
 export function useDebtPayments(debtId: string) {

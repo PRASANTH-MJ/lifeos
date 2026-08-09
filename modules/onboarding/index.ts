@@ -1,6 +1,7 @@
 export { useUserDetails } from './useUserDetails';
 export { OnboardingForm } from './OnboardingForm';
 export { OnboardingGate } from './OnboardingGate';
+export { AppTourModal } from './AppTourModal';
 export {
   HEALTH_GOAL_LABELS,
   INCOME_BRACKET_LABELS,

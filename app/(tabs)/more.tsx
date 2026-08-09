@@ -5,7 +5,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Card, ScreenContainer, useTabSwipeNavigation } from '@/components';
 import { useAppTheme } from '@/theme';
 
-type ModuleHref = '/calendar' | '/meditation' | '/breathing' | '/affirmations' | '/finance' | '/food' | '/mind-training' | '/workout' | '/timer' | '/shopping' | '/settings' | '/analytics';
+type ModuleHref = '/calendar' | '/meditation' | '/breathing' | '/affirmations' | '/finance' | '/food' | '/mind-training' | '/workout' | '/water' | '/timer' | '/shopping' | '/settings' | '/analytics';
 
 type ModuleLink = {
   href: ModuleHref;
@@ -69,7 +69,7 @@ export default function MoreScreen() {
         {
           href: '/food',
           icon: 'restaurant',
-          title: 'Food',
+          title: 'Food Tracker',
           subtitle: 'Meals, calories, and macros by day',
           color: theme.colors.moduleTasks,
           mutedColor: theme.colors.moduleTasksMuted,
@@ -77,8 +77,16 @@ export default function MoreScreen() {
         {
           href: '/workout',
           icon: 'barbell',
-          title: 'Workouts',
+          title: 'Workout Tracker',
           subtitle: "Today's recommendation based on your goals",
+          color: theme.colors.moduleTasks,
+          mutedColor: theme.colors.moduleTasksMuted,
+        },
+        {
+          href: '/water',
+          icon: 'water',
+          title: 'Water Tracker',
+          subtitle: 'Log your daily water intake',
           color: theme.colors.moduleTasks,
           mutedColor: theme.colors.moduleTasksMuted,
         },
@@ -106,7 +114,7 @@ export default function MoreScreen() {
         {
           href: '/finance',
           icon: 'cash',
-          title: 'Finance',
+          title: 'Finance Tracker',
           subtitle: 'Income, expenses, and monthly summaries',
           color: theme.colors.primary,
           mutedColor: theme.colors.primaryMuted,
@@ -135,7 +143,7 @@ export default function MoreScreen() {
         {
           href: '/settings',
           icon: 'settings-outline',
-          title: 'Settings',
+          title: 'Settings and Profile',
           subtitle: 'Time format and app preferences',
           color: theme.colors.textSecondary,
           mutedColor: theme.colors.border,

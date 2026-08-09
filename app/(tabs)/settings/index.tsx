@@ -55,6 +55,9 @@ export default function SettingsScreen() {
   const { settings, setTimeFormat } = useSettings();
   const { profile, setName, setAvatarUri, setPin, disablePin } = useProfile();
   const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
+  useEffect(() => {
+    setNameDraft(profile?.name ?? '');
+  }, [profile?.name]);
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [themeUpsellVisible, setThemeUpsellVisible] = useState(false);
   const [backupUpsellVisible, setBackupUpsellVisible] = useState(false);
@@ -102,8 +105,10 @@ export default function SettingsScreen() {
     }
   };
 
+  const nicknameDirty = nameDraft.trim() !== (profile.name ?? '');
+
   const onSaveName = () => {
-    if (nameDraft.trim() !== (profile.name ?? '')) setName(nameDraft);
+    if (nicknameDirty) setName(nameDraft.trim());
   };
 
   return (
@@ -153,7 +158,12 @@ export default function SettingsScreen() {
                 </View>
               </Pressable>
               <View style={{ flex: 1, gap: theme.spacing.xs }}>
-                <TextField placeholder="Your name" value={nameDraft} onChangeText={setNameDraft} onBlur={onSaveName} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+                  <View style={{ flex: 1 }}>
+                    <TextField placeholder="Nickname" value={nameDraft} onChangeText={setNameDraft} />
+                  </View>
+                  {nicknameDirty ? <Button label="Save" variant="secondary" onPress={onSaveName} /> : null}
+                </View>
                 {daysActive !== null ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Ionicons name="flame" size={13} color={theme.colors.warning} />
@@ -363,6 +373,11 @@ export default function SettingsScreen() {
         </View>
 
         <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Help" />
+          <Card style={{ gap: theme.spacing.sm }}>
+            <Button label="Help & Support" variant="secondary" onPress={() => router.push('/help')} />
+          </Card>
+
           <SectionHeader label="Feedback" />
           <Card style={{ gap: theme.spacing.sm }}>
             <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>

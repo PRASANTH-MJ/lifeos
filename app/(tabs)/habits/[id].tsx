@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Button, Card, DonutChart, Legend, LoadingState, RangeChip, ScreenContainer, TrendChart } from '@/components';
+import { FLOATING_TAB_BAR_CLEARANCE } from '@/components/tabBarMetrics';
 import { addDays, buildMonthGrid, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { useCategories } from '@/modules/categories';
@@ -30,7 +31,7 @@ const STATUS_COLOR = (theme: ReturnType<typeof useAppTheme>, status?: LogStatus)
 export default function HabitDetailScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab: initialTab } = useLocalSearchParams<{ id: string; tab?: DetailTab }>();
   const habitId = Number(id);
   const {
     habit,
@@ -48,7 +49,7 @@ export default function HabitDetailScreen() {
   } = useHabitDetail(habitId);
   const { categories } = useCategories('habit');
 
-  const [tab, setTab] = useState<DetailTab>('calendar');
+  const [tab, setTab] = useState<DetailTab>(initialTab ?? 'calendar');
   const [sheetDate, setSheetDate] = useState<string | null>(null);
   const [monthCursor, setMonthCursor] = useState(() => monthCursorOf(todayKey()));
   const [statsRange, setStatsRange] = useState<RangeKey>('month');
@@ -189,7 +190,14 @@ export default function HabitDetailScreen() {
           ) : null}
         </ScrollView>
 
-        <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.surface }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.border,
+            backgroundColor: theme.colors.surface,
+            marginBottom: FLOATING_TAB_BAR_CLEARANCE,
+          }}>
           {(
             [
               { key: 'calendar', label: 'Calendar', icon: 'calendar-outline' },

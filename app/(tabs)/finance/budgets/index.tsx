@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 
 import { Card, EmptyState, LoadingState, RangeChip, ScreenContainer } from '@/components';
 import { BUDGET_PERIOD_LABELS, BUDGET_STATUS_LABELS, formatCurrency, useFinanceBudgetPlans, useFinanceCategories, type BudgetPeriod, type BudgetStatus } from '@/modules/finance';
@@ -32,6 +32,13 @@ export default function BudgetsScreen() {
   const filtered = plans.filter((p) => p.period === period);
   const totalBudget = filtered.reduce((sum, p) => sum + p.amount, 0);
   const totalSpent = filtered.reduce((sum, p) => sum + p.spent, 0);
+
+  const onDelete = (planId: string) => {
+    Alert.alert('Delete budget?', 'This removes the budget plan.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => removeBudgetPlan(planId) },
+    ]);
+  };
 
   return (
     <ScreenContainer>
@@ -80,33 +87,37 @@ export default function BudgetsScreen() {
                 const progress = Math.min(plan.spent / plan.amount, 1);
                 const forecastPercent = Math.round((plan.forecastSpend / plan.amount) * 100);
                 return (
-                  <Card key={plan.id} style={{ gap: theme.spacing.sm }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-                        {plan.name}
-                        {category ? ` · ${category.name}` : ''}
-                      </Text>
-                      <Pressable onPress={() => removeBudgetPlan(plan.id)} hitSlop={8}>
-                        <Ionicons name="trash-outline" size={16} color={theme.colors.textTertiary} />
-                      </Pressable>
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{formatCurrency(plan.spent)}</Text>
-                      <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>of {formatCurrency(plan.amount)}</Text>
-                    </View>
-                    <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
-                      <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: STATUS_COLORS[plan.status] }} />
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: STATUS_COLORS[plan.status] }} />
-                        <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs }}>{BUDGET_STATUS_LABELS[plan.status]}</Text>
-                      </View>
-                      <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-                        Forecasted spend at end: {forecastPercent}%
-                      </Text>
-                    </View>
-                  </Card>
+                  <Link key={plan.id} href={{ pathname: '/finance/budgets/[id]', params: { id: plan.id } }} asChild>
+                    <Pressable>
+                      <Card style={{ gap: theme.spacing.sm }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+                            {plan.name}
+                            {category ? ` · ${category.name}` : ''}
+                          </Text>
+                          <Pressable onPress={() => onDelete(plan.id)} hitSlop={8}>
+                            <Ionicons name="trash-outline" size={16} color={theme.colors.textTertiary} />
+                          </Pressable>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{formatCurrency(plan.spent)}</Text>
+                          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>of {formatCurrency(plan.amount)}</Text>
+                        </View>
+                        <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
+                          <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: STATUS_COLORS[plan.status] }} />
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: STATUS_COLORS[plan.status] }} />
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs }}>{BUDGET_STATUS_LABELS[plan.status]}</Text>
+                          </View>
+                          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                            Forecasted spend at end: {forecastPercent}%
+                          </Text>
+                        </View>
+                      </Card>
+                    </Pressable>
+                  </Link>
                 );
               })}
             </View>

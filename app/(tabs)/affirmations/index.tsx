@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, ImageBackground, PanResponder, Pressable, Text, View } from 'react-native';
+import { Animated, ImageBackground, PanResponder, Pressable, Share, Text, View } from 'react-native';
 
 import { Button, Card, GlowSurface, LoadingState, ReminderCard, ScreenContainer } from '@/components';
 import { backgroundFor, useAffirmations } from '@/modules/affirmations';
@@ -97,6 +97,10 @@ export default function AffirmationsScreen() {
 
   const displayed = affirmations[index];
 
+  const onShare = () => {
+    Share.share({ message: `"${displayed.text}" — via Flowsy` });
+  };
+
   return (
     <ScreenContainer>
       <Stack.Screen
@@ -148,28 +152,21 @@ export default function AffirmationsScreen() {
                   <Ionicons name="shuffle" size={18} color="#fff" />
                   <Text style={{ color: '#fff', fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>Shuffle</Text>
                 </Pressable>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  {affirmations.length > 1
-                    ? affirmations.slice(0, 8).map((a, i) => (
-                        <View
-                          key={a.id}
-                          style={{
-                            width: i === index ? 14 : 5,
-                            height: 5,
-                            borderRadius: 3,
-                            backgroundColor: i === index ? '#fff' : 'rgba(255,255,255,0.4)',
-                          }}
-                        />
-                      ))
-                    : null}
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>
+                  {index + 1} / {affirmations.length}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                  <Pressable onPress={onShare} hitSlop={8}>
+                    <Ionicons name="share-social-outline" size={20} color="#fff" />
+                  </Pressable>
+                  <Pressable onPress={() => toggleFavorite(displayed)} hitSlop={8}>
+                    <Ionicons
+                      name={displayed.is_favorite ? 'heart' : 'heart-outline'}
+                      size={22}
+                      color={displayed.is_favorite ? theme.colors.danger : '#fff'}
+                    />
+                  </Pressable>
                 </View>
-                <Pressable onPress={() => toggleFavorite(displayed)} hitSlop={8}>
-                  <Ionicons
-                    name={displayed.is_favorite ? 'heart' : 'heart-outline'}
-                    size={22}
-                    color={displayed.is_favorite ? theme.colors.danger : '#fff'}
-                  />
-                </Pressable>
               </View>
             </View>
           </ImageBackground>

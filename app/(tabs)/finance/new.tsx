@@ -5,7 +5,15 @@ import { Modal, Pressable, Text, View } from 'react-native';
 import { Button, Chip, EmptyState, ScreenContainer, TextField } from '@/components';
 import { addDays, formatDisplayDate, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
-import { useAccounts, useFinanceCategories, useFinanceLabels, useTransactionLabels, useTransactions, type TransactionType } from '@/modules/finance';
+import {
+  suggestCategoryName,
+  useAccounts,
+  useFinanceCategories,
+  useFinanceLabels,
+  useTransactionLabels,
+  useTransactions,
+  type TransactionType,
+} from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 const QUICK_DATES = [
@@ -33,6 +41,7 @@ export default function NewTransactionScreen() {
   const [saving, setSaving] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
+  const [categoryAutoSuggested, setCategoryAutoSuggested] = useState(false);
 
   // "New Transaction" is a static route — expo-router reuses the same screen instance across
   // repeated visits rather than mounting a fresh one each time, so a plain useState default only
@@ -47,8 +56,23 @@ export default function NewTransactionScreen() {
       setDate(todayKey());
       setNote('');
       setSelectedLabelIds([]);
+      setCategoryAutoSuggested(false);
     }, [])
   );
+
+  const onChangeNote = (text: string) => {
+    setNote(text);
+    if (categoryId !== null && !categoryAutoSuggested) return;
+    const suggestedName = suggestCategoryName(text, type);
+    const match = suggestedName ? relevantCategories.find((c) => c.name === suggestedName) : null;
+    if (match) {
+      setCategoryId(match.id);
+      setCategoryAutoSuggested(true);
+    } else if (categoryAutoSuggested) {
+      setCategoryId(null);
+      setCategoryAutoSuggested(false);
+    }
+  };
 
   if (!loadingAccounts && accounts.length === 0) {
     return (
@@ -115,6 +139,10 @@ export default function NewTransactionScreen() {
 
         <TextField label="Amount" placeholder="0.00" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" autoFocus />
 
+        {type !== 'transfer' ? (
+          <TextField label="Note (optional)" placeholder="e.g. Swiggy, rent, Uber..." value={note} onChangeText={onChangeNote} />
+        ) : null}
+
         <View style={{ gap: theme.spacing.sm }}>
           <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
             {type === 'transfer' ? 'From account' : 'Account'}
@@ -141,16 +169,24 @@ export default function NewTransactionScreen() {
           </View>
         ) : (
           <View style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
-              Category
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                Category
+              </Text>
+              {categoryAutoSuggested ? (
+                <Text style={{ color: theme.colors.primary, fontSize: theme.typography.size.xs }}>Suggested from your note</Text>
+              ) : null}
+            </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
               {relevantCategories.map((category) => (
                 <Chip
                   key={category.id}
                   label={category.name}
                   selected={categoryId === category.id}
-                  onPress={() => setCategoryId(category.id)}
+                  onPress={() => {
+                    setCategoryId(category.id);
+                    setCategoryAutoSuggested(false);
+                  }}
                   color={category.color}
                 />
               ))}
@@ -175,7 +211,9 @@ export default function NewTransactionScreen() {
           </View>
         </View>
 
-        <TextField label="Note (optional)" placeholder="Add a note" value={note} onChangeText={setNote} />
+        {type === 'transfer' ? (
+          <TextField label="Note (optional)" placeholder="Add a note" value={note} onChangeText={setNote} />
+        ) : null}
 
         {labels.length > 0 ? (
           <View style={{ gap: theme.spacing.sm }}>

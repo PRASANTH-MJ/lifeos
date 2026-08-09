@@ -67,6 +67,37 @@ export function useFinanceGoals() {
     [db, refresh]
   );
 
+  const editGoal = useCallback(
+    async (id: string, values: Partial<{ name: string; color: string; targetAmount: number; targetDate: string | null }>) => {
+      const updates: string[] = [];
+      const params: (string | number | null)[] = [];
+      if (values.name !== undefined) {
+        updates.push('name = ?');
+        params.push(values.name);
+      }
+      if (values.color !== undefined) {
+        updates.push('color = ?');
+        params.push(values.color);
+      }
+      if (values.targetAmount !== undefined) {
+        updates.push('target_amount = ?');
+        params.push(values.targetAmount);
+      }
+      if (values.targetDate !== undefined) {
+        updates.push('target_date = ?');
+        params.push(values.targetDate);
+      }
+      if (updates.length === 0) return;
+      updates.push('updated_at = ?');
+      params.push(new Date().toISOString());
+      params.push(Number(id));
+      await db.runAsync(`UPDATE finance_goals SET ${updates.join(', ')} WHERE id = ?`, params);
+      await pushLocalRow(db, 'finance_goals', Number(id));
+      await refresh();
+    },
+    [db, refresh]
+  );
+
   const closeGoal = useCallback(
     async (id: string, isClosed: boolean) => {
       await db.runAsync('UPDATE finance_goals SET is_closed = ?, updated_at = ? WHERE id = ?', [
@@ -89,7 +120,7 @@ export function useFinanceGoals() {
     [db, refresh]
   );
 
-  return { goals, loading, refresh, addGoal, closeGoal, removeGoal };
+  return { goals, loading, refresh, addGoal, editGoal, closeGoal, removeGoal };
 }
 
 export function useGoalContributions(goalId: string) {

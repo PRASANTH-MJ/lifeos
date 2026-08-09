@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
+import { View } from 'react-native';
 
 import { GlowSurface } from '@/components';
 import { FLOATING_TAB_BAR_HEIGHT, FLOATING_TAB_BAR_MARGIN } from '@/components/tabBarMetrics';
+import { AppTourModal } from '@/modules/onboarding';
+import { AiAssistantFab } from '@/modules/recommendations';
 import { useAppTheme, type AppTheme } from '@/theme';
 import { withAlpha } from '@/theme/withAlpha';
 
@@ -23,6 +26,7 @@ export default function TabsLayout() {
   const theme = useAppTheme();
 
   return (
+    <View style={{ flex: 1 }}>
     <Tabs
       backBehavior="history"
       screenOptions={{
@@ -83,10 +87,14 @@ export default function TabsLayout() {
       <Tabs.Screen name="food" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="mind-training" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="workout" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="water" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="timer" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="shopping" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="settings" options={{ headerShown: false, href: null }} />
     </Tabs>
+    <AiAssistantFab />
+    <AppTourModal />
+    </View>
   );
 }
 

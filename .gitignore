@@ -46,3 +46,8 @@ server/data.sqlite*
 # generated native folders
 /ios
 /android
+
+# local EAS builds and their logs (produced by `eas build --local`)
+*.apk
+*.aab
+local-build*.log

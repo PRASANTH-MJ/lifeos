@@ -1,11 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 
 import { Card, EmptyState, LoadingState, ScreenContainer } from '@/components';
 import { formatDisplayDate } from '@/lib/date';
-import { formatCurrency, formatCurrencyCompact, useAccounts, useFinanceCategories, useFinanceRecords, type RecordEntry } from '@/modules/finance';
+import {
+  formatCurrency,
+  formatCurrencyCompact,
+  useAccounts,
+  useFinanceCategories,
+  useFinanceRecords,
+  useTransactions,
+  type RecordEntry,
+} from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 const RANGE_OPTIONS = [
@@ -24,6 +32,7 @@ export default function RecordsScreen() {
   const { groups, loading } = useFinanceRecords(days);
   const { accounts } = useAccounts();
   const { categories } = useFinanceCategories();
+  const { removeTransaction } = useTransactions();
 
   if (loading) {
     return (
@@ -94,7 +103,13 @@ export default function RecordsScreen() {
 
                 <View style={{ gap: theme.spacing.sm }}>
                   {group.entries.map((entry) => (
-                    <RecordRow key={entry.id} entry={entry} accounts={accounts} categories={categories} />
+                    <RecordRow
+                      key={entry.id}
+                      entry={entry}
+                      accounts={accounts}
+                      categories={categories}
+                      onDelete={removeTransaction}
+                    />
                   ))}
                 </View>
               </View>
@@ -110,12 +125,15 @@ function RecordRow({
   entry,
   accounts,
   categories,
+  onDelete,
 }: {
   entry: RecordEntry;
   accounts: ReturnType<typeof useAccounts>['accounts'];
   categories: ReturnType<typeof useFinanceCategories>['categories'];
+  onDelete: (id: string) => Promise<void>;
 }) {
   const theme = useAppTheme();
+  const router = useRouter();
   const account = accounts.find((a) => a.id === entry.account_id);
   const toAccount = entry.to_account_id ? accounts.find((a) => a.id === entry.to_account_id) : null;
   const category = entry.category_id ? categories.find((c) => c.id === entry.category_id) : null;
@@ -125,9 +143,24 @@ function RecordRow({
   const iconColor = isTransfer ? theme.colors.primary : (category?.color ?? '#8E8E93');
   const iconName = isTransfer ? 'swap-horizontal' : ((category?.icon ?? 'pricetag') as never);
 
+  const confirmDelete = () => {
+    Alert.alert('Delete transaction?', 'This cannot be undone, and will reverse its effect on the account balance.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => onDelete(entry.id) },
+    ]);
+  };
+
+  const showActions = () => {
+    Alert.alert(isTransfer ? 'Transfer' : (category?.name ?? 'Uncategorized'), formatCurrency(entry.amount, account?.currency), [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Edit', onPress: () => router.push({ pathname: '/finance/[id]', params: { id: entry.id } }) },
+      { text: 'Delete', style: 'destructive', onPress: confirmDelete },
+    ]);
+  };
+
   return (
     <Link key={entry.id} href={{ pathname: '/finance/[id]', params: { id: entry.id } }} asChild>
-      <Pressable>
+      <Pressable onLongPress={showActions}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
           <View style={{ width: 40, height: 40 }}>
             <View
@@ -181,6 +214,10 @@ function RecordRow({
             <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>({formatCurrencyCompact(entry.balanceAfter)})</Text>
             <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{formatDisplayDate(entry.date)}</Text>
           </View>
+
+          <Pressable hitSlop={10} onPress={showActions}>
+            <Ionicons name="ellipsis-vertical" size={16} color={theme.colors.textTertiary} />
+          </Pressable>
         </Card>
       </Pressable>
     </Link>

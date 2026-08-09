@@ -6,7 +6,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 25;
+const DATABASE_VERSION = 29;
 
 /** A deterministic, non-random id derived from a fixed string — used only for seed rows (built-in
  * categories, starter affirmations) so every fresh install gets the exact same sync_id for "the
@@ -1148,7 +1148,301 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     currentDbVersion = 25;
   }
 
-  // Future modules land here as `if (currentDbVersion === 25) { ... currentDbVersion = 26; }`
+  if (currentDbVersion === 25) {
+    // Per-exercise set/rep/weight logging for the exercise library — distinct from workout_logs
+    // (which just marks a whole pre-built workout complete for the day). exercise_key references
+    // the bundled exercises.json dataset, not a DB row, so there's no foreign key.
+    await db.execAsync(`
+      CREATE TABLE exercise_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        exercise_key TEXT NOT NULL,
+        date TEXT NOT NULL,
+        sets INTEGER,
+        reps INTEGER,
+        weight_kg REAL,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        sync_id TEXT
+      );
+      CREATE INDEX idx_exercise_logs_exercise_key ON exercise_logs(exercise_key);
+      CREATE INDEX idx_exercise_logs_date ON exercise_logs(date);
+      CREATE INDEX idx_exercise_logs_sync_id ON exercise_logs(sync_id);
+    `);
+
+    currentDbVersion = 26;
+  }
+
+  if (currentDbVersion === 26) {
+    await db.execAsync(`
+      CREATE TABLE water_preferences (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        goal_ml INTEGER NOT NULL DEFAULT 2000,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE water_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount_ml INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        sync_id TEXT
+      );
+      CREATE INDEX idx_water_logs_date ON water_logs(date);
+      CREATE INDEX idx_water_logs_sync_id ON water_logs(sync_id);
+    `);
+    await db.runAsync("INSERT INTO water_preferences (id, goal_ml, updated_at) VALUES (1, 2000, ?)", [new Date().toISOString()]);
+
+    currentDbVersion = 27;
+  }
+
+  if (currentDbVersion === 27) {
+    await db.execAsync('ALTER TABLE workout_logs ADD COLUMN duration_seconds INTEGER');
+
+    currentDbVersion = 28;
+  }
+
+  if (currentDbVersion === 28) {
+    const MORE_AFFIRMATIONS = [
+      // Self-worth
+      'I am worthy of love and respect, exactly as I am.',
+      'My value doesn\'t depend on anyone else\'s approval.',
+      'I treat myself with the same kindness I offer others.',
+      'I am enough, even on the days that feel hard.',
+      'I deserve good things, and I let myself receive them.',
+      'I am proud of who I am becoming.',
+      'My worth was never up for debate.',
+      'I honor my needs without guilt.',
+      'I am allowed to take up space.',
+      'I like who I am when I stop comparing myself to others.',
+      // Confidence
+      'I trust my ability to figure things out.',
+      'I speak up for myself with clarity and calm.',
+      'I am capable of more than I give myself credit for.',
+      'My voice matters, and I use it.',
+      'I walk into new situations with quiet confidence.',
+      'I don\'t need to be perfect to be proud of myself.',
+      'I back myself, even when I\'m unsure.',
+      'I am becoming more confident with every step I take.',
+      'I trust the decisions I make for my own life.',
+      'I stand tall in who I am.',
+      // Calm & anxiety relief
+      'I am safe in this moment.',
+      'I can handle whatever comes next, one step at a time.',
+      'My breath is steady, and so am I.',
+      'This feeling is temporary — it will pass.',
+      'I release what I cannot control.',
+      'I choose peace over worry.',
+      'I am allowed to slow down.',
+      'Not everything needs to be figured out today.',
+      'I give myself permission to rest.',
+      'I trust that things will work out, even if I don\'t know how yet.',
+      'I am grounded, even when things around me feel uncertain.',
+      'I can be anxious and brave at the same time.',
+      // Gratitude
+      'I notice the good things, even the small ones.',
+      'I am thankful for how far I\'ve come.',
+      'There is always something to appreciate today.',
+      'I choose to see what I have, not just what I lack.',
+      'Gratitude turns what I have into enough.',
+      'I am grateful for the people who show up for me.',
+      'Today holds something worth being thankful for.',
+      'I appreciate my body for carrying me through each day.',
+      // Resilience & growth
+      'Every challenge I\'ve faced has taught me something.',
+      'I grow stronger every time I choose to keep going.',
+      'Setbacks are not the end of my story.',
+      'I am not defined by my mistakes — I learn from them.',
+      'I have survived every hard day so far.',
+      'I am capable of starting again, as many times as I need to.',
+      'Difficult seasons don\'t last forever.',
+      'I turn obstacles into lessons.',
+      'I am always growing, even when it doesn\'t feel like it.',
+      'My past does not decide my future.',
+      'I am resilient, adaptable, and stronger than I think.',
+      'Progress, not perfection, is enough.',
+      // Focus & productivity
+      'I can focus on one thing at a time.',
+      'I give myself credit for what I finish, not just what\'s left.',
+      'I do my best work when I trust the process.',
+      'Small steps forward still count as progress.',
+      'I am productive without needing to be busy every second.',
+      'I finish what matters most first.',
+      'Distractions don\'t control my day — I do.',
+      'I am allowed to work at my own pace.',
+      // Health & body
+      'I listen to what my body needs.',
+      'I am grateful for my body and how it supports me.',
+      'Taking care of myself is not selfish.',
+      'I move my body because I love it, not to punish it.',
+      'I nourish myself with food, rest, and kindness.',
+      'My body deserves care, not criticism.',
+      'I am learning to be gentle with myself.',
+      'Healing is not linear, and that\'s okay.',
+      // Relationships
+      'I attract people who respect and value me.',
+      'I am open to giving and receiving love.',
+      'I set boundaries that protect my peace.',
+      'I choose relationships that lift me up.',
+      'I communicate my needs with honesty and care.',
+      'I forgive myself for relationships that didn\'t work out.',
+      'I am a good friend to the people I care about.',
+      'I deserve relationships built on mutual respect.',
+      // Morning
+      'Today is a fresh start.',
+      'I choose how I want to show up today.',
+      'This morning, I set the tone for a good day.',
+      'I wake up with purpose.',
+      'Today, I will do my best — and that is enough.',
+      'I greet this day with an open mind.',
+      'Whatever today brings, I am ready.',
+      // Evening
+      'I release today\'s stress before I sleep.',
+      'I did enough today.',
+      'Tomorrow is another chance to try again.',
+      'I let go of what I couldn\'t control today.',
+      'I am proud of how I showed up today, however it went.',
+      'Rest is productive too.',
+      'I close today with grace, not judgment.',
+      // Letting go
+      'I release what no longer serves me.',
+      'I don\'t have to carry yesterday into today.',
+      'Letting go is not giving up — it\'s making room.',
+      'I forgive myself for what I didn\'t know back then.',
+      'I am free from needing everyone\'s approval.',
+      'I choose to move forward, not stay stuck.',
+      'Some things are meant to be released, not fixed.',
+      // Abundance & success
+      'Opportunities are always finding their way to me.',
+      'I am open to receiving abundance in all forms.',
+      'Success looks different for everyone, and mine is valid.',
+      'I am building the life I want, one day at a time.',
+      'Money flows to me through effort and opportunity.',
+      'I celebrate my wins, no matter how small.',
+      'I am worthy of the success I\'m working toward.',
+      'Good things are already on their way to me.',
+      // Self-compassion
+      'I would never speak to a friend the way I sometimes speak to myself.',
+      'I am doing the best I can with what I know right now.',
+      'I deserve patience, especially from myself.',
+      'Mistakes don\'t make me a failure — they make me human.',
+      'I choose self-compassion over self-criticism.',
+      'I am allowed to have an off day.',
+      'I am kind to myself, especially when things are hard.',
+      // Courage
+      'I can feel scared and do it anyway.',
+      'Courage isn\'t the absence of fear — it\'s moving forward with it.',
+      'I am brave enough to try, even without a guarantee.',
+      'I choose growth over comfort.',
+      'I am not afraid to ask for help.',
+      'Every brave choice makes the next one easier.',
+      'I trust myself to handle what\'s uncertain.',
+      // Sleep & rest
+      'My mind and body are ready to rest.',
+      'I release today\'s thoughts and welcome quiet.',
+      'Sleep restores me, and I welcome it.',
+      'I am safe to relax completely.',
+      'Tomorrow can wait until tomorrow.',
+      'I let my body settle into calm.',
+      // Purpose & direction
+      'I am exactly where I need to be right now.',
+      'My path doesn\'t have to look like anyone else\'s.',
+      'I trust the timing of my life.',
+      'I am allowed to change direction.',
+      'Clarity comes with time — I don\'t need all the answers today.',
+      'I am becoming the person I\'m meant to be.',
+      'My journey is mine, and that\'s exactly right.',
+      // Focus on the present
+      'This moment is enough.',
+      'I am here, right now, and that matters.',
+      'I don\'t need to rush through today to get to tomorrow.',
+      'I notice what\'s good, right in front of me.',
+      'I am present for my own life.',
+      // Strength in difficulty
+      'I am stronger than the thing I\'m facing.',
+      'I don\'t have to have it all figured out to keep going.',
+      'This is hard, and I am still here.',
+      'I give myself credit for showing up today.',
+      'Even small progress is still progress.',
+      'I am allowed to ask for support when I need it.',
+      'I am not alone in what I\'m carrying.',
+      // Confidence in change
+      'Change is uncomfortable, but I can grow through it.',
+      'I trust myself to adapt to whatever comes.',
+      'New chapters require leaving old ones behind.',
+      'I am capable of reinventing myself when I need to.',
+      'Uncertainty doesn\'t mean I\'m doing something wrong.',
+      // Joy & lightness
+      'I let myself enjoy the good moments without guilt.',
+      'Laughter is good for my soul.',
+      'I make room for joy, even in busy seasons.',
+      'I don\'t need a reason to feel good today.',
+      'I am allowed to have fun.',
+      'Small joys are still joys worth noticing.',
+      // Creativity
+      'My ideas are worth exploring.',
+      'I don\'t need permission to create.',
+      'There is no wrong way to express myself.',
+      'I trust my creative instincts.',
+      'Inspiration finds me when I stay curious.',
+      'I make things because I enjoy making them, not to be perfect.',
+      'My imagination is a strength, not a distraction.',
+      // Work & career
+      'I bring value wherever I show up.',
+      'I am allowed to grow into a role, not just fit it perfectly on day one.',
+      'My effort today is building something worthwhile.',
+      'I can be ambitious and patient at the same time.',
+      'Asking questions makes me better at what I do, not weaker.',
+      'I don\'t have to prove my worth through overwork.',
+      'My career is a path, not a race against anyone else.',
+      'I am learning something new, even on hard days at work.',
+      // Patience
+      'Good things are allowed to take time.',
+      'I don\'t need to rush the process to trust it.',
+      'Patience with myself is a practice, not a personality trait.',
+      'I can wait for the right moment without losing hope.',
+      'Slow progress is still progress.',
+      // Forgiveness of others
+      'I can release resentment without excusing what happened.',
+      'Forgiving others is something I do for my own peace.',
+      'I choose not to carry other people\'s mistakes as my own weight.',
+      'Letting go of anger makes room for something lighter.',
+      // Body positivity
+      'My body is not something I need to apologize for.',
+      'I am more than how I look.',
+      'My body has carried me through every day of my life so far.',
+      'I choose respect over criticism when I think about my body.',
+      'My worth isn\'t measured by a number on a scale.',
+      // Motivation & discipline
+      'Discipline is just choosing my future over my mood right now.',
+      'I don\'t need to feel motivated to take the first step.',
+      'Showing up matters more than showing up perfectly.',
+      'Small consistent actions build the life I want.',
+      'I keep promises to myself.',
+      'Today\'s effort is tomorrow\'s progress.',
+      // Hope
+      'Better days are ahead, even if I can\'t see them yet.',
+      'Hope doesn\'t require certainty.',
+      'Things can change for me, even quickly.',
+      'I choose to believe good things are still possible.',
+      'This chapter isn\'t the whole story.',
+      'Even small hope is enough to keep going.',
+    ];
+
+    const seededAt = new Date().toISOString();
+    for (const text of MORE_AFFIRMATIONS) {
+      const syncId = await deterministicSyncId('affirmation', text);
+      await db.runAsync(
+        'INSERT INTO affirmations (text, is_favorite, is_custom, created_at, updated_at, sync_id) VALUES (?, 0, 0, ?, ?, ?)',
+        [text, seededAt, seededAt, syncId]
+      );
+    }
+
+    currentDbVersion = 29;
+  }
+
+  // Future modules land here as `if (currentDbVersion === 29) { ... currentDbVersion = 30; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

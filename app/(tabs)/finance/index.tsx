@@ -110,30 +110,36 @@ export default function FinanceScreen() {
                   {ACCOUNT_TYPE_LABELS[type]}
                 </Text>
                 {(accountsByType.get(type) ?? []).map((account) => (
-                  <Card key={account.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                    <View
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: theme.radius.md,
-                        backgroundColor: theme.colors.primaryMuted,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}>
-                      <Ionicons name={TYPE_ICON[type]} size={19} color={theme.colors.primary} />
-                    </View>
-                    <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
-                      {account.name}
-                    </Text>
-                    <Text
-                      style={{
-                        color: account.current_balance >= 0 ? theme.colors.textPrimary : theme.colors.danger,
-                        fontSize: theme.typography.size.base,
-                        fontWeight: theme.typography.weight.semibold,
-                      }}>
-                      {formatCurrency(account.current_balance, account.currency)}
-                    </Text>
-                  </Card>
+                  <Link key={account.id} href={{ pathname: '/finance/accounts/[id]', params: { id: account.id } }} asChild>
+                    <Pressable>
+                      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                        <View
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: theme.radius.md,
+                            backgroundColor: theme.colors.primaryMuted,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}>
+                          <Ionicons name={TYPE_ICON[type]} size={19} color={theme.colors.primary} />
+                        </View>
+                        <Text
+                          style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
+                          {account.name}
+                        </Text>
+                        <Text
+                          style={{
+                            color: account.current_balance >= 0 ? theme.colors.textPrimary : theme.colors.danger,
+                            fontSize: theme.typography.size.base,
+                            fontWeight: theme.typography.weight.semibold,
+                          }}>
+                          {formatCurrency(account.current_balance, account.currency)}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+                      </Card>
+                    </Pressable>
+                  </Link>
                 ))}
               </View>
             ))}

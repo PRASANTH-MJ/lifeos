@@ -41,13 +41,17 @@ export default function WorkoutDetailScreen() {
           ))}
         </Card>
 
-        <Button
-          label="Mark complete"
-          onPress={async () => {
-            await logCompletion(workout.key);
-            router.back();
-          }}
-        />
+        <View style={{ gap: theme.spacing.sm }}>
+          <Button label="Start workout" onPress={() => router.push({ pathname: '/workout/session/[key]', params: { key: workout.key } })} />
+          <Button
+            label="Already did it — mark complete"
+            variant="secondary"
+            onPress={async () => {
+              await logCompletion(workout.key);
+              router.back();
+            }}
+          />
+        </View>
       </View>
     </ScreenContainer>
   );

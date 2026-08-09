@@ -58,6 +58,21 @@ export function useFoodDay(dateKey: string) {
     [db, dateKey, refresh]
   );
 
+  const updateLog = useCallback(
+    async (
+      id: number,
+      values: { description: string; meal: Meal; calories: number; proteinG?: number | null; carbsG?: number | null; fatG?: number | null }
+    ) => {
+      await db.runAsync(
+        `UPDATE food_logs SET description = ?, meal = ?, calories = ?, protein_g = ?, carbs_g = ?, fat_g = ?, updated_at = ? WHERE id = ?`,
+        [values.description, values.meal, values.calories, values.proteinG ?? null, values.carbsG ?? null, values.fatG ?? null, new Date().toISOString(), id]
+      );
+      await pushLocalRow(db, 'food_logs', id);
+      await refresh();
+    },
+    [db, refresh]
+  );
+
   const deleteLog = useCallback(
     async (id: number) => {
       await recordDeleteBeforeRemoving(db, 'food_logs', id);
@@ -89,5 +104,5 @@ export function useFoodDay(dateKey: string) {
     return map;
   }, [logs]);
 
-  return { logs, loading, totals, byMeal, createLog, deleteLog, refresh };
+  return { logs, loading, totals, byMeal, createLog, updateLog, deleteLog, refresh };
 }

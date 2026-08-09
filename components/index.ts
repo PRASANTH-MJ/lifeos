@@ -1,4 +1,5 @@
 export { ScreenContainer } from './ScreenContainer';
+export { ExerciseMotionPreview } from './ExerciseMotionPreview';
 export { Card } from './Card';
 export { GlowSurface } from './GlowSurface';
 export { CompletionPulse } from './CompletionPulse';

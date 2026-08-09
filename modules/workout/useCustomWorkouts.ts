@@ -49,11 +49,23 @@ export function useCustomWorkouts() {
     [table]
   );
 
+  const addExerciseToWorkout = useCallback(
+    (key: string, exerciseLine: string) => {
+      const id = Number(key.replace('custom-', ''));
+      const row = table.rows.find((r) => r.id === id);
+      if (!row) return Promise.resolve();
+      const exercises = [...JSON.parse(row.exercises), exerciseLine];
+      return table.update(id, { exercises: JSON.stringify(exercises) } as Partial<CustomWorkoutRow>);
+    },
+    [table]
+  );
+
   return {
     workouts: table.rows.map(toWorkout),
     loading: table.loading,
     addWorkout,
     removeWorkout,
+    addExerciseToWorkout,
     refresh: table.refresh,
   };
 }

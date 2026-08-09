@@ -162,6 +162,70 @@ export function useFinancePlannedPayments() {
     [db, refresh]
   );
 
+  const editPlannedPayment = useCallback(
+    async (
+      id: string,
+      values: Partial<{
+        accountId: string;
+        categoryId: string | null;
+        type: 'income' | 'expense';
+        amount: number;
+        payee: string;
+        frequency: PlannedPaymentFrequency;
+        nextDate: string;
+        notify: boolean;
+        note: string | null;
+      }>
+    ) => {
+      const updates: string[] = [];
+      const params: (string | number | null)[] = [];
+      if (values.accountId !== undefined) {
+        updates.push('account_id = ?');
+        params.push(Number(values.accountId));
+      }
+      if (values.categoryId !== undefined) {
+        updates.push('category_id = ?');
+        params.push(values.categoryId ? Number(values.categoryId) : null);
+      }
+      if (values.type !== undefined) {
+        updates.push('type = ?');
+        params.push(values.type);
+      }
+      if (values.amount !== undefined) {
+        updates.push('amount = ?');
+        params.push(values.amount);
+      }
+      if (values.payee !== undefined) {
+        updates.push('payee = ?');
+        params.push(values.payee);
+      }
+      if (values.frequency !== undefined) {
+        updates.push('frequency = ?');
+        params.push(values.frequency);
+      }
+      if (values.nextDate !== undefined) {
+        updates.push('next_date = ?');
+        params.push(values.nextDate);
+      }
+      if (values.notify !== undefined) {
+        updates.push('notify = ?');
+        params.push(values.notify ? 1 : 0);
+      }
+      if (values.note !== undefined) {
+        updates.push('note = ?');
+        params.push(values.note);
+      }
+      if (updates.length === 0) return;
+      updates.push('updated_at = ?');
+      params.push(new Date().toISOString());
+      params.push(Number(id));
+      await db.runAsync(`UPDATE finance_planned_payments SET ${updates.join(', ')} WHERE id = ?`, params);
+      await pushLocalRow(db, 'finance_planned_payments', Number(id));
+      await refresh();
+    },
+    [db, refresh]
+  );
+
   const removePlannedPayment = useCallback(
     async (id: string) => {
       await recordDeleteBeforeRemoving(db, 'finance_planned_payments', Number(id));
@@ -171,5 +235,5 @@ export function useFinancePlannedPayments() {
     [db, refresh]
   );
 
-  return { plannedPayments, loading, refresh, addPlannedPayment, markPaid, removePlannedPayment };
+  return { plannedPayments, loading, refresh, addPlannedPayment, editPlannedPayment, markPaid, removePlannedPayment };
 }

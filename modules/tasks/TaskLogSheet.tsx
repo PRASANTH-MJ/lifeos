@@ -1,3 +1,5 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
@@ -19,6 +21,7 @@ type Props = {
 
 export function TaskLogSheet({ visible, task, date, existingLog, onClose, onSave, onClear }: Props) {
   const theme = useAppTheme();
+  const router = useRouter();
   const { settings } = useSettings();
   const [saving, setSaving] = useState(false);
 
@@ -34,6 +37,11 @@ export function TaskLogSheet({ visible, task, date, existingLog, onClose, onSave
     await onClear();
     setSaving(false);
     onClose();
+  };
+
+  const openDetail = (tab: 'calendar' | 'statistics' | 'edit') => {
+    onClose();
+    router.push({ pathname: '/tasks/[id]', params: { id: String(task.id), tab } });
   };
 
   return (
@@ -75,6 +83,26 @@ export function TaskLogSheet({ visible, task, date, existingLog, onClose, onSave
                 <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.sm }}>Reset entry</Text>
               </Pressable>
             ) : null}
+          </View>
+
+          <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing.md }}>
+            {(
+              [
+                { key: 'calendar', label: 'Calendar', icon: 'calendar-outline' },
+                { key: 'statistics', label: 'Statistics', icon: 'stats-chart-outline' },
+                { key: 'edit', label: 'Edit', icon: 'create-outline' },
+              ] as const
+            ).map((entry) => (
+              <Pressable
+                key={entry.key}
+                onPress={() => openDetail(entry.key)}
+                style={{ flex: 1, alignItems: 'center', gap: 2, paddingVertical: theme.spacing.xs }}>
+                <Ionicons name={entry.icon} size={20} color={theme.colors.textTertiary} />
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>
+                  {entry.label}
+                </Text>
+              </Pressable>
+            ))}
           </View>
         </View>
       </View>

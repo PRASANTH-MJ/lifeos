@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link, Stack } from 'expo-router';
+import { Link, Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Modal, Pressable, Text, View } from 'react-native';
 
@@ -12,10 +12,13 @@ import { useAppTheme } from '@/theme';
 
 export default function FoodScreen() {
   const theme = useAppTheme();
+  const router = useRouter();
   const [date, setDate] = useState(todayKey());
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(todayKey()));
-  const { loading, totals, byMeal, deleteLog, refresh } = useFoodDay(date);
+  const { loading, totals, byMeal, deleteLog, createLog, refresh } = useFoodDay(date);
+  const { logs: yesterdayLogs } = useFoodDay(addDays(date, -1));
+  const [repeating, setRepeating] = useState(false);
   const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders(
     'food',
     'Log your meals',
@@ -31,16 +34,41 @@ export default function FoodScreen() {
 
   const isEmpty = !loading && MEALS.every((meal) => byMeal[meal].length === 0);
 
+  const onRepeatYesterday = async () => {
+    setRepeating(true);
+    try {
+      for (const log of yesterdayLogs) {
+        await createLog({
+          description: log.description,
+          meal: log.meal,
+          calories: log.calories,
+          proteinG: log.protein_g,
+          carbsG: log.carbs_g,
+          fatG: log.fat_g,
+        });
+      }
+    } finally {
+      setRepeating(false);
+    }
+  };
+
   return (
     <ScreenContainer onRefresh={refresh}>
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Link href={{ pathname: '/food/new', params: { date } }} asChild>
-              <Pressable hitSlop={8}>
-                <Ionicons name="add-circle" size={28} color={theme.colors.primary} />
-              </Pressable>
-            </Link>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.lg }}>
+              <Link href="/food/analytics" asChild>
+                <Pressable hitSlop={8}>
+                  <Ionicons name="stats-chart-outline" size={22} color={theme.colors.textSecondary} />
+                </Pressable>
+              </Link>
+              <Link href={{ pathname: '/food/new', params: { date } }} asChild>
+                <Pressable hitSlop={8}>
+                  <Ionicons name="add-circle" size={28} color={theme.colors.primary} />
+                </Pressable>
+              </Link>
+            </View>
           ),
         }}
       />
@@ -83,6 +111,10 @@ export default function FoodScreen() {
         ))}
         <Button label={reminders.length > 0 ? 'Add another reminder' : 'Add a reminder'} variant="secondary" onPress={addReminder} />
 
+        {isEmpty && yesterdayLogs.length > 0 ? (
+          <Button label={`Repeat yesterday's ${yesterdayLogs.length} meal${yesterdayLogs.length === 1 ? '' : 's'}`} variant="secondary" onPress={onRepeatYesterday} loading={repeating} />
+        ) : null}
+
         {isEmpty ? (
           <EmptyState icon="restaurant-outline" title="Nothing logged" subtitle="Tap + to log a meal or snack." />
         ) : (
@@ -93,7 +125,10 @@ export default function FoodScreen() {
                   {mealLabel(meal)}
                 </Text>
                 {byMeal[meal].map((log) => (
-                  <Pressable key={log.id} onLongPress={() => onDelete(log.id)}>
+                  <Pressable
+                    key={log.id}
+                    onPress={() => router.push({ pathname: '/food/new', params: { date, id: String(log.id) } })}
+                    onLongPress={() => onDelete(log.id)}>
                     <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>{log.description}</Text>

@@ -168,6 +168,8 @@ function RootNavigation() {
         <Stack.Screen name="premium" options={{ presentation: 'modal' }} />
         <Stack.Screen name="onboarding" options={{ presentation: 'modal', headerShown: true, title: 'Personal Details' }} />
         <Stack.Screen name="feedback" options={{ presentation: 'modal', headerShown: true, title: 'Send Feedback' }} />
+        <Stack.Screen name="assistant" options={{ presentation: 'modal', headerShown: true, title: 'For You' }} />
+        <Stack.Screen name="help" options={{ presentation: 'modal', headerShown: true, title: 'Help & Support' }} />
       </Stack>
     </RouterThemeProvider>
   );

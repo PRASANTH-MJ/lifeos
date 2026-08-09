@@ -1,14 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { Button, Chip, ScreenContainer, TextField } from '@/components';
 import {
   EQUIPMENT_OPTIONS,
+  findLibraryExercise,
   GOALS,
   equipmentLabel,
   goalLabel,
+  openExercisePicker,
   useCustomWorkouts,
   type Equipment,
   type WorkoutGoal,
@@ -18,6 +20,7 @@ import { useAppTheme } from '@/theme';
 export default function NewWorkoutScreen() {
   const theme = useAppTheme();
   const router = useRouter();
+  const { prefill } = useLocalSearchParams<{ prefill?: string }>();
   const { addWorkout } = useCustomWorkouts();
 
   const [title, setTitle] = useState('');
@@ -35,13 +38,22 @@ export default function NewWorkoutScreen() {
       setGoal('general');
       setEquipment('none');
       setMinutesText('30');
-      setExercises(['', '']);
-    }, [])
+      setExercises(prefill ? [prefill, ''] : ['', '']);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefill])
   );
 
   const updateExercise = (index: number, text: string) => setExercises((items) => items.map((item, i) => (i === index ? text : item)));
   const addExercise = () => setExercises((items) => [...items, '']);
   const removeExercise = (index: number) => setExercises((items) => items.filter((_, i) => i !== index));
+
+  const onPickFromLibrary = () => {
+    openExercisePicker(router, (keys) => {
+      const names = keys.map((k) => findLibraryExercise(k)?.name).filter((n): n is string => !!n);
+      if (names.length === 0) return;
+      setExercises((items) => [...items.filter((e) => e.trim().length > 0), ...names]);
+    });
+  };
 
   const trimmedExercises = exercises.map((e) => e.trim()).filter(Boolean);
   const minutes = Number(minutesText);
@@ -98,11 +110,19 @@ export default function NewWorkoutScreen() {
               </Pressable>
             </View>
           ))}
-          <Pressable onPress={addExercise}>
-            <Text style={{ color: theme.colors.moduleTasks, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
-              Add exercise
-            </Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: theme.spacing.lg }}>
+            <Pressable onPress={addExercise}>
+              <Text style={{ color: theme.colors.moduleTasks, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                Add exercise
+              </Text>
+            </Pressable>
+            <Pressable onPress={onPickFromLibrary} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="library-outline" size={14} color={theme.colors.moduleTasks} />
+              <Text style={{ color: theme.colors.moduleTasks, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                Pick from library
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         <Button label="Save workout" onPress={onSave} disabled={!canSave} loading={saving} />

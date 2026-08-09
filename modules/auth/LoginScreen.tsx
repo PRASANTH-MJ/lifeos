@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Button, TextField } from '@/components';
 import { useAppTheme } from '@/theme';
@@ -20,6 +20,7 @@ export function LoginScreen() {
   const canSubmit = email.trim().length > 3 && password.length >= 6 && !submitting;
 
   const onSubmit = async () => {
+    Keyboard.dismiss();
     setError(null);
     setInfo(null);
     setSubmitting(true);
@@ -29,6 +30,7 @@ export function LoginScreen() {
   };
 
   const onForgotPassword = async () => {
+    Keyboard.dismiss();
     if (email.trim().length < 4) {
       setError('Enter your email above first, then tap "Forgot password?" again.');
       return;
@@ -41,14 +43,39 @@ export function LoginScreen() {
     else setError(result.error);
   };
 
+  const switchMode = () => {
+    setMode(mode === 'signin' ? 'signup' : 'signin');
+    setError(null);
+    setInfo(null);
+  };
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: theme.spacing.xl, gap: theme.spacing.lg }}
+        contentContainerStyle={{ flexGrow: 1, padding: theme.spacing.xl, paddingTop: theme.spacing['4xl'], gap: theme.spacing.lg }}
         keyboardShouldPersistTaps="handled">
-        <View style={{ gap: theme.spacing.xs, marginBottom: theme.spacing.md }}>
+        <View style={{ alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.lg }}>
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 20,
+              overflow: 'hidden',
+              backgroundColor: theme.colors.surface,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              ...theme.shadow.md,
+            }}>
+            <Image source={require('../../assets/icon.png')} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+          </View>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.xl, fontWeight: theme.typography.weight.bold }}>
+            Flowsy
+          </Text>
+        </View>
+
+        <View style={{ gap: theme.spacing.xs, marginBottom: theme.spacing.sm }}>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
             {mode === 'signin' ? 'Welcome back' : 'Create your account'}
           </Text>
@@ -71,32 +98,45 @@ export function LoginScreen() {
           value={password}
           onChangeText={setPassword}
           placeholder={mode === 'signin' ? 'Your password' : 'At least 6 characters'}
-          secureTextEntry
+          isPassword
           autoCapitalize="none"
         />
 
-        {error ? <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.sm }}>{error}</Text> : null}
-        {info ? <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.sm }}>{info}</Text> : null}
-
-        {submitting ? (
-          <ActivityIndicator />
-        ) : (
-          <Button label={mode === 'signin' ? 'Sign in' : 'Sign up'} onPress={onSubmit} disabled={!canSubmit} />
-        )}
-
-        {mode === 'signin' ? (
-          <Button label="Forgot password?" variant="ghost" onPress={onForgotPassword} />
+        {error ? (
+          <View style={{ backgroundColor: theme.colors.dangerMuted, borderRadius: theme.radius.md, padding: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.sm }}>{error}</Text>
+          </View>
+        ) : null}
+        {info ? (
+          <View style={{ backgroundColor: theme.colors.successMuted, borderRadius: theme.radius.md, padding: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.sm }}>{info}</Text>
+          </View>
         ) : null}
 
-        <Button
-          label={mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-          variant="ghost"
-          onPress={() => {
-            setMode(mode === 'signin' ? 'signup' : 'signin');
-            setError(null);
-            setInfo(null);
-          }}
-        />
+        <View style={{ gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
+          {submitting ? (
+            <ActivityIndicator />
+          ) : (
+            <Button label={mode === 'signin' ? 'Sign in' : 'Sign up'} onPress={onSubmit} disabled={!canSubmit} />
+          )}
+
+          {mode === 'signin' ? (
+            <Pressable onPress={onForgotPassword} style={{ alignItems: 'center', paddingVertical: theme.spacing.xs }}>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>Forgot password?</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        <View style={{ flex: 1 }} />
+
+        <Pressable onPress={switchMode} style={{ flexDirection: 'row', justifyContent: 'center', gap: 4, paddingVertical: theme.spacing.sm }}>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>
+            {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}
+          </Text>
+          <Text style={{ color: theme.colors.primary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+            {mode === 'signin' ? 'Sign up' : 'Sign in'}
+          </Text>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );

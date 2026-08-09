@@ -147,6 +147,48 @@ export function useFinanceBudgetPlans() {
     [db, refresh]
   );
 
+  const editBudgetPlan = useCallback(
+    async (
+      id: string,
+      values: Partial<{ name: string; period: BudgetPeriod; amount: number; categoryId: string | null; startDate: string | null; endDate: string | null }>
+    ) => {
+      const updates: string[] = [];
+      const params: (string | number | null)[] = [];
+      if (values.name !== undefined) {
+        updates.push('name = ?');
+        params.push(values.name);
+      }
+      if (values.period !== undefined) {
+        updates.push('period = ?');
+        params.push(values.period);
+      }
+      if (values.amount !== undefined) {
+        updates.push('amount = ?');
+        params.push(values.amount);
+      }
+      if (values.categoryId !== undefined) {
+        updates.push('category_id = ?');
+        params.push(values.categoryId ? Number(values.categoryId) : null);
+      }
+      if (values.startDate !== undefined) {
+        updates.push('start_date = ?');
+        params.push(values.startDate);
+      }
+      if (values.endDate !== undefined) {
+        updates.push('end_date = ?');
+        params.push(values.endDate);
+      }
+      if (updates.length === 0) return;
+      updates.push('updated_at = ?');
+      params.push(new Date().toISOString());
+      params.push(Number(id));
+      await db.runAsync(`UPDATE finance_budget_plans SET ${updates.join(', ')} WHERE id = ?`, params);
+      await pushLocalRow(db, 'finance_budget_plans', Number(id));
+      await refresh();
+    },
+    [db, refresh]
+  );
+
   const removeBudgetPlan = useCallback(
     async (id: string) => {
       await recordDeleteBeforeRemoving(db, 'finance_budget_plans', Number(id));
@@ -156,5 +198,5 @@ export function useFinanceBudgetPlans() {
     [db, refresh]
   );
 
-  return { plans, loading, refresh, addBudgetPlan, removeBudgetPlan };
+  return { plans, loading, refresh, addBudgetPlan, editBudgetPlan, removeBudgetPlan };
 }
