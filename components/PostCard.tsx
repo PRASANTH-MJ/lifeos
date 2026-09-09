@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { memo, useEffect, useState } from 'react';
-import { Image, KeyboardAvoidingView, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { memo, useState } from 'react';
+import { KeyboardAvoidingView, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 
 import { auth } from '@/firebase/config';
 import {
@@ -457,32 +458,25 @@ function PostPhotoCarousel({ uris, cardWidth, maxHeight }: { uris: string[]; car
  * had the same bug on the capture side). `aspectRatio` + `maxHeight` on the Image itself, rather
  * than computing pixel dimensions by hand, lets the layout engine do the clamping: under the cap
  * it renders at the true ratio with nothing cropped, and only a genuinely extreme outlier (past
- * `maxHeight`) ever gets `resizeMode="contain"`'s letterboxing instead of a crop. */
+ * `maxHeight`) ever gets `contentFit="contain"`'s letterboxing instead of a crop.
+ *
+ * Uses expo-image, not react-native's core Image — RN's Image only ever shows an animated GIF's
+ * first frame on Android (a long-standing platform limitation of its image pipeline there), which
+ * is exactly why a posted route GIF looked static in the Feed despite being a real animated file.
+ * expo-image decodes and plays GIF/WebP animation natively on both platforms. */
 function PostPhoto({ uri, maxHeight }: { uri: string; maxHeight: number }) {
   const theme = useAppTheme();
   const [ratio, setRatio] = useState<number | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    Image.getSize(
-      uri,
-      (width, height) => {
-        if (!cancelled) setRatio(width / height);
-      },
-      () => {
-        // Unreadable URI — keep the fallback ratio below rather than leaving `ratio` unset.
-      }
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [uri]);
-
   return (
-    <Image
+    <ExpoImage
       source={{ uri }}
       style={{ width: '100%', aspectRatio: ratio ?? 4 / 5, maxHeight, borderRadius: theme.radius.lg }}
-      resizeMode="contain"
+      contentFit="contain"
+      onLoad={(event) => {
+        const { width, height } = event.source;
+        if (width && height) setRatio(width / height);
+      }}
     />
   );
 }

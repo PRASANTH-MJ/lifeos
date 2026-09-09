@@ -75,6 +75,22 @@ export default function TimerScreen() {
     []
   );
 
+  // Keep the screen from locking while a session is actually running — a locked screen mid-timer
+  // is exactly when someone wants to glance at elapsed time. Scoped to TIMER_KEEP_AWAKE_TAG (not
+  // the library default) so nothing else in the app can accidentally clear it, and deactivated on
+  // unmount as a safety net in case `running` never flips back to false first (e.g. navigating
+  // away mid-session).
+  useEffect(() => {
+    if (running) {
+      activateKeepAwakeAsync(TIMER_KEEP_AWAKE_TAG);
+    } else {
+      deactivateKeepAwake(TIMER_KEEP_AWAKE_TAG);
+    }
+    return () => {
+      deactivateKeepAwake(TIMER_KEEP_AWAKE_TAG);
+    };
+  }, [running]);
+
   const targetMinutes = mode === 'countdown' ? countdownMinutes : mode === 'pomodoro' ? (pomodoroPhase === 'focus' ? POMODORO_FOCUS_MINUTES : POMODORO_BREAK_MINUTES) : null;
 
   const stop = () => {

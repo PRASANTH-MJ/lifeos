@@ -25,7 +25,7 @@
         "android.permission.VIBRATE",
         "android.permission.WAKE_LOCK"
       ],
-      "versionCode": 59
+      "versionCode": 61
     },
     "web": {
       "bundler": "metro",
@@ -101,7 +101,16 @@
           "microphonePermission": "Allow Flowsy to use the microphone for voice commands.",
           "speechRecognitionPermission": "Allow Flowsy to use speech recognition for voice commands."
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "allowBackup": false
+          }
+        }
+      ],
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true
