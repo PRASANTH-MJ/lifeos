@@ -77,6 +77,10 @@ export function ActivityShareCarousel({
   const [photoUri, setPhotoUri] = useState<string | null>(initialPhotoUri ?? null);
   const [useGif, setUseGif] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<StoryTemplateId>('minimal');
+  // Route tab gets its own template choice, independent of the Photo tab's — both start on
+  // 'minimal' but a user picking "Bold" for their route card shouldn't also flip the (unrelated)
+  // photo template underneath if they switch tabs.
+  const [selectedRouteTemplate, setSelectedRouteTemplate] = useState<StoryTemplateId>('minimal');
 
   const routeCardRef = useRef<View>(null);
   const photoCardRef = useRef<View>(null);
@@ -132,6 +136,9 @@ export function ActivityShareCarousel({
       // The GIF path posts the raw encoded animation as-is — captureRef can only ever grab one
       // frame of an animated image, so there's no way to bake the overlay onto a GIF the same
       // way the static route image gets it (see PostToFeedPrompt's identical reasoning).
+      // The GIF path posts the raw encoded animation as-is regardless of the static template
+      // choice below — see this function's own doc comment for why an overlay can't be baked
+      // onto a GIF the same way.
       if (useGif && animatedGifUri) return animatedGifUri;
       if (!routeCardRef.current) return null;
       return captureRef(routeCardRef, { format: 'png', quality: 1 });
@@ -180,7 +187,7 @@ export function ActivityShareCarousel({
 
       {mode === 'route' ? (
             <View style={{ alignItems: 'center' }}>
-              <PhotoStoryTemplate ref={routeCardRef} photoUri={routePhotoUri} card={card} stats={stats} />
+              <PhotoStoryTemplate ref={routeCardRef} photoUri={routePhotoUri} card={card} stats={stats} template={selectedRouteTemplate} />
 
               {gifOffered ? (
                 <View style={{ marginTop: theme.spacing.md, width: '100%', gap: theme.spacing.xs }}>
@@ -202,6 +209,12 @@ export function ActivityShareCarousel({
                       Preparing the animated version — it'll be ready in a few seconds.
                     </Text>
                   ) : null}
+                </View>
+              ) : null}
+
+              {!useGif ? (
+                <View style={{ marginTop: theme.spacing.md, width: '100%' }}>
+                  <StoryTemplatePicker selected={selectedRouteTemplate} onSelect={setSelectedRouteTemplate} hasRoute={false} />
                 </View>
               ) : null}
             </View>

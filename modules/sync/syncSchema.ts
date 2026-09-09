@@ -19,6 +19,19 @@ export type SyncTableConfig = {
  * see that file's doc comment.
  */
 export const SYNC_TABLES: SyncTableConfig[] = [
+  // user_details/app_settings deliberately come first, ahead of alphabetical/FK-dependency
+  // order (both have zero foreignKeys, so nothing else depends on merge order putting them
+  // here) — user_details.onboarding_done is what RootNavigation's stackReady gate checks before
+  // showing the real app at all (see app/_layout.tsx). On a fresh install signed back into an
+  // account with a lot of history, these two used to sit near the very end of this list, so
+  // literally every other table (finance, habits, a large shopping list, ...) merged first before
+  // the onboarding gate ever cleared — a real device merging hundreds of records one at a time
+  // could take long enough that a user staring at a seemingly-stuck onboarding screen would give
+  // up and redo onboarding (racing a last-write-wins overwrite of their real historical answers)
+  // or reach for Settings' separate Cloud Backup "Restore" as a way to force it, never realizing
+  // the normal sync was already working, just slowly and on a table ordered almost last.
+  { table: 'user_details' },
+  { table: 'app_settings' },
   { table: 'categories' },
   { table: 'finance_accounts' },
   { table: 'finance_categories' },
@@ -104,9 +117,7 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   { table: 'custom_workouts' },
   { table: 'routine_progress' },
   { table: 'routine_day_logs' },
-  { table: 'app_settings' },
   { table: 'module_reminders' },
-  { table: 'user_details' },
   { table: 'body_measurements' },
   { table: 'relationship_people' },
   { table: 'relationship_checkins', foreignKeys: [{ column: 'person_id', referencesTable: 'relationship_people' }] },
