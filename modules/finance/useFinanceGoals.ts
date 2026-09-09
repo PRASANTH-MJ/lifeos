@@ -113,6 +113,14 @@ export function useFinanceGoals() {
 
   const removeGoal = useCallback(
     async (id: string) => {
+      // finance_goal_contributions.goal_id is ON DELETE CASCADE — tombstone those rows before
+      // deleting the goal, or other devices never learn the cascaded contributions were removed.
+      const contributionRows = await db.getAllAsync<{ id: number }>('SELECT id FROM finance_goal_contributions WHERE goal_id = ?', [
+        Number(id),
+      ]);
+      for (const row of contributionRows) {
+        await recordDeleteBeforeRemoving(db, 'finance_goal_contributions', row.id);
+      }
       await recordDeleteBeforeRemoving(db, 'finance_goals', Number(id));
       await db.runAsync('DELETE FROM finance_goals WHERE id = ?', [Number(id)]);
       await refresh();

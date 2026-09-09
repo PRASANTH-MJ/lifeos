@@ -70,7 +70,7 @@ export function TimeField({ label, value, onChange }: Props) {
           {label}
         </Text>
       ) : null}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: theme.spacing.sm }}>
         <TextInput
           value={hourText}
           onChangeText={setHourText}

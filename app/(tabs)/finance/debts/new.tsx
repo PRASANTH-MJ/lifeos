@@ -71,6 +71,11 @@ export default function NewDebtScreen() {
         </Text>
 
         <Button label="Save" onPress={onSave} disabled={!canSave} loading={saving} />
+        {!canSave ? (
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, textAlign: 'center' }}>
+            {!personName.trim() ? 'Enter a name to continue' : 'Enter an amount to continue'}
+          </Text>
+        ) : null}
       </View>
     </ScreenContainer>
   );

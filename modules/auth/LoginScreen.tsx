@@ -1,5 +1,6 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Keyboard, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Button, TextField } from '@/components';
 import { useAppTheme } from '@/theme';
@@ -9,6 +10,7 @@ type Mode = 'signin' | 'signup';
 
 export function LoginScreen() {
   const theme = useAppTheme();
+  const router = useRouter();
   const { signIn, signUp, resetPassword } = useAuth();
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
@@ -17,12 +19,21 @@ export function LoginScreen() {
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = email.trim().length > 3 && password.length >= 6 && !submitting;
-
   const onSubmit = async () => {
     Keyboard.dismiss();
     setError(null);
     setInfo(null);
+    // Deliberately not gated behind a `disabled` prop derived from `email`/`password` length —
+    // Android's OS-level autofill can fill the visible TextInput without ever firing
+    // onChangeText, so a length-based `canSubmit` can stay stuck false (button looks filled in
+    // but taps silently do nothing) even though the field visibly has text. Validating here
+    // instead means every tap actually does something, and a genuinely-empty field still gets a
+    // clear inline error rather than a mysterious dead button.
+    if (submitting) return;
+    if (email.trim().length <= 3 || password.length < 6) {
+      setError('Enter a valid email and a password of at least 6 characters.');
+      return;
+    }
     setSubmitting(true);
     const result = mode === 'signin' ? await signIn(email, password) : await signUp(email, password);
     setSubmitting(false);
@@ -50,11 +61,17 @@ export function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: theme.colors.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: theme.spacing.xl, paddingTop: theme.spacing['4xl'], gap: theme.spacing.lg }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          padding: theme.spacing.xl,
+          paddingTop: theme.spacing['4xl'],
+          gap: theme.spacing.lg,
+          maxWidth: 480,
+          width: '100%',
+          alignSelf: 'center',
+        }}
         keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.lg }}>
           <View
@@ -117,14 +134,22 @@ export function LoginScreen() {
           {submitting ? (
             <ActivityIndicator />
           ) : (
-            <Button label={mode === 'signin' ? 'Sign in' : 'Sign up'} onPress={onSubmit} disabled={!canSubmit} />
+            <Button label={mode === 'signin' ? 'Sign in' : 'Sign up'} onPress={onSubmit} />
           )}
 
           {mode === 'signin' ? (
             <Pressable onPress={onForgotPassword} style={{ alignItems: 'center', paddingVertical: theme.spacing.xs }}>
               <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>Forgot password?</Text>
             </Pressable>
-          ) : null}
+          ) : (
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, textAlign: 'center' }}>
+              By signing up, you agree to our{' '}
+              <Text style={{ color: theme.colors.primary }} onPress={() => router.push('/privacy-policy')}>
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+          )}
         </View>
 
         <View style={{ flex: 1 }} />

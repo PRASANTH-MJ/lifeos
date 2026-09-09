@@ -6,6 +6,7 @@ export {
   HEALTH_GOAL_LABELS,
   INCOME_BRACKET_LABELS,
   FINANCIAL_GOAL_LABELS,
+  healthGoalToContentGoal,
   type HealthGoal,
   type IncomeBracket,
   type FinancialGoal,

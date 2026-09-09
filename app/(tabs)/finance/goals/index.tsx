@@ -2,14 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link, Stack, useRouter } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, EmptyState, LoadingState, ScreenContainer } from '@/components';
-import { formatCurrency, useFinanceGoals } from '@/modules/finance';
+import { Card, EmptyState, IconBadge, LoadingState, ProgressBar, ScreenContainer } from '@/components';
+import { formatCurrency, useAccounts, useFinanceGoals } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 export default function GoalsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { goals, loading } = useFinanceGoals();
+  const { displayCurrency } = useAccounts();
 
   if (loading) {
     return (
@@ -55,34 +56,30 @@ export default function GoalsScreen() {
               return (
                 <Link key={goal.id} href={{ pathname: '/finance/goals/[id]', params: { id: goal.id } }} asChild>
                   <Pressable>
-                    <Card style={{ gap: theme.spacing.sm, opacity: goal.is_closed ? 0.6 : 1 }}>
+                    <Card tier="elevated" style={{ gap: theme.spacing.sm, opacity: goal.is_closed ? 0.6 : 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                        <View
-                          style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: theme.radius.md,
-                            backgroundColor: `${goal.color}22`,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}>
-                          <Ionicons name={goal.icon as never} size={19} color={goal.color} />
-                        </View>
+                        <IconBadge name={goal.icon as never} color={goal.color} />
                         <View style={{ flex: 1 }}>
                           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
                             {goal.name}
                           </Text>
                           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-                            {formatCurrency(goal.current_amount)} of {formatCurrency(goal.target_amount)}
+                            {formatCurrency(goal.current_amount, displayCurrency)} of {formatCurrency(goal.target_amount, displayCurrency)}
                           </Text>
                         </View>
-                        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
-                          {Math.round(progress * 100)}%
-                        </Text>
+                        <View
+                          style={{
+                            paddingHorizontal: theme.spacing.sm,
+                            paddingVertical: 3,
+                            borderRadius: theme.radius.full,
+                            backgroundColor: `${goal.color}22`,
+                          }}>
+                          <Text style={{ color: goal.color, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+                            {Math.round(progress * 100)}%
+                          </Text>
+                        </View>
                       </View>
-                      <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
-                        <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: goal.color }} />
-                      </View>
+                      <ProgressBar progress={progress} color={goal.color} />
                     </Card>
                   </Pressable>
                 </Link>

@@ -1,12 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Image, Linking, Pressable, ScrollView, Share, Text, View } from 'react-native';
+import { Image, Linking, Pressable, Share, Text, View } from 'react-native';
 
-import { Button, Card, EmptyState, LoadingState, ScreenContainer, TextField, TrendChart } from '@/components';
-import { FLOATING_TAB_BAR_CLEARANCE } from '@/components/tabBarMetrics';
+import { Button, Card, EmptyState, ExerciseMuscleDiagram, IconBadge, LoadingState, PrBanner, ScreenContainer, SegmentedControl, TextField, TrendChart, showAlert } from '@/components';
 import { formatDisplayDate, todayKey } from '@/lib/date';
-import { findLibraryExercise, useCustomWorkouts, useExerciseLogs, useRecentExercises } from '@/modules/workout';
+import { bestWeightKg, isNewWeightPr, useCustomWorkouts, useExerciseCatalog, useExerciseLogs, useRecentExercises } from '@/modules/workout';
 import { useAppTheme } from '@/theme';
 
 type DetailTab = 'about' | 'history' | 'progress';
@@ -15,7 +14,8 @@ export default function ExerciseDetailScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { key } = useLocalSearchParams<{ key: string }>();
-  const exercise = findLibraryExercise(key);
+  const { exercises: catalog, loading: catalogLoading } = useExerciseCatalog();
+  const exercise = catalog.find((e) => e.key === key);
   const { logs, loading, addLog, removeLog } = useExerciseLogs(key ?? '');
   const { recordView } = useRecentExercises();
   const { workouts: customWorkouts, addExerciseToWorkout } = useCustomWorkouts();
@@ -30,6 +30,7 @@ export default function ExerciseDetailScreen() {
   const [weight, setWeight] = useState('');
   const [saving, setSaving] = useState(false);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
+  const [justHitPr, setJustHitPr] = useState(false);
 
   useEffect(() => {
     if (restSecondsLeft === null) return;
@@ -42,6 +43,13 @@ export default function ExerciseDetailScreen() {
   }, [restSecondsLeft]);
 
   if (!exercise) {
+    if (catalogLoading) {
+      return (
+        <ScreenContainer>
+          <LoadingState />
+        </ScreenContainer>
+      );
+    }
     return (
       <ScreenContainer>
         <EmptyState icon="alert-circle-outline" title="Exercise not found" />
@@ -52,20 +60,27 @@ export default function ExerciseDetailScreen() {
   const onLogSet = async () => {
     setSaving(true);
     try {
+      const weightKg = weight.trim() ? Number(weight) : null;
+      // Checked against the logs already loaded (pre-insert), so this set isn't compared
+      // against itself once addLog below writes it.
+      const isPr = isNewWeightPr(logs, weightKg);
       await addLog({
         date: todayKey(),
         sets: sets.trim() ? Math.round(Number(sets)) : null,
         reps: reps.trim() ? Math.round(Number(reps)) : null,
-        weightKg: weight.trim() ? Number(weight) : null,
+        weightKg,
       });
       setSets('');
       setReps('');
       setWeight('');
       setRestSecondsLeft(60);
+      setJustHitPr(isPr);
     } finally {
       setSaving(false);
     }
   };
+
+  const personalBestKg = bestWeightKg(logs);
 
   const onOpenYoutube = () => {
     Linking.openURL(`https://www.youtube.com/results?search_query=${encodeURIComponent(`${exercise.name} exercise how to`)}`);
@@ -83,12 +98,12 @@ export default function ExerciseDetailScreen() {
       createNew();
       return;
     }
-    Alert.alert('Add to workout', `Add "${exercise.name}" to which workout?`, [
+    showAlert('Add to workout', `Add "${exercise.name}" to which workout?`, [
       ...customWorkouts.map((w) => ({
         text: w.title,
         onPress: async () => {
           await addExerciseToWorkout(w.key, exercise.name);
-          Alert.alert('Added', `Added ${exercise.name} to ${w.title}.`);
+          showAlert('Added', `Added ${exercise.name} to ${w.title}.`);
         },
       })),
       { text: 'New workout…', onPress: createNew },
@@ -97,7 +112,7 @@ export default function ExerciseDetailScreen() {
   };
 
   const onDeleteLog = (id: number) => {
-    Alert.alert('Remove this entry?', undefined, [
+    showAlert('Remove this entry?', undefined, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => removeLog(id) },
     ]);
@@ -109,11 +124,20 @@ export default function ExerciseDetailScreen() {
     .map((l) => ({ date: l.date, value: l.weight_kg ?? 0 }));
 
   return (
-    <ScreenContainer scroll={false} padded={false}>
+    <ScreenContainer>
       <Stack.Screen options={{ title: exercise.name }} />
-      <View style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.xl }} showsVerticalScrollIndicator={false}>
-          {tab === 'about' ? (
+      <View style={{ gap: theme.spacing.xl }}>
+        <SegmentedControl
+          options={[
+            { value: 'about', label: 'About' },
+            { value: 'history', label: 'History' },
+            { value: 'progress', label: 'Progress' },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+
+        {tab === 'about' ? (
             <View style={{ gap: theme.spacing.lg }}>
               {exercise.imageUrl ? (
                 <Image source={{ uri: exercise.imageUrl }} style={{ width: '100%', height: 220, borderRadius: theme.radius.lg }} resizeMode="cover" />
@@ -130,6 +154,7 @@ export default function ExerciseDetailScreen() {
                 <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
                   Target muscles
                 </Text>
+                <ExerciseMuscleDiagram muscles={exercise.muscles} musclesSecondary={exercise.musclesSecondary} />
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
                   {exercise.muscles.map((m) => (
                     <View key={m} style={{ paddingHorizontal: theme.spacing.md, paddingVertical: 6, borderRadius: theme.radius.full, backgroundColor: theme.colors.moduleTasksMuted }}>
@@ -162,10 +187,19 @@ export default function ExerciseDetailScreen() {
                 </Card>
               ) : null}
 
+              {justHitPr ? <PrBanner label={`${exercise.name} · ${weight || personalBestKg} kg`} /> : null}
+
               <Card style={{ gap: theme.spacing.md }}>
-                <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-                  Log a set
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+                    Log a set
+                  </Text>
+                  {personalBestKg != null ? (
+                    <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                      Personal Best: {personalBestKg} kg
+                    </Text>
+                  ) : null}
+                </View>
                 <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
                   <View style={{ flex: 1 }}>
                     <TextField label="Sets" placeholder="3" value={sets} onChangeText={setSets} keyboardType="number-pad" />
@@ -177,7 +211,7 @@ export default function ExerciseDetailScreen() {
                     <TextField label="Weight kg" placeholder="20" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" />
                   </View>
                 </View>
-                <Button label="Log set" onPress={onLogSet} loading={saving} disabled={!sets.trim() && !reps.trim() && !weight.trim()} />
+                <Button label="Log set" onPress={onLogSet} loading={saving} disabled={!sets.trim() && !reps.trim() && !weight.trim()} glow />
               </Card>
 
               {restSecondsLeft !== null ? (
@@ -215,6 +249,7 @@ export default function ExerciseDetailScreen() {
                 {logs.map((log) => (
                   <Pressable key={log.id} onLongPress={() => onDeleteLog(log.id)}>
                     <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                      <IconBadge name="barbell" color={theme.colors.moduleTasks} size="sm" />
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
                           {[log.sets ? `${log.sets} sets` : null, log.reps ? `${log.reps} reps` : null, log.weight_kg ? `${log.weight_kg} kg` : null]
@@ -230,46 +265,15 @@ export default function ExerciseDetailScreen() {
             )
           ) : null}
 
-          {tab === 'progress' ? (
-            progressData.length < 2 ? (
-              <EmptyState icon="stats-chart-outline" title="Not enough data yet" subtitle="Log weight for a few sets to see your progress trend." />
-            ) : (
-              <Card>
-                <TrendChart label="Weight over time (kg)" data={progressData} color={theme.colors.moduleTasks} />
-              </Card>
-            )
-          ) : null}
-        </ScrollView>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
-            backgroundColor: theme.colors.surface,
-            marginBottom: FLOATING_TAB_BAR_CLEARANCE,
-          }}>
-          {(
-            [
-              { key: 'about', label: 'About', icon: 'information-circle-outline' },
-              { key: 'history', label: 'History', icon: 'time-outline' },
-              { key: 'progress', label: 'Progress', icon: 'stats-chart-outline' },
-            ] as const
-          ).map((entry) => {
-            const active = tab === entry.key;
-            return (
-              <Pressable
-                key={entry.key}
-                onPress={() => setTab(entry.key)}
-                style={{ flex: 1, alignItems: 'center', gap: 2, paddingVertical: theme.spacing.sm }}>
-                <Ionicons name={entry.icon} size={20} color={active ? theme.colors.moduleTasks : theme.colors.textTertiary} />
-                <Text style={{ color: active ? theme.colors.moduleTasks : theme.colors.textTertiary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>
-                  {entry.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {tab === 'progress' ? (
+          progressData.length < 2 ? (
+            <EmptyState icon="stats-chart-outline" title="Not enough data yet" subtitle="Log weight for a few sets to see your progress trend." />
+          ) : (
+            <Card>
+              <TrendChart label="Weight over time (kg)" data={progressData} color={theme.colors.moduleTasks} />
+            </Card>
+          )
+        ) : null}
       </View>
     </ScreenContainer>
   );

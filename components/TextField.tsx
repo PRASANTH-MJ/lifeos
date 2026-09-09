@@ -28,6 +28,7 @@ export function TextField({ label, error, style, isPassword, secureTextEntry, ..
       ) : null}
       <View style={{ justifyContent: 'center' }}>
         <TextInput
+          accessibilityLabel={label ?? inputProps.placeholder}
           placeholderTextColor={theme.colors.textTertiary}
           secureTextEntry={isPassword ? !visible : secureTextEntry}
           style={[
@@ -50,6 +51,8 @@ export function TextField({ label, error, style, isPassword, secureTextEntry, ..
           <Pressable
             onPress={() => setVisible((v) => !v)}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={visible ? 'Hide password' : 'Show password'}
             style={{ position: 'absolute', right: theme.spacing.md }}>
             <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color={theme.colors.textTertiary} />
           </Pressable>

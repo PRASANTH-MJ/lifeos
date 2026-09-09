@@ -2,10 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Card, CompletionPulse, RowActionsMenu } from '@/components';
+import { Card, CompletionPulse, IconBadge, RowActionsMenu, StreakBadge } from '@/components';
 import type { Category } from '@/modules/categories';
 import { useAppTheme } from '@/theme';
-import { StreakBadge } from './StreakBadge';
 import { isDueToday } from './streak';
 import { parseTargetDays, type Habit, type HabitLog } from './types';
 
@@ -46,22 +45,17 @@ export function HabitListItem({
   const completedToday = todayLog?.status === 'done';
 
   return (
-    <Card style={styles.row}>
+    <Card style={[styles.row, completedToday ? { opacity: 0.7 } : null]}>
       <Link href={{ pathname: '/habits/[id]', params: { id: String(habit.id) } }} asChild>
         <Pressable style={styles.linkRow}>
-          <View
-            style={[
-              styles.icon,
-              { backgroundColor: theme.colors.moduleHabitsMuted, borderRadius: theme.radius.md },
-            ]}>
-            <Ionicons name={habit.icon as never} size={20} color={theme.colors.moduleHabits} />
-          </View>
+          <IconBadge name={habit.icon as never} color={theme.colors.moduleHabits} size="md" />
           <View style={styles.info}>
             <Text
               style={{
                 color: theme.colors.textPrimary,
                 fontSize: theme.typography.size.base,
                 fontWeight: theme.typography.weight.semibold,
+                textDecorationLine: completedToday ? 'line-through' : 'none',
               }}
               numberOfLines={1}>
               {habit.name}
@@ -155,12 +149,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  icon: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   info: {
     flex: 1,

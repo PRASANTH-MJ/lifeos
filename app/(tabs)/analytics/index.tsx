@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useMemo, useState, type ReactNode } from 'react';
+import { ScrollView, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { Card, Chip, DonutChart, LineChart, Legend, LoadingState, OverlayChart, ScreenContainer, Sparkline, StatCard, TrendChart } from '@/components';
+import { Card, Chip, DonutChart, IconBadge, LineChart, Legend, LoadingState, OverlayChart, ScreenContainer, Sparkline, StatCard, TrendChart } from '@/components';
 import {
   ActionableInsights,
   MetricGrid,
@@ -13,7 +14,7 @@ import {
   type MetricDomain,
   type MetricTrend,
 } from '@/modules/analytics';
-import { formatCurrency, formatCurrencyCompact, useFinanceBudgets, useFinanceDailySpend, useFinanceSummary, useFinanceWeekSpend } from '@/modules/finance';
+import { formatCurrency, formatCurrencyCompact, useAccounts, useFinanceBudgets, useFinanceDailySpend, useFinanceSummary, useFinanceWeekSpend } from '@/modules/finance';
 import { todayKey } from '@/lib/date';
 import { useAppTheme } from '@/theme';
 
@@ -53,6 +54,7 @@ export default function AnalyticsScreen() {
   const { weekSpend } = useFinanceWeekSpend();
   const { series: spendSeries, total: spendTotal } = useFinanceDailySpend(days);
   const { budgets } = useFinanceBudgets();
+  const { displayCurrency } = useAccounts();
 
   const insights = useMemo(
     () => (data ? generateActionableInsights(data, previousStats, rangeLabel, spendTotal) : []),
@@ -126,15 +128,15 @@ export default function AnalyticsScreen() {
         label: 'Finance',
         color: theme.colors.primary,
         metrics: [
-          { label: 'Spend', value: formatCurrencyCompact(spendTotal), current: spendTotal, previous: previousStats?.spend ?? null, invert: true },
+          { label: 'Spend', value: formatCurrencyCompact(spendTotal, displayCurrency), current: spendTotal, previous: previousStats?.spend ?? null, invert: true },
         ],
       },
     ];
-  }, [data, previousStats, spendTotal, theme]);
+  }, [data, previousStats, spendTotal, displayCurrency, theme]);
 
   if (loading || !data) {
     return (
-      <ScreenContainer>
+      <ScreenContainer edges={['top', 'bottom']}>
         <LoadingState />
       </ScreenContainer>
     );
@@ -145,7 +147,7 @@ export default function AnalyticsScreen() {
   const maxMealCalories = Math.max(1, ...data.mealBreakdown.map((m) => m.calories));
 
   return (
-    <ScreenContainer>
+    <ScreenContainer edges={['top', 'bottom']}>
       <View style={{ gap: theme.spacing.xl }}>
         <View>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>
@@ -169,10 +171,8 @@ export default function AnalyticsScreen() {
         ) : null}
 
         {trends ? (
-          <Card style={{ gap: theme.spacing.lg }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Trends
-            </Text>
+          <Card tier="panel" style={{ gap: theme.spacing.lg }}>
+            <ChartHeader icon="trending-up" color={theme.colors.primary} label="Trends" />
             {TREND_METRICS.map((metric) => (
               <TrendRow key={metric.key} label={metric.label} color={metric.color} invert={metric.invert} trend={trends[metric.key]} />
             ))}
@@ -185,9 +185,7 @@ export default function AnalyticsScreen() {
 
         {data.tasksSeries.length >= 5 ? (
           <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Mood vs. tasks completed
-            </Text>
+            <ChartHeader icon="analytics" color={theme.colors.moduleTasks} label="Mood vs. tasks completed" />
             <OverlayChart
               barSeries={data.tasksSeries}
               lineSeries={data.moodSeries}
@@ -200,31 +198,27 @@ export default function AnalyticsScreen() {
         ) : null}
 
         {budgets && (budgets.weeklyBudget != null || budgets.monthlyBudget != null) ? (
-          <Card style={{ gap: theme.spacing.md }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Finance pacing
-            </Text>
+          <Card tier="panel" style={{ gap: theme.spacing.md }}>
+            <ChartHeader icon="wallet" color={theme.colors.primary} label="Finance pacing" />
             {budgets.weeklyBudget != null ? (
-              <FinanceSituationRow label="This week" spend={weekSpend} budget={budgets.weeklyBudget} />
+              <FinanceSituationRow label="This week" spend={weekSpend} budget={budgets.weeklyBudget} currency={displayCurrency} />
             ) : null}
             {budgets.monthlyBudget != null ? (
-              <FinanceSituationRow label="This month" spend={currentMonthSummary?.expense ?? 0} budget={budgets.monthlyBudget} />
+              <FinanceSituationRow label="This month" spend={currentMonthSummary?.expense ?? 0} budget={budgets.monthlyBudget} currency={displayCurrency} />
             ) : null}
           </Card>
         ) : null}
 
-        <Card>
+        <ChartCard icon="flame" color={theme.colors.moduleHabits}>
           <TrendChart label={`Habit completions / day (${rangeLabel})`} data={data.habitsSeries} color={theme.colors.moduleHabits} />
-        </Card>
-        <Card>
+        </ChartCard>
+        <ChartCard icon="checkbox" color={theme.colors.moduleTasks}>
           <TrendChart label={`Tasks completed / day (${rangeLabel})`} data={data.tasksSeries} color={theme.colors.moduleTasks} />
-        </Card>
+        </ChartCard>
 
         {habitTotal > 0 ? (
           <Card style={{ alignItems: 'center', gap: theme.spacing.md }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold, alignSelf: 'flex-start' }}>
-              Habit check-ins ({rangeLabel})
-            </Text>
+            <ChartHeader icon="pie-chart" color={theme.colors.moduleHabits} label={`Habit check-ins (${rangeLabel})`} style={{ alignSelf: 'flex-start' }} />
             <DonutChart
               segments={[
                 { value: data.habitStatusBreakdown.done, color: theme.colors.success },
@@ -242,15 +236,13 @@ export default function AnalyticsScreen() {
           </Card>
         ) : null}
 
-        <Card>
+        <ChartCard icon="happy" color={theme.colors.moduleJournal}>
           <LineChart label="Mood tracker (1–5)" data={data.moodSeries} color={theme.colors.moduleJournal} formatValue={(v) => v.toFixed(1)} />
-        </Card>
+        </ChartCard>
 
         {moodTotal > 0 ? (
           <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Mood breakdown ({rangeLabel})
-            </Text>
+            <ChartHeader icon="happy-outline" color={theme.colors.moduleJournal} label={`Mood breakdown (${rangeLabel})`} />
             {data.moodBreakdown.map((mood) => (
               <View key={mood.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{mood.label}</Text>
@@ -262,19 +254,17 @@ export default function AnalyticsScreen() {
           </Card>
         ) : null}
 
-        <Card>
+        <ChartCard icon="leaf" color={theme.colors.moduleJournal}>
           <TrendChart label="Meditation + breathing minutes / day" data={data.wellnessSeries} color={theme.colors.moduleJournal} />
-        </Card>
+        </ChartCard>
 
-        <Card>
-          <TrendChart label="Spending / day" data={spendSeries} color={theme.colors.danger} formatValue={(v) => formatCurrency(v)} />
-        </Card>
+        <ChartCard icon="cash" color={theme.colors.danger}>
+          <TrendChart label="Spending / day" data={spendSeries} color={theme.colors.danger} formatValue={(v) => formatCurrency(v, displayCurrency)} />
+        </ChartCard>
 
         {data.mealBreakdown.length > 0 ? (
           <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Calories by meal ({rangeLabel})
-            </Text>
+            <ChartHeader icon="restaurant" color={theme.colors.moduleTasks} label={`Calories by meal (${rangeLabel})`} />
             {data.mealBreakdown.map((meal) => (
               <View key={meal.meal} style={{ gap: 4 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -293,14 +283,48 @@ export default function AnalyticsScreen() {
           </Card>
         ) : null}
 
-        <Card>
+        <ChartCard icon="flame-outline" color={theme.colors.primary}>
           <TrendChart label="Calories / day" data={data.caloriesSeries} color={theme.colors.primary} />
-        </Card>
-        <Card>
+        </ChartCard>
+        <ChartCard icon="nutrition" color={theme.colors.moduleTasks}>
           <TrendChart label="Protein (g) / day" data={data.proteinSeries} color={theme.colors.moduleTasks} />
-        </Card>
+        </ChartCard>
       </View>
     </ScreenContainer>
+  );
+}
+
+function ChartHeader({
+  icon,
+  color,
+  label,
+  style,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  label: string;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const theme = useAppTheme();
+  return (
+    <View style={[{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }, style]}>
+      <IconBadge name={icon} color={color} size="sm" />
+      <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/** Wraps an existing chart component (TrendChart/LineChart/etc.) with a leading IconBadge, without
+ * touching the chart itself — the chart keeps rendering its own internal label/value row. */
+function ChartCard({ icon, color, children }: { icon: keyof typeof Ionicons.glyphMap; color: string; children: ReactNode }) {
+  const theme = useAppTheme();
+  return (
+    <Card style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.md }}>
+      <IconBadge name={icon} color={color} size="sm" />
+      <View style={{ flex: 1 }}>{children}</View>
+    </Card>
   );
 }
 
@@ -326,7 +350,7 @@ function TrendRow({ label, color, invert, trend }: { label: string; color: strin
   );
 }
 
-function FinanceSituationRow({ label, spend, budget }: { label: string; spend: number; budget: number }) {
+function FinanceSituationRow({ label, spend, budget, currency }: { label: string; spend: number; budget: number; currency: string }) {
   const theme = useAppTheme();
   const over = spend > budget;
   const progress = Math.min(spend / budget, 1);
@@ -335,7 +359,7 @@ function FinanceSituationRow({ label, spend, budget }: { label: string; spend: n
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{label}</Text>
         <Text style={{ color: over ? theme.colors.danger : theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
-          {formatCurrency(spend)} / {formatCurrency(budget)}
+          {formatCurrency(spend, currency)} / {formatCurrency(budget, currency)}
         </Text>
       </View>
       <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.border, overflow: 'hidden' }}>

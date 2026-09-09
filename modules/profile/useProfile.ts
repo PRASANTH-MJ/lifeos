@@ -13,8 +13,10 @@ type ProfileRow = {
   avatar_uri: string | null;
   pin_hash: string | null;
   pin_enabled: number;
+  biometric_enabled: number;
   firebase_uid: string | null;
   premium: number;
+  gender: string | null;
 };
 
 function toProfile(row: ProfileRow | null): UserProfile {
@@ -23,8 +25,10 @@ function toProfile(row: ProfileRow | null): UserProfile {
     avatarUri: row?.avatar_uri ?? null,
     pinEnabled: Boolean(row?.pin_enabled),
     pinHash: row?.pin_hash ?? null,
+    biometricEnabled: Boolean(row?.biometric_enabled),
     firebaseUid: row?.firebase_uid ?? null,
     premium: Boolean(row?.premium),
+    gender: (row?.gender as UserProfile['gender']) ?? null,
   };
 }
 
@@ -41,7 +45,7 @@ export function useProfile() {
   const refresh = useCallback(async () => {
     setLoading(true);
     const row = await db.getFirstAsync<ProfileRow>(
-      'SELECT name, avatar_uri, pin_hash, pin_enabled, firebase_uid, premium FROM user_profile WHERE id = 1'
+      'SELECT name, avatar_uri, pin_hash, pin_enabled, biometric_enabled, firebase_uid, premium, gender FROM user_profile WHERE id = 1'
     );
     setProfile(toProfile(row));
     setLoading(false);
@@ -100,9 +104,19 @@ export function useProfile() {
   );
 
   const disablePin = useCallback(async () => {
-    await db.runAsync('UPDATE user_profile SET pin_enabled = 0, pin_hash = NULL, updated_at = ? WHERE id = 1', [new Date().toISOString()]);
+    await db.runAsync('UPDATE user_profile SET pin_enabled = 0, pin_hash = NULL, biometric_enabled = 0, updated_at = ? WHERE id = 1', [
+      new Date().toISOString(),
+    ]);
     await refresh();
   }, [db, refresh]);
+
+  const setBiometricEnabled = useCallback(
+    async (enabled: boolean) => {
+      await db.runAsync('UPDATE user_profile SET biometric_enabled = ?, updated_at = ? WHERE id = 1', [enabled ? 1 : 0, new Date().toISOString()]);
+      await refresh();
+    },
+    [db, refresh]
+  );
 
   const verifyPin = useCallback(
     async (pin: string): Promise<boolean> => {
@@ -128,5 +142,13 @@ export function useProfile() {
     [db, refresh]
   );
 
-  return { profile, loading, setName, setAvatarUri, setPin, disablePin, verifyPin, syncAccount, refresh };
+  const setGender = useCallback(
+    async (gender: UserProfile['gender']) => {
+      await db.runAsync('UPDATE user_profile SET gender = ?, updated_at = ? WHERE id = 1', [gender, new Date().toISOString()]);
+      await refresh();
+    },
+    [db, refresh]
+  );
+
+  return { profile, loading, setName, setAvatarUri, setGender, setPin, disablePin, setBiometricEnabled, verifyPin, syncAccount, refresh };
 }

@@ -6,6 +6,8 @@ export default function MeditationLayout() {
       <Stack.Screen name="index" options={{ title: 'Meditation' }} />
       <Stack.Screen name="[sessionKey]" options={{ title: 'Session', headerBackTitle: 'Meditation' }} />
       <Stack.Screen name="timer" options={{ title: 'Timer', presentation: 'modal' }} />
+      <Stack.Screen name="chakras" options={{ title: 'Chakra Meditation', headerBackTitle: 'Meditation' }} />
+      <Stack.Screen name="chakra/[chakraKey]" options={{ title: 'Chakra', headerBackTitle: 'Chakras' }} />
     </Stack>
   );
 }

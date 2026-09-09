@@ -128,6 +128,12 @@ export function useFinanceDebts() {
 
   const removeDebt = useCallback(
     async (id: string) => {
+      // finance_debt_payments.debt_id is ON DELETE CASCADE — tombstone those rows before deleting
+      // the debt, or other devices never learn the cascaded payments were removed.
+      const paymentRows = await db.getAllAsync<{ id: number }>('SELECT id FROM finance_debt_payments WHERE debt_id = ?', [Number(id)]);
+      for (const row of paymentRows) {
+        await recordDeleteBeforeRemoving(db, 'finance_debt_payments', row.id);
+      }
       await recordDeleteBeforeRemoving(db, 'finance_debts', Number(id));
       await db.runAsync('DELETE FROM finance_debts WHERE id = ?', [Number(id)]);
       await refresh();

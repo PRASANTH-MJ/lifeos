@@ -1,8 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { Button, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, LoadingState, ScreenContainer, TextField, showAlert } from '@/components';
 import { formatDisplayDateTime } from '@/lib/date';
 import { MoodPicker, useJournalDetail } from '@/modules/journal';
 import { useAppTheme } from '@/theme';
@@ -29,7 +30,7 @@ export default function JournalDetailScreen() {
   }
 
   const onDelete = () => {
-    Alert.alert('Delete entry?', 'This cannot be undone.', [
+    showAlert('Delete entry?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -50,9 +51,22 @@ export default function JournalDetailScreen() {
         </Text>
 
         {entry.prompt ? (
-          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.base, fontStyle: 'italic' }}>
-            {entry.prompt}
-          </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'flex-start',
+              gap: theme.spacing.sm,
+              backgroundColor: theme.colors.background,
+              borderRadius: theme.radius.card,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              padding: theme.spacing.md,
+            }}>
+            <Ionicons name="sparkles-outline" size={16} color={theme.colors.textTertiary} style={{ marginTop: 2 }} />
+            <Text style={{ flex: 1, color: theme.colors.textSecondary, fontSize: theme.typography.size.base, fontStyle: 'italic' }}>
+              {entry.prompt}
+            </Text>
+          </View>
         ) : null}
 
         <MoodPicker value={entry.mood} onChange={(mood) => updateEntry({ mood })} />

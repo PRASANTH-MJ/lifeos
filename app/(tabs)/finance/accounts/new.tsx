@@ -51,7 +51,7 @@ export default function NewAccountScreen() {
   return (
     <ScreenContainer>
       <View style={{ gap: theme.spacing.xl }}>
-        <TextField label="Account name" placeholder="e.g. SBI Bank" value={name} onChangeText={setName} autoFocus />
+        <TextField label="Bank name" placeholder="e.g. SBI Bank" value={name} onChangeText={setName} autoFocus />
 
         <View style={{ gap: theme.spacing.sm }}>
           <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
@@ -78,6 +78,11 @@ export default function NewAccountScreen() {
         <TextField label="Starting balance (optional)" placeholder="0.00" value={startingBalance} onChangeText={setStartingBalance} keyboardType="decimal-pad" />
 
         <Button label="Save account" onPress={onSave} disabled={!canSave} loading={saving} />
+        {!canSave ? (
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, textAlign: 'center' }}>
+            Enter a bank name to continue
+          </Text>
+        ) : null}
       </View>
     </ScreenContainer>
   );

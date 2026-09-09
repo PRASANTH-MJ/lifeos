@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { glowStrokeLayers, nextGradientId } from './charts/glow';
 import { smoothPath } from './charts/smoothPath';
@@ -82,9 +82,6 @@ export function OverlayChart({ barSeries, lineSeries, barColor, lineColor, barLa
             />
           ))}
           <Path d={linePath} fill="none" stroke={lineColor} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-          {lineCoords.map((c, index) => (
-            <Circle key={index} cx={c.x} cy={c.y} r={3} fill={lineColor} />
-          ))}
         </Svg>
       </View>
       <View style={{ flexDirection: 'row', gap: theme.spacing.lg, justifyContent: 'center' }}>

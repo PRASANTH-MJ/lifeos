@@ -1,10 +1,10 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Crypto from 'expo-crypto';
 
 import { useLocalTable } from '@/db';
-import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
+import { onLocalWrite, pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import { todayKey } from '@/lib/date';
 import { syncHabitNotifications } from './scheduleHabitNotifications';
 import { computePeriodProgress, computeStreak } from './streak';
@@ -33,8 +33,13 @@ export type CreateHabitInput = {
   targetDays?: number[];
   periodTargetCount?: number | null;
   periodLengthDays?: number | null;
-  reminderTime?: string | null;
+  /** One or more "HH:MM" (24-hour) times — a daily reminder/alarm fires at each. Empty/undefined
+   * means no reminder. */
+  reminderTimes?: string[];
   alarmEnabled?: boolean;
+  /** Free-text grouping label, e.g. "Morning routine" — see types.ts's `routine_group` doc
+   * comment. Undefined/null means ungrouped. */
+  routineGroup?: string | null;
 };
 
 export type LogValues = {
@@ -64,6 +69,16 @@ export function useHabits() {
       refreshLogs();
     }, [refreshLogs])
   );
+
+  // Same reasoning as db/useLocalTable.ts's onLocalWrite subscription — this hook's own
+  // `logsByHabit` state (unlike `table.rows`, which useLocalTable already covers) is hand-rolled,
+  // so it needs its own subscription to notice a habit_logs write made through a different
+  // useHabits() instance (e.g. usePublicProfileStatsSync's, mounted once at the root layout).
+  useEffect(() => {
+    return onLocalWrite((table) => {
+      if (table === 'habit_logs') refreshLogs();
+    });
+  }, [refreshLogs]);
 
   const upsertLog = useCallback(
     async (habitId: number, values: LogValues) => {
@@ -124,6 +139,7 @@ export function useHabits() {
 
   const createHabit = useCallback(
     async (values: CreateHabitInput) => {
+      const reminderTime = values.reminderTimes && values.reminderTimes.length > 0 ? JSON.stringify(values.reminderTimes) : null;
       const habitId = await table.insert({
         name: values.name,
         icon: values.icon,
@@ -139,17 +155,18 @@ export function useHabits() {
         target_days: JSON.stringify(values.targetDays ?? []),
         period_target_count: values.periodTargetCount ?? null,
         period_length_days: values.periodLengthDays ?? null,
-        reminder_time: values.reminderTime ?? null,
+        reminder_time: reminderTime,
         alarm_enabled: values.alarmEnabled ? 1 : 0,
         sort_order: table.rows.length ? Math.max(...table.rows.map((h) => h.sort_order)) + 1 : 0,
         created_at: new Date().toISOString(),
         archived: 0,
+        routine_group: values.routineGroup?.trim() || null,
       } as Partial<Habit>);
 
       syncHabitNotifications({
         id: habitId,
         name: values.name,
-        reminder_time: values.reminderTime ?? null,
+        reminder_time: reminderTime,
         alarm_enabled: values.alarmEnabled ? 1 : 0,
       }).catch(() => {});
 
@@ -198,7 +215,18 @@ export function useHabits() {
   );
 
   const archiveHabit = useCallback((id: number) => table.update(id, { archived: 1 } as Partial<Habit>), [table]);
-  const removeHabit = useCallback((id: number) => table.remove(id), [table]);
+  const removeHabit = useCallback(
+    async (id: number) => {
+      // habit_logs.habit_id is ON DELETE CASCADE — tombstone those rows before table.remove()
+      // deletes the habit, or other devices never learn the cascaded logs were removed too.
+      const logRows = await db.getAllAsync<{ id: number }>('SELECT id FROM habit_logs WHERE habit_id = ?', [id]);
+      for (const row of logRows) {
+        await recordDeleteBeforeRemoving(db, 'habit_logs', row.id);
+      }
+      await table.remove(id);
+    },
+    [db, table]
+  );
 
   return {
     habits: habitsWithStats,

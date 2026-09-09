@@ -3,7 +3,7 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, ScreenContainer } from '@/components';
+import { Card, IconBadge, ScreenContainer } from '@/components';
 import { formatDisplayDate, todayKey } from '@/lib/date';
 import { CalendarMonthGrid, useCalendarDay, useMonthMarkers } from '@/modules/calendar';
 import { useAppTheme } from '@/theme';
@@ -72,7 +72,7 @@ export default function CalendarScreen() {
                 <Link key={`event-${event.id}`} href={{ pathname: '/calendar/[id]', params: { id: String(event.id) } }} asChild>
                   <Pressable>
                     <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                      <Ionicons name="calendar" size={18} color={theme.colors.primary} />
+                      <IconBadge name="calendar" size="md" />
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
                           {event.title}

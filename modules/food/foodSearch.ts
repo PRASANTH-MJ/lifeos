@@ -100,15 +100,4 @@ export async function searchFoodProducts(query: string): Promise<FoodSearchResul
   return [...indianResults, ...offResults];
 }
 
-/** Looks up a single product by barcode (e.g. from a camera scan) — barcodes only apply to
- * packaged products, so this only ever queries Open Food Facts. */
-export async function lookupFoodBarcode(barcode: string): Promise<FoodSearchResult | null> {
-  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${FIELDS}`;
-  const response = await fetch(url);
-  if (!response.ok) return null;
-  const data = await response.json();
-  if (data.status === 0 || !data.product) return null;
-  return toOffResult(data.product);
-}
-
 export const FOOD_DATA_LICENSE_NOTICE = 'Indian dish values are standard reference estimates · Packaged food data from Open Food Facts (ODbL)';

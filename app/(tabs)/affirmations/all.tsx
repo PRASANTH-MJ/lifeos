@@ -1,15 +1,68 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
-import { FlatList, ImageBackground, Pressable, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, Text, TextInput, View } from 'react-native';
 
-import { Card, EmptyState, ScreenContainer } from '@/components';
-import { backgroundFor, useAffirmations } from '@/modules/affirmations';
+import { Button, Card, EmptyState, IconBadge, RowActionsMenu, ScreenContainer, TextField } from '@/components';
+import { useAffirmations } from '@/modules/affirmations';
+import type { Affirmation } from '@/modules/affirmations';
 import { useAppTheme } from '@/theme';
+
+function EditAffirmationSheet({
+  affirmation,
+  onClose,
+  onSave,
+}: {
+  affirmation: Affirmation | null;
+  onClose: () => void;
+  onSave: (id: number, text: string) => Promise<void>;
+}) {
+  const theme = useAppTheme();
+  const [text, setText] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (affirmation) setText(affirmation.text);
+  }, [affirmation]);
+
+  return (
+    <Modal visible={!!affirmation} animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay }} onPress={onClose} />
+        <View
+          style={{
+            backgroundColor: theme.colors.surface,
+            borderTopLeftRadius: theme.radius.xl,
+            borderTopRightRadius: theme.radius.xl,
+            padding: theme.spacing.xl,
+            gap: theme.spacing.md,
+          }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
+            Edit affirmation
+          </Text>
+          <TextField value={text} onChangeText={setText} multiline numberOfLines={3} autoFocus />
+          <Button
+            label="Save changes"
+            disabled={!text.trim()}
+            loading={saving}
+            onPress={async () => {
+              if (!affirmation) return;
+              setSaving(true);
+              await onSave(affirmation.id, text.trim());
+              setSaving(false);
+              onClose();
+            }}
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
 
 export default function AllAffirmationsScreen() {
   const theme = useAppTheme();
-  const { affirmations, toggleFavorite } = useAffirmations();
+  const { affirmations, toggleFavorite, editCustom, removeCustom } = useAffirmations();
   const [query, setQuery] = useState('');
+  const [editingAffirmation, setEditingAffirmation] = useState<Affirmation | null>(null);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -25,8 +78,8 @@ export default function AllAffirmationsScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             gap: theme.spacing.sm,
-            backgroundColor: theme.colors.surface,
-            borderRadius: theme.radius.md,
+            backgroundColor: theme.colors.background,
+            borderRadius: theme.radius.card,
             borderWidth: 1,
             borderColor: theme.colors.border,
             paddingHorizontal: theme.spacing.md,
@@ -51,11 +104,7 @@ export default function AllAffirmationsScreen() {
             contentContainerStyle={{ gap: theme.spacing.sm, paddingBottom: theme.spacing.xl }}
             renderItem={({ item: affirmation }) => (
               <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, padding: theme.spacing.sm }}>
-                <ImageBackground
-                  source={backgroundFor(affirmation.id, affirmation.text)}
-                  imageStyle={{ borderRadius: theme.radius.sm }}
-                  style={{ width: 36, height: 36, borderRadius: theme.radius.sm, overflow: 'hidden' }}
-                />
+                <IconBadge name="sparkles" color={theme.colors.moduleJournal} size="sm" shape="square" />
                 <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.sm }}>{affirmation.text}</Text>
                 <Pressable onPress={() => toggleFavorite(affirmation)} hitSlop={8}>
                   <Ionicons
@@ -64,11 +113,21 @@ export default function AllAffirmationsScreen() {
                     color={affirmation.is_favorite ? theme.colors.danger : theme.colors.textTertiary}
                   />
                 </Pressable>
+                {/* Only user-created affirmations can be edited/deleted — the built-in set has no
+                    re-seed path if one were accidentally removed. */}
+                {affirmation.is_custom ? (
+                  <RowActionsMenu
+                    itemLabel="affirmation"
+                    onEdit={() => setEditingAffirmation(affirmation)}
+                    onDelete={() => removeCustom(affirmation.id)}
+                  />
+                ) : null}
               </Card>
             )}
           />
         )}
       </View>
+      <EditAffirmationSheet affirmation={editingAffirmation} onClose={() => setEditingAffirmation(null)} onSave={editCustom} />
     </ScreenContainer>
   );
 }

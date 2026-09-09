@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 
+import { GlowSurface } from './GlowSurface';
 import { useAppTheme } from '@/theme';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'gradient';
@@ -12,9 +13,21 @@ type Props = {
   variant?: Variant;
   loading?: boolean;
   disabled?: boolean;
+  /** Wraps the button in an ambient GlowSurface halo (same technique Card's `glow` prop uses) —
+   * opt-in, for the one or two primary CTAs per screen that should read as the main action
+   * (matches the Cyber-Sanctuary pattern's neon-glow treatment on hero buttons), not every
+   * button everywhere. */
+  glow?: boolean;
+  /** Forces the label onto a single line and shrinks its font to fit the available width instead
+   * of wrapping — opt-in, for buttons in a fixed-width row (e.g. an evenly-split multi-button
+   * row) where a wrapped second line would grow that button taller than its neighbors. Any
+   * button with a longish label can hit this at large OS/accessibility text-size settings, not
+   * just the club action rows this was first added for, so it's a general Button prop rather
+   * than a one-off fix. */
+  shrinkToFit?: boolean;
 };
 
-export function Button({ label, onPress, variant = 'primary', loading, disabled }: Props) {
+export function Button({ label, onPress, variant = 'primary', loading, disabled, glow, shrinkToFit }: Props) {
   const theme = useAppTheme();
   const isDisabled = disabled || loading;
   const isGradient = variant === 'gradient';
@@ -35,10 +48,13 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
 
   const elevated = variant === 'primary' || variant === 'danger' || isGradient;
 
-  return (
+  const button = (
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={({ pressed }) => [
         styles.base,
         elevated && !isDisabled ? theme.shadow.sm : null,
@@ -64,6 +80,9 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
         <ActivityIndicator color={textColors[variant]} />
       ) : (
         <Text
+          numberOfLines={shrinkToFit ? 1 : undefined}
+          adjustsFontSizeToFit={shrinkToFit}
+          minimumFontScale={shrinkToFit ? 0.8 : undefined}
           style={{
             color: textColors[variant],
             fontSize: theme.typography.size.base,
@@ -74,6 +93,8 @@ export function Button({ label, onPress, variant = 'primary', loading, disabled 
       )}
     </Pressable>
   );
+
+  return glow && !isDisabled ? <GlowSurface borderRadius={theme.radius.md}>{button}</GlowSurface> : button;
 }
 
 const styles = StyleSheet.create({

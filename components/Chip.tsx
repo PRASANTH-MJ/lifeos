@@ -42,7 +42,12 @@ export function Chip({ label, selected = true, color, mutedColor, onPress }: Pro
   }
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [...containerStyle, { opacity: pressed ? 0.65 : 1 }]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+      style={({ pressed }) => [...containerStyle, { opacity: pressed ? 0.65 : 1 }]}>
       {content}
     </Pressable>
   );

@@ -1,13 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link, useRouter } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
+import { Link, Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { Card, EmptyState, LoadingState, ScreenContainer } from '@/components';
+import { Card, Chip, EmptyState, IconBadge, ImportFormatModal, LoadingState, ScreenContainer, showAlert, type ImportFieldSpec } from '@/components';
 import { formatDisplayDate } from '@/lib/date';
+import { loadSampleTransactions } from '@/lib/sampleData';
 import {
   formatCurrency,
   formatCurrencyCompact,
+  parseTransactionsCsv,
   useAccounts,
   useFinanceCategories,
   useFinanceRecords,
@@ -15,6 +19,55 @@ import {
   type RecordEntry,
 } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
+
+const CSV_MIME_TYPES = ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel', 'text/plain'];
+
+/** Mirrors exactly what modules/finance/importTransactionsCsv.ts reads — keep in sync with that
+ * file if its column matching ever changes. */
+const TRANSACTIONS_IMPORT_FIELDS: ImportFieldSpec[] = [
+  {
+    column: 'account',
+    aliases: ['accountName'],
+    required: true,
+    format: 'Text — must match one of your existing account names exactly (case-insensitive).',
+    notes: 'Rows with no matching account are skipped, not created.',
+    example: 'Checking',
+  },
+  {
+    column: 'amount',
+    aliases: ['amt'],
+    required: true,
+    format: 'Plain positive number, no currency symbol or thousands separator.',
+    notes: 'Rows with a missing or non-positive amount are skipped.',
+    example: '42.50',
+  },
+  {
+    column: 'type',
+    required: false,
+    format: 'One of: income, expense, transfer. Defaults to expense if left blank or unrecognized.',
+    example: 'expense',
+  },
+  {
+    column: 'category',
+    required: false,
+    format: "Text — must match one of your existing category names for that row's type (case-insensitive).",
+    notes: 'Ignored for transfers. Left uncategorized if it doesn\'t match.',
+    example: 'Groceries',
+  },
+  {
+    column: 'date',
+    required: false,
+    format: 'YYYY-MM-DD, or any date format JavaScript can parse. Defaults to today if blank or unparseable.',
+    example: '2026-01-15',
+  },
+  {
+    column: 'note',
+    aliases: ['description'],
+    required: false,
+    format: 'Free text.',
+    example: 'Weekly groceries',
+  },
+];
 
 const RANGE_OPTIONS = [
   { key: '7d', label: '7D', days: 7 },
@@ -28,11 +81,78 @@ type RangeKey = (typeof RANGE_OPTIONS)[number]['key'];
 export default function RecordsScreen() {
   const theme = useAppTheme();
   const [range, setRange] = useState<RangeKey>('1y');
+  const [formatModalVisible, setFormatModalVisible] = useState(false);
   const days = RANGE_OPTIONS.find((option) => option.key === range)!.days;
-  const { groups, loading } = useFinanceRecords(days);
-  const { accounts } = useAccounts();
+  const { groups, loading, refresh } = useFinanceRecords(days);
+  const { accounts, displayCurrency } = useAccounts();
   const { categories } = useFinanceCategories();
-  const { removeTransaction } = useTransactions();
+  const { addTransaction, removeTransaction } = useTransactions();
+
+  // removeTransaction comes from its own useTransactions() instance, separate from the
+  // useFinanceRecords(days) instance this screen actually renders `groups` from — that hook only
+  // refetches on screen focus, so without an explicit refresh here a delete wouldn't be reflected
+  // in the visible ledger until the user navigated away and back.
+  const onDeleteEntry = async (id: string) => {
+    await removeTransaction(id);
+    await refresh();
+  };
+
+  const onImportCsv = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: CSV_MIME_TYPES, copyToCacheDirectory: true });
+    if (result.canceled || !result.assets[0]) return;
+    const file = new File(result.assets[0].uri);
+    const text = await file.text();
+    const { rows, total, skipped } = parseTransactionsCsv(text, accounts, categories);
+
+    if (rows.length === 0) {
+      showAlert('Nothing to import', 'No rows matched an existing account with a valid amount. Make sure your CSV has "account" and "amount" columns.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'View CSV format', onPress: () => setFormatModalVisible(true) },
+      ]);
+      return;
+    }
+
+    showAlert(
+      `Import ${rows.length} transaction${rows.length === 1 ? '' : 's'}?`,
+      skipped > 0 ? `${skipped} of ${total} rows were skipped (missing account or amount).` : `All ${total} rows matched.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Import',
+          onPress: async () => {
+            for (const row of rows) {
+              await addTransaction(row, { skipDuplicateCheck: true });
+            }
+            await refresh();
+            showAlert('Imported', `Added ${rows.length} transaction${rows.length === 1 ? '' : 's'}.`);
+          },
+        },
+      ]
+    );
+  };
+
+  const onLoadSampleData = () => {
+    showAlert('Load sample transactions?', 'Adds 10 example transactions to your first account so you can see how Records looks with data.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Load sample data',
+        onPress: async () => {
+          const count = await loadSampleTransactions(accounts, categories, addTransaction);
+          await refresh();
+          if (count > 0) showAlert('Done', `Added ${count} sample transactions.`);
+        },
+      },
+    ]);
+  };
+
+  const onMenu = () => {
+    showAlert('Records', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'CSV/Excel format', onPress: () => setFormatModalVisible(true) },
+      { text: 'Import CSV', onPress: onImportCsv },
+      { text: 'Load sample data', onPress: onLoadSampleData },
+    ]);
+  };
 
   if (loading) {
     return (
@@ -43,7 +163,16 @@ export default function RecordsScreen() {
   }
 
   return (
-    <ScreenContainer>
+    <ScreenContainer onRefresh={refresh}>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <Pressable hitSlop={8} onPress={onMenu}>
+              <Ionicons name="ellipsis-horizontal-circle-outline" size={24} color={theme.colors.textSecondary} />
+            </Pressable>
+          ),
+        }}
+      />
       <View style={{ gap: theme.spacing.xl }}>
         <View>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>
@@ -52,43 +181,33 @@ export default function RecordsScreen() {
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Every transaction, with your balance at the time</Text>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
           {RANGE_OPTIONS.map((option) => (
-            <Pressable key={option.key} style={{ flex: 1 }} onPress={() => setRange(option.key)}>
-              <View
-                style={{
-                  alignItems: 'center',
-                  paddingVertical: theme.spacing.sm,
-                  borderRadius: theme.radius.md,
-                  backgroundColor: range === option.key ? theme.colors.primaryMuted : theme.colors.surface,
-                  borderWidth: 1,
-                  borderColor: range === option.key ? theme.colors.primary : theme.colors.border,
-                }}>
-                <Text
-                  style={{
-                    color: range === option.key ? theme.colors.primary : theme.colors.textSecondary,
-                    fontSize: theme.typography.size.sm,
-                    fontWeight: theme.typography.weight.medium,
-                  }}>
-                  {option.label}
-                </Text>
-              </View>
-            </Pressable>
+            <Chip key={option.key} label={option.label} selected={range === option.key} onPress={() => setRange(option.key)} />
           ))}
-        </View>
+        </ScrollView>
 
         {groups.length === 0 ? (
-          <EmptyState icon="list-outline" title="No transactions in this range" />
+          <View style={{ gap: theme.spacing.sm }}>
+            <EmptyState icon="list-outline" title="No transactions in this range" />
+            <Pressable onPress={onLoadSampleData} style={{ alignItems: 'center' }}>
+              <Text style={{ color: theme.colors.primary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                Load sample data
+              </Text>
+            </Pressable>
+          </View>
         ) : (
-          <View style={{ gap: theme.spacing.xl }}>
+          <View style={{ gap: theme.spacing.lg }}>
             {groups.map((group) => (
-              <View key={group.monthLabel} style={{ gap: theme.spacing.sm }}>
+              <Card key={group.monthLabel} tier="panel" style={{ gap: theme.spacing.md }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                   <View>
                     <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.bold }}>
                       {group.monthLabel}
                     </Text>
-                    <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Balance {formatCurrency(group.balance)}</Text>
+                    <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                      Balance {formatCurrency(group.balance, displayCurrency)}
+                    </Text>
                   </View>
                   <Text
                     style={{
@@ -97,7 +216,7 @@ export default function RecordsScreen() {
                       fontWeight: theme.typography.weight.semibold,
                     }}>
                     Σ {group.sum >= 0 ? '' : '-'}
-                    {formatCurrency(Math.abs(group.sum))}
+                    {formatCurrency(Math.abs(group.sum), displayCurrency)}
                   </Text>
                 </View>
 
@@ -108,15 +227,24 @@ export default function RecordsScreen() {
                       entry={entry}
                       accounts={accounts}
                       categories={categories}
-                      onDelete={removeTransaction}
+                      displayCurrency={displayCurrency}
+                      onDelete={onDeleteEntry}
                     />
                   ))}
                 </View>
-              </View>
+              </Card>
             ))}
           </View>
         )}
       </View>
+
+      <ImportFormatModal
+        visible={formatModalVisible}
+        onClose={() => setFormatModalVisible(false)}
+        title="CSV/Excel import format"
+        intro="Build your own file with a header row using these column names (any order, case-insensitive), then import it as CSV or Excel."
+        fields={TRANSACTIONS_IMPORT_FIELDS}
+      />
     </ScreenContainer>
   );
 }
@@ -125,11 +253,13 @@ function RecordRow({
   entry,
   accounts,
   categories,
+  displayCurrency,
   onDelete,
 }: {
   entry: RecordEntry;
   accounts: ReturnType<typeof useAccounts>['accounts'];
   categories: ReturnType<typeof useFinanceCategories>['categories'];
+  displayCurrency: string;
   onDelete: (id: string) => Promise<void>;
 }) {
   const theme = useAppTheme();
@@ -144,14 +274,14 @@ function RecordRow({
   const iconName = isTransfer ? 'swap-horizontal' : ((category?.icon ?? 'pricetag') as never);
 
   const confirmDelete = () => {
-    Alert.alert('Delete transaction?', 'This cannot be undone, and will reverse its effect on the account balance.', [
+    showAlert('Delete transaction?', 'This cannot be undone, and will reverse its effect on the account balance.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => onDelete(entry.id) },
     ]);
   };
 
   const showActions = () => {
-    Alert.alert(isTransfer ? 'Transfer' : (category?.name ?? 'Uncategorized'), formatCurrency(entry.amount, account?.currency), [
+    showAlert(isTransfer ? 'Transfer' : (category?.name ?? 'Uncategorized'), formatCurrency(entry.amount, account?.currency), [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Edit', onPress: () => router.push({ pathname: '/finance/[id]', params: { id: entry.id } }) },
       { text: 'Delete', style: 'destructive', onPress: confirmDelete },
@@ -162,35 +292,7 @@ function RecordRow({
     <Link key={entry.id} href={{ pathname: '/finance/[id]', params: { id: entry.id } }} asChild>
       <Pressable onLongPress={showActions}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-          <View style={{ width: 40, height: 40 }}>
-            <View
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: `${iconColor}22`,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              <Ionicons name={iconName} size={18} color={iconColor} />
-            </View>
-            <View
-              style={{
-                position: 'absolute',
-                right: -2,
-                bottom: -2,
-                width: 14,
-                height: 14,
-                borderRadius: 7,
-                backgroundColor: theme.colors.success,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 2,
-                borderColor: theme.colors.surface,
-              }}>
-              <Ionicons name="checkmark" size={8} color="#FFFFFF" />
-            </View>
-          </View>
+          <IconBadge name={iconName} color={iconColor} />
 
           <View style={{ flex: 1 }}>
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
@@ -211,7 +313,9 @@ function RecordRow({
               {isTransfer ? '' : isIncome ? '+' : '-'}
               {formatCurrency(entry.amount, account?.currency)}
             </Text>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>({formatCurrencyCompact(entry.balanceAfter)})</Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              ({formatCurrencyCompact(entry.balanceAfter, displayCurrency)})
+            </Text>
             <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{formatDisplayDate(entry.date)}</Text>
           </View>
 

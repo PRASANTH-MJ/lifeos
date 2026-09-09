@@ -25,7 +25,7 @@
         "android.permission.VIBRATE",
         "android.permission.WAKE_LOCK"
       ],
-      "versionCode": 3
+      "versionCode": 59
     },
     "web": {
       "bundler": "metro",
@@ -59,17 +59,49 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Flowsy to access your photos to set a profile picture."
+          "photosPermission": "Allow Flowsy to access your photos to set a profile picture or attach to a post.",
+          "cameraPermission": "Allow Flowsy to use your camera to take a photo for your post."
         }
       ],
       "expo-sharing",
+      "expo-asset",
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Flowsy to use your camera to scan food barcodes."
+          "cameraPermission": "Allow Flowsy to use your camera to scan food."
         }
       ],
-      "expo-asset"
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Flowsy to access your location to record your route while a run, walk, or activity is in progress, even when the app is in the background.",
+          "locationWhenInUsePermission": "Allow Flowsy to access your location to record your route while a run, walk, or activity is in progress.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Flowsy to use Face ID to unlock the app."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Flowsy to save your activity and post images to your photos.",
+          "savePhotosPermission": "Allow Flowsy to save your activity and post images to your photos.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Flowsy to use the microphone for voice commands.",
+          "speechRecognitionPermission": "Allow Flowsy to use speech recognition for voice commands."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

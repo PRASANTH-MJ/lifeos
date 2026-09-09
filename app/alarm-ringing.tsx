@@ -25,40 +25,85 @@ export default function AlarmRingingScreen() {
   const { identifier, title, body } = useLocalSearchParams<{ identifier?: string; title?: string; body?: string }>();
   const player = useAudioPlayer(require('../assets/audio/flashes.mp3'));
 
+  // Both the explicit stop() (Dismiss/Snooze) and this effect's own cleanup call player.pause()
+  // — dismissing always triggers both (stop() runs first, then leaveAlarmScreen()'s navigation
+  // unmounts this screen, running the cleanup too). Calling pause() a second time on a player
+  // expo-audio already considers stopped/released, or on Vibration after the OS already tore
+  // down the vibration session, has been an intermittent native crash straight to
+  // RootErrorBoundary — wrapped defensively here (matching notifications/alarm.ts's own
+  // `safely()` pattern for the exact same class of "native module already torn down" issue).
   useEffect(() => {
     player.loop = true;
     player.play();
     Vibration.vibrate(VIBRATION_PATTERN, true);
     return () => {
-      player.pause();
-      Vibration.cancel();
+      try {
+        player.pause();
+      } catch {
+        // best-effort — see comment above
+      }
+      try {
+        Vibration.cancel();
+      } catch {
+        // best-effort
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const stop = () => {
-    player.pause();
-    Vibration.cancel();
+    try {
+      player.pause();
+    } catch {
+      // best-effort — see the effect cleanup's comment above
+    }
+    try {
+      Vibration.cancel();
+    } catch {
+      // best-effort
+    }
+  };
+
+  // When the app was killed and this screen was launched fresh via the notification's Android
+  // full-screen intent, there's no prior screen underneath it — router.back() is a no-op in that
+  // case, and Android's default handling of "nothing left to go back to" on a single-Activity
+  // Expo app is to finish the Activity, which looks exactly like the app closing.
+  // router.canGoBack() was previously used to branch between back() and replace('/'), but it can
+  // report stale/incorrect state right after a cold start via full-screen intent — a false
+  // "true" here still runs back() into a dead end and finishes the Activity, which is exactly the
+  // "dismiss/snooze closes the app" bug this screen exists to prevent. Always replacing to home
+  // removes that ambiguity entirely: it's a valid destination whether or not there was anything
+  // to go back to.
+  const leaveAlarmScreen = () => {
+    router.replace('/');
   };
 
   const onDismiss = async () => {
     stop();
-    if (identifier) await cancelAlarm(identifier);
-    router.back();
+    try {
+      if (identifier) await cancelAlarm(identifier);
+    } catch {
+      // best-effort — never let a cancellation failure block actually leaving this screen
+    }
+    leaveAlarmScreen();
   };
 
   const onSnooze = async () => {
     stop();
-    if (identifier) {
-      await scheduleOneTimeAlarm({
-        identifier: `${identifier}-snooze`,
-        title: title || 'Alarm',
-        body: body || '',
-        date: new Date(Date.now() + SNOOZE_MINUTES * 60 * 1000),
-        data: { kind: 'alarm', identifier, title: title || 'Alarm', body: body || '' },
-      });
+    try {
+      if (identifier) {
+        await scheduleOneTimeAlarm({
+          identifier: `${identifier}-snooze`,
+          title: title || 'Alarm',
+          body: body || '',
+          date: new Date(Date.now() + SNOOZE_MINUTES * 60 * 1000),
+          data: { kind: 'alarm', identifier, title: title || 'Alarm', body: body || '' },
+        });
+      }
+    } catch {
+      // best-effort — same reasoning as onDismiss above
     }
-    router.back();
+    leaveAlarmScreen();
   };
 
   return (

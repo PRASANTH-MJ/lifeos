@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
 
 import {
   BarPairChart,
@@ -7,6 +7,7 @@ import {
   Chip,
   DonutChart,
   EmptyState,
+  IconBadge,
   LineChart,
   LoadingState,
   NamedBarChart,
@@ -23,10 +24,12 @@ import {
   useFinanceBalanceTrend,
   useFinanceCashFlow,
   useFinanceCategories,
+  useFinanceDebts,
   useFinanceForecast,
   useFinancePlannedPayments,
   useFinanceSpendingByPriority,
   useFinanceSummary,
+  useNetWorthHistory,
   type SpendingPriority,
 } from '@/modules/finance';
 import { addDays, formatDisplayDate, todayKey } from '@/lib/date';
@@ -43,6 +46,7 @@ type RangeKey = (typeof RANGE_OPTIONS)[number]['key'];
 
 const SECTIONS = [
   { key: 'balance', label: 'Balance' },
+  { key: 'networth', label: 'Net Worth' },
   { key: 'cashflow', label: 'Cash-flow' },
   { key: 'spending', label: 'Spending' },
   { key: 'outlook', label: 'Outlook' },
@@ -68,32 +72,14 @@ export default function FinanceAnalyticsScreen() {
           ))}
         </ScrollView>
 
-        <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
           {RANGE_OPTIONS.map((option) => (
-            <Pressable key={option.key} style={{ flex: 1 }} onPress={() => setRange(option.key)}>
-              <View
-                style={{
-                  alignItems: 'center',
-                  paddingVertical: theme.spacing.sm,
-                  borderRadius: theme.radius.md,
-                  backgroundColor: range === option.key ? theme.colors.primaryMuted : theme.colors.surface,
-                  borderWidth: 1,
-                  borderColor: range === option.key ? theme.colors.primary : theme.colors.border,
-                }}>
-                <Text
-                  style={{
-                    color: range === option.key ? theme.colors.primary : theme.colors.textSecondary,
-                    fontSize: theme.typography.size.sm,
-                    fontWeight: theme.typography.weight.medium,
-                  }}>
-                  {option.label}
-                </Text>
-              </View>
-            </Pressable>
+            <Chip key={option.key} label={option.label} selected={range === option.key} onPress={() => setRange(option.key)} />
           ))}
-        </View>
+        </ScrollView>
 
         {section === 'balance' ? <BalanceSection days={days} /> : null}
+        {section === 'networth' ? <NetWorthSection days={days} /> : null}
         {section === 'cashflow' ? <CashFlowSection days={days} /> : null}
         {section === 'spending' ? <SpendingSection days={days} /> : null}
         {section === 'outlook' ? <OutlookSection days={days} /> : null}
@@ -104,7 +90,7 @@ export default function FinanceAnalyticsScreen() {
 
 function BalanceSection({ days }: { days: number }) {
   const theme = useAppTheme();
-  const { accounts, netWorth, loading } = useAccounts();
+  const { accounts, netWorth, displayCurrency, loading } = useAccounts();
   const { series, changePercent, refresh } = useFinanceBalanceTrend(days);
   void refresh;
 
@@ -114,18 +100,21 @@ function BalanceSection({ days }: { days: number }) {
 
   return (
     <View style={{ gap: theme.spacing.xl }}>
-      <Card style={{ gap: theme.spacing.md }}>
-        <View>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            Balance Trend
-          </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Do I have more money than before?</Text>
+      <Card tier="panel" style={{ gap: theme.spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <IconBadge name="trending-up-outline" color={theme.colors.primary} size="sm" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Balance Trend
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Do I have more money than before?</Text>
+          </View>
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <View>
             <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>TODAY</Text>
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
-              {formatCurrencyCompact(netWorth)}
+              {formatCurrencyCompact(netWorth, displayCurrency)}
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
@@ -142,18 +131,26 @@ function BalanceSection({ days }: { days: number }) {
           </View>
         </View>
         {series.length > 0 ? (
-          <LineChart label="" data={series.map((p) => ({ date: p.label, value: p.value }))} color={theme.colors.primary} formatValue={formatCurrencyCompact} />
+          <LineChart
+            label=""
+            data={series.map((p) => ({ date: p.label, value: p.value }))}
+            color={theme.colors.primary}
+            formatValue={(v) => formatCurrencyCompact(v, displayCurrency)}
+          />
         ) : (
           <EmptyState icon="trending-up-outline" title="No balance history yet" />
         )}
       </Card>
 
-      <Card style={{ gap: theme.spacing.md }}>
-        <View>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            Balance by Accounts
-          </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>In which accounts do I have most of my money?</Text>
+      <Card tier="panel" style={{ gap: theme.spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <IconBadge name="wallet-outline" color={theme.colors.primary} size="sm" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Balance by Accounts
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>In which accounts do I have most of my money?</Text>
+          </View>
         </View>
         {accounts.length === 0 ? (
           <EmptyState icon="wallet-outline" title="No accounts yet" />
@@ -189,8 +186,66 @@ function BalanceSection({ days }: { days: number }) {
   );
 }
 
+function NetWorthSection({ days }: { days: number }) {
+  const theme = useAppTheme();
+  const { netWorth: accountsNetWorth, displayCurrency, loading: loadingAccounts } = useAccounts();
+  const { debts, remainingById, loading: loadingDebts } = useFinanceDebts();
+  const { snapshots, loading: loadingHistory, recordTodaySnapshot } = useNetWorthHistory(days);
+
+  // "Outstanding debts" here means money owed — only the 'borrowed' side of finance_debts is a
+  // liability against net worth; 'lent' money is a receivable that never left an account balance
+  // in the first place, so it isn't subtracted a second time here.
+  const outstandingDebt = debts
+    .filter((debt) => debt.direction === 'borrowed' && !debt.is_closed)
+    .reduce((sum, debt) => sum + (remainingById[debt.id] ?? debt.amount), 0);
+  const netWorth = accountsNetWorth - outstandingDebt;
+  const loading = loadingAccounts || loadingDebts;
+
+  useEffect(() => {
+    if (loading) return;
+    recordTodaySnapshot(netWorth);
+    // Only re-runs once loading finishes — recordTodaySnapshot itself no-ops if today's row
+    // already exists, so this deliberately doesn't depend on `netWorth` changing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  if (loading || loadingHistory) return <LoadingState />;
+
+  const series = snapshots.map((snapshot) => ({ date: snapshot.date, value: snapshot.net_worth }));
+
+  return (
+    <View style={{ gap: theme.spacing.xl }}>
+      <Card tier="panel" style={{ gap: theme.spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <IconBadge name="analytics-outline" color={theme.colors.primary} size="sm" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Net Worth
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Accounts minus what I owe, over time</Text>
+          </View>
+        </View>
+        <Text
+          style={{
+            color: netWorth >= 0 ? theme.colors.textPrimary : theme.colors.danger,
+            fontSize: theme.typography.size['2xl'],
+            fontWeight: theme.typography.weight.bold,
+          }}>
+          {formatCurrencyCompact(netWorth, displayCurrency)}
+        </Text>
+        {series.length > 1 ? (
+          <LineChart label="" data={series} color={theme.colors.primary} formatValue={(v) => formatCurrencyCompact(v, displayCurrency)} />
+        ) : (
+          <EmptyState icon="analytics-outline" title="Building history" subtitle="Check back tomorrow — one point is recorded per day." />
+        )}
+      </Card>
+    </View>
+  );
+}
+
 function CashFlowSection({ days }: { days: number }) {
   const theme = useAppTheme();
+  const { displayCurrency } = useAccounts();
   const { buckets, current, previous } = useFinanceCashFlow(days);
 
   const pctChange = (curr: number, prev: number) => (prev !== 0 ? ((curr - prev) / Math.abs(prev)) * 100 : curr !== 0 ? 100 : 0);
@@ -198,52 +253,100 @@ function CashFlowSection({ days }: { days: number }) {
   return (
     <View style={{ gap: theme.spacing.xl }}>
       <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-        <StatCard label="Income" value={formatCurrencyCompact(current.income)} color={theme.colors.success} glass />
-        <StatCard label="Expenses" value={formatCurrencyCompact(current.expense)} color={theme.colors.danger} glass />
-        <StatCard label="Cash flow" value={formatCurrencyCompact(current.cashFlow)} color={current.cashFlow >= 0 ? theme.colors.success : theme.colors.danger} glass />
+        <StatCard label="Income" value={formatCurrencyCompact(current.income, displayCurrency)} color={theme.colors.success} glass />
+        <StatCard label="Expenses" value={formatCurrencyCompact(current.expense, displayCurrency)} color={theme.colors.danger} glass />
+        <StatCard
+          label="Cash flow"
+          value={formatCurrencyCompact(current.cashFlow, displayCurrency)}
+          color={current.cashFlow >= 0 ? theme.colors.success : theme.colors.danger}
+          glass
+        />
       </View>
 
-      <Card style={{ gap: theme.spacing.md }}>
-        <View>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            Cash-flow
-          </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Income vs. expenses per period</Text>
+      <Card tier="panel" style={{ gap: theme.spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <IconBadge name="swap-horizontal-outline" color={theme.colors.primary} size="sm" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Cash-flow
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Income vs. expenses per period</Text>
+          </View>
         </View>
         {buckets.length > 0 && buckets.some((b) => b.income || b.expense) ? (
-          <BarPairChart data={buckets} formatValue={formatCurrencyCompact} />
+          <BarPairChart data={buckets} formatValue={(v) => formatCurrencyCompact(v, displayCurrency)} />
         ) : (
           <EmptyState icon="swap-horizontal-outline" title="No transactions in this range" />
         )}
       </Card>
 
-      <Card style={{ gap: theme.spacing.md }}>
-        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-          Period to Period Comparison
-        </Text>
-        <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-          How am I doing versus the previous period of the same length?
-        </Text>
-        <ComparisonRow label="Income" curr={current.income} prev={previous.income} pct={pctChange(current.income, previous.income)} good />
-        <ComparisonRow label="Expenses" curr={current.expense} prev={previous.expense} pct={pctChange(current.expense, previous.expense)} good={false} />
-        <ComparisonRow label="Cash flow" curr={current.cashFlow} prev={previous.cashFlow} pct={pctChange(current.cashFlow, previous.cashFlow)} good />
+      <Card tier="panel" style={{ gap: theme.spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <IconBadge name="repeat-outline" color={theme.colors.primary} size="sm" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Period to Period Comparison
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              How am I doing versus the previous period of the same length?
+            </Text>
+          </View>
+        </View>
+        <ComparisonRow
+          label="Income"
+          curr={current.income}
+          prev={previous.income}
+          pct={pctChange(current.income, previous.income)}
+          currency={displayCurrency}
+          good
+        />
+        <ComparisonRow
+          label="Expenses"
+          curr={current.expense}
+          prev={previous.expense}
+          pct={pctChange(current.expense, previous.expense)}
+          currency={displayCurrency}
+          good={false}
+        />
+        <ComparisonRow
+          label="Cash flow"
+          curr={current.cashFlow}
+          prev={previous.cashFlow}
+          pct={pctChange(current.cashFlow, previous.cashFlow)}
+          currency={displayCurrency}
+          good
+        />
       </Card>
     </View>
   );
 }
 
-function ComparisonRow({ label, curr, prev, pct, good }: { label: string; curr: number; prev: number; pct: number; good: boolean }) {
+function ComparisonRow({
+  label,
+  curr,
+  prev,
+  pct,
+  currency,
+  good,
+}: {
+  label: string;
+  curr: number;
+  prev: number;
+  pct: number;
+  currency: string;
+  good: boolean;
+}) {
   const theme = useAppTheme();
   const improved = good ? pct >= 0 : pct <= 0;
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
       <View>
         <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{label}</Text>
-        <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>was {formatCurrencyCompact(prev)}</Text>
+        <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>was {formatCurrencyCompact(prev, currency)}</Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
-          {formatCurrencyCompact(curr)}
+          {formatCurrencyCompact(curr, currency)}
         </Text>
         <Text style={{ color: improved ? theme.colors.success : theme.colors.danger, fontSize: theme.typography.size.xs }}>
           {pct >= 0 ? '+' : ''}
@@ -256,6 +359,7 @@ function ComparisonRow({ label, curr, prev, pct, good }: { label: string; curr: 
 
 function SpendingSection({ days }: { days: number }) {
   const theme = useAppTheme();
+  const { displayCurrency } = useAccounts();
   const { totals, buckets } = useFinanceSpendingByPriority(days);
   const { categories } = useFinanceCategories();
   const today = todayKey();
@@ -282,17 +386,20 @@ function SpendingSection({ days }: { days: number }) {
 
   return (
     <View style={{ gap: theme.spacing.xl }}>
-      <Card style={{ gap: theme.spacing.md }}>
-        <View>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            The Nature of Spending
-          </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-            How much must I pay, need to pay, or just want to spend?
-          </Text>
+      <Card tier="panel" style={{ gap: theme.spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <IconBadge name="layers-outline" color={theme.colors.primary} size="sm" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              The Nature of Spending
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              How much must I pay, need to pay, or just want to spend?
+            </Text>
+          </View>
         </View>
         <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
-          {formatCurrencyCompact(grandTotal)}
+          {formatCurrencyCompact(grandTotal, displayCurrency)}
         </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
           {(['all', 'must', 'need', 'want'] as const).map((key) => (
@@ -312,15 +419,22 @@ function SpendingSection({ days }: { days: number }) {
         )}
       </Card>
 
-      <Card style={{ gap: theme.spacing.lg }}>
-        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-          {filter === 'all' ? 'All categories' : `${PRIORITY_LABELS[filter]} categories`}
-        </Text>
+      <Card tier="panel" style={{ gap: theme.spacing.lg }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <IconBadge name="pie-chart-outline" color={theme.colors.primary} size="sm" />
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+            {filter === 'all' ? 'All categories' : `${PRIORITY_LABELS[filter]} categories`}
+          </Text>
+        </View>
         {filteredCategories.length === 0 ? (
           <EmptyState icon="pie-chart-outline" title="Nothing here" />
         ) : (
           <>
-            <DonutChart segments={filteredCategories.map((c) => ({ value: c.total, color: c.color }))} centerLabel={formatCurrencyCompact(filteredTotal)} centerSubLabel="total" />
+            <DonutChart
+              segments={filteredCategories.map((c) => ({ value: c.total, color: c.color }))}
+              centerLabel={formatCurrencyCompact(filteredTotal, displayCurrency)}
+              centerSubLabel="total"
+            />
             <View style={{ gap: theme.spacing.sm }}>
               {filteredCategories.map((category) => (
                 <View key={category.name} style={{ gap: 4 }}>
@@ -330,7 +444,7 @@ function SpendingSection({ days }: { days: number }) {
                       <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{category.name}</Text>
                     </View>
                     <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
-                      {formatCurrency(category.total)}
+                      {formatCurrency(category.total, displayCurrency)}
                     </Text>
                   </View>
                   <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
@@ -348,6 +462,7 @@ function SpendingSection({ days }: { days: number }) {
 
 function OutlookSection({ days }: { days: number }) {
   const theme = useAppTheme();
+  const { displayCurrency } = useAccounts();
   const { forecast } = useFinanceForecast(days);
   const { plannedPayments } = useFinancePlannedPayments();
 
@@ -358,17 +473,20 @@ function OutlookSection({ days }: { days: number }) {
 
   return (
     <View style={{ gap: theme.spacing.xl }}>
-      <Card style={{ gap: theme.spacing.md }}>
-        <View>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            Balance Forecast
-          </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-            If the last period repeats, will I have enough money?
-          </Text>
+      <Card tier="panel" style={{ gap: theme.spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <IconBadge name="calculator-outline" color={theme.colors.primary} size="sm" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Balance Forecast
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              If the last period repeats, will I have enough money?
+            </Text>
+          </View>
         </View>
         <NamedBarChart
-          formatValue={formatCurrencyCompact}
+          formatValue={(v) => formatCurrencyCompact(v, displayCurrency)}
           bars={[
             { label: 'Starting balance', value: forecast.startingBalance, color: theme.colors.primary },
             { label: 'Expected income', value: forecast.expectedIncome, color: theme.colors.success },
@@ -386,25 +504,37 @@ function OutlookSection({ days }: { days: number }) {
         </Text>
       </Card>
 
-      <Card style={{ gap: theme.spacing.md }}>
-        <View>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-            Planned Payments
-          </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>What's actually scheduled in this range?</Text>
+      <Card tier="panel" style={{ gap: theme.spacing.md }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <IconBadge name="time-outline" color={theme.colors.primary} size="sm" />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Planned Payments
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>What's actually scheduled in this range?</Text>
+          </View>
         </View>
         {upcoming.length === 0 ? (
           <EmptyState icon="time-outline" title="Nothing scheduled in this range" />
         ) : (
           <>
             <View style={{ flexDirection: 'row', gap: theme.spacing.lg }}>
-              <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.sm }}>+{formatCurrencyCompact(plannedIncome)} income</Text>
-              <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.sm }}>-{formatCurrencyCompact(plannedExpense)} expense</Text>
+              <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.sm }}>
+                +{formatCurrencyCompact(plannedIncome, displayCurrency)} income
+              </Text>
+              <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.sm }}>
+                -{formatCurrencyCompact(plannedExpense, displayCurrency)} expense
+              </Text>
             </View>
             <View style={{ gap: theme.spacing.sm }}>
               {upcoming.map((payment) => (
-                <View key={payment.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View>
+                <View key={payment.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+                  <IconBadge
+                    name={payment.type === 'income' ? 'arrow-down-circle' : 'arrow-up-circle'}
+                    color={payment.type === 'income' ? theme.colors.success : theme.colors.danger}
+                    size="sm"
+                  />
+                  <View style={{ flex: 1 }}>
                     <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
                       {payment.payee}
                     </Text>
@@ -417,7 +547,7 @@ function OutlookSection({ days }: { days: number }) {
                       fontWeight: theme.typography.weight.semibold,
                     }}>
                     {payment.type === 'income' ? '+' : '-'}
-                    {formatCurrencyCompact(payment.amount)}
+                    {formatCurrencyCompact(payment.amount, displayCurrency)}
                   </Text>
                 </View>
               ))}

@@ -1,8 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Button, Card, EmptyState, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Card, EmptyState, LoadingState, RowActionsMenu, ScreenContainer, TextField } from '@/components';
 import { useFinanceLabels } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
@@ -10,17 +9,34 @@ const COLORS = ['#8E8E93', '#3D8BFF', '#34C759', '#FF9500', '#AF52DE', '#FF2D55'
 
 export default function LabelsScreen() {
   const theme = useAppTheme();
-  const { labels, loading, addLabel, removeLabel } = useFinanceLabels();
+  const { labels, loading, addLabel, editLabel, removeLabel } = useFinanceLabels();
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState(COLORS[0]);
   const [saving, setSaving] = useState(false);
 
-  const onAdd = async () => {
+  const startEdit = (label: { id: string; name: string; color: string }) => {
+    setEditingId(label.id);
+    setName(label.name);
+    setColor(label.color);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setName('');
+    setColor(COLORS[0]);
+  };
+
+  const onSubmit = async () => {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await addLabel(name.trim(), color);
-      setName('');
+      if (editingId) {
+        await editLabel(editingId, name.trim(), color);
+      } else {
+        await addLabel(name.trim(), color);
+      }
+      cancelEdit();
     } finally {
       setSaving(false);
     }
@@ -47,7 +63,7 @@ export default function LabelsScreen() {
         </View>
 
         <Card style={{ gap: theme.spacing.md }}>
-          <TextField placeholder="New label name" value={name} onChangeText={setName} />
+          <TextField placeholder="Label name" value={name} onChangeText={setName} />
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
             {COLORS.map((option) => (
               <Pressable key={option} onPress={() => setColor(option)}>
@@ -64,7 +80,16 @@ export default function LabelsScreen() {
               </Pressable>
             ))}
           </View>
-          <Button label="Add label" onPress={onAdd} disabled={!name.trim()} loading={saving} />
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            {editingId ? (
+              <View style={{ flex: 1 }}>
+                <Button label="Cancel" variant="ghost" onPress={cancelEdit} />
+              </View>
+            ) : null}
+            <View style={{ flex: 1 }}>
+              <Button label={editingId ? 'Save changes' : 'Add label'} onPress={onSubmit} disabled={!name.trim()} loading={saving} />
+            </View>
+          </View>
         </Card>
 
         {labels.length === 0 ? (
@@ -73,13 +98,11 @@ export default function LabelsScreen() {
           <View style={{ gap: theme.spacing.sm }}>
             {labels.map((label) => (
               <Card key={label.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: label.color }} />
+                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: label.color }} />
                 <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
                   {label.name}
                 </Text>
-                <Pressable onPress={() => removeLabel(label.id)} hitSlop={8}>
-                  <Ionicons name="trash-outline" size={18} color={theme.colors.textTertiary} />
-                </Pressable>
+                <RowActionsMenu itemLabel={label.name} onEdit={() => startEdit(label)} onDelete={() => removeLabel(label.id)} />
               </Card>
             ))}
           </View>

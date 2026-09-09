@@ -1,8 +1,8 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Modal, Pressable, Switch, Text, View } from 'react-native';
+import { Modal, Pressable, Switch, Text, View } from 'react-native';
 
-import { Button, Card, Chip, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Card, Chip, LoadingState, ScreenContainer, TextField, showAlert } from '@/components';
 import { monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import {
@@ -18,6 +18,7 @@ import {
 import { useAppTheme } from '@/theme';
 
 const FREQUENCIES: PlannedPaymentFrequency[] = ['once', 'weekly', 'monthly', 'yearly'];
+const REMIND_DAYS_OPTIONS = [0, 1, 3, 7] as const;
 
 export default function PlannedPaymentDetailScreen() {
   const theme = useAppTheme();
@@ -40,6 +41,8 @@ export default function PlannedPaymentDetailScreen() {
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(payment?.next_date ?? todayKey()));
   const [notify, setNotify] = useState(payment?.notify ?? true);
   const [note, setNote] = useState(payment?.note ?? '');
+  const [isSubscription, setIsSubscription] = useState(payment?.is_subscription ?? false);
+  const [remindDaysBefore, setRemindDaysBefore] = useState(payment?.remind_days_before ?? 0);
   const [saving, setSaving] = useState(false);
 
   if (!payment) {
@@ -68,8 +71,18 @@ export default function PlannedPaymentDetailScreen() {
         nextDate,
         notify,
         note: note.trim() || null,
+        isSubscription,
+        remindDaysBefore,
       });
-      await syncPlannedPaymentNotification({ id: payment.id, payee: payee.trim(), amount: numericAmount, next_date: nextDate, notify, type });
+      await syncPlannedPaymentNotification({
+        id: payment.id,
+        payee: payee.trim(),
+        amount: numericAmount,
+        next_date: nextDate,
+        notify,
+        type,
+        remind_days_before: remindDaysBefore,
+      });
       router.back();
     } finally {
       setSaving(false);
@@ -77,7 +90,7 @@ export default function PlannedPaymentDetailScreen() {
   };
 
   const onDelete = () => {
-    Alert.alert('Delete planned payment?', 'This removes the schedule.', [
+    showAlert('Delete planned payment?', 'This removes the schedule.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -157,10 +170,35 @@ export default function PlannedPaymentDetailScreen() {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
+            Subscription
+          </Text>
+          <Switch value={isSubscription} onValueChange={setIsSubscription} />
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
             Remind me
           </Text>
           <Switch value={notify} onValueChange={setNotify} />
         </View>
+
+        {notify ? (
+          <View style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+              Remind me
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+              {REMIND_DAYS_OPTIONS.map((days) => (
+                <Chip
+                  key={days}
+                  label={days === 0 ? 'On due date' : `${days} day${days === 1 ? '' : 's'} before`}
+                  selected={remindDaysBefore === days}
+                  onPress={() => setRemindDaysBefore(days)}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <TextField label="Note (optional)" value={note} onChangeText={setNote} />
 
@@ -171,7 +209,7 @@ export default function PlannedPaymentDetailScreen() {
       <Modal visible={datePickerVisible} animationType="slide" transparent onRequestClose={() => setDatePickerVisible(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay }} onPress={() => setDatePickerVisible(false)} />
-          <Card style={{ borderTopLeftRadius: theme.radius.xl, borderTopRightRadius: theme.radius.xl, gap: theme.spacing.lg }}>
+          <Card tier="panel" style={{ borderTopLeftRadius: theme.radius.xl, borderTopRightRadius: theme.radius.xl, gap: theme.spacing.lg }}>
             <CalendarMonthGrid
               year={dateCursor.year}
               month={dateCursor.month}

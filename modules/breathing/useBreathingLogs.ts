@@ -1,10 +1,10 @@
 import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, dateKeyToTimestamp, toDateKey, todayKey } from '@/lib/date';
-import { pushLocalRow } from '@/modules/sync';
+import { onLocalWrite, pushLocalRow } from '@/modules/sync';
 import type { BreathingLog } from './types';
 
 export function useBreathingLogs() {
@@ -24,6 +24,15 @@ export function useBreathingLogs() {
       refresh();
     }, [refresh])
   );
+
+  // See onLocalWrite's doc comment (modules/sync/syncEngine.ts) — picks up a breathing_logs write
+  // made through a different useBreathingLogs() instance (e.g. usePublicProfileStatsSync's,
+  // mounted once at the root layout and never "focused" again by navigation).
+  useEffect(() => {
+    return onLocalWrite((table) => {
+      if (table === 'breathing_logs') refresh();
+    });
+  }, [refresh]);
 
   const logSession = useCallback(
     async (patternKey: string, durationSeconds: number, cycles: number, dateKey?: string) => {

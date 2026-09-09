@@ -1,20 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 
-import { Button, Card, EmptyState, ReminderCard, ScreenContainer, TextField, UpsellModal, useTabSwipeNavigation } from '@/components';
+import { Button, Card, Chip, EmptyState, IconBadge, ReminderCard, ScreenContainer, TextField, UpsellModal } from '@/components';
 import { formatDisplayDate, monthCursorOf, shiftMonth, toDateKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { CheckinSheet, computeWeeklyStreak, JournalListItem, useCheckins, useJournal } from '@/modules/journal';
 import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
-import { useModuleReminders } from '@/modules/reminders';
+import { useDefaultCheckinReminders, useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function JournalScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const swipeHandlers = useTabSwipeNavigation('/journal');
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState<string | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -29,6 +28,7 @@ export default function JournalScreen() {
     'Time to journal',
     "Write down what's on your mind today."
   );
+  const { morning: morningReminder, night: nightReminder } = useDefaultCheckinReminders();
 
   const heatmapValues = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -46,8 +46,20 @@ export default function JournalScreen() {
 
   const filteredEntries = dateFilter ? entries.filter((entry) => toDateKey(new Date(entry.created_at)) === dateFilter) : entries;
 
+  // Modal renders as a top-level overlay regardless of which tab is focused, so a sheet left
+  // open here would otherwise keep floating over whichever tab you switch to next.
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setDatePickerVisible(false);
+        setCheckinSheet(null);
+        setShowUpsell(false);
+      };
+    }, [])
+  );
+
   return (
-    <View style={{ flex: 1 }} {...swipeHandlers}>
+    <View style={{ flex: 1 }}>
     <ScreenContainer onRefresh={refresh}>
       <Stack.Screen
         options={{
@@ -64,7 +76,7 @@ export default function JournalScreen() {
               </Pressable>
               <Pressable
                 hitSlop={8}
-                onPress={() => (journalGate.allowed ? router.push('/journal/new') : setShowUpsell(true))}>
+                onPress={() => (journalGate.allowed ? router.push('/journal-new') : setShowUpsell(true))}>
                 <Ionicons name="add-circle" size={28} color={theme.colors.moduleJournal} />
               </Pressable>
             </View>
@@ -74,7 +86,7 @@ export default function JournalScreen() {
       <View style={{ gap: theme.spacing.lg }}>
         {!search && entries.length > 0 ? (
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-            <Ionicons name="flame" size={22} color={theme.colors.moduleJournal} />
+            <IconBadge name="flame" color={theme.colors.moduleJournal} />
             <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>
               {weeklyStreak > 0
                 ? `${weeklyStreak} week${weeklyStreak === 1 ? '' : 's'} of journaling in a row`
@@ -86,6 +98,7 @@ export default function JournalScreen() {
         <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
           <CheckinButton
             label="Morning check-in"
+            icon="sunny"
             done={morning != null}
             color={theme.colors.moduleJournal}
             mutedColor={theme.colors.moduleJournalMuted}
@@ -93,12 +106,40 @@ export default function JournalScreen() {
           />
           <CheckinButton
             label="Night check-in"
+            icon="moon"
             done={night != null}
             color={theme.colors.moduleJournal}
             mutedColor={theme.colors.moduleJournalMuted}
             onPress={() => setCheckinSheet('night')}
           />
         </View>
+
+        {morningReminder.reminders.map((reminder) => (
+          <View key={reminder.id} style={{ gap: theme.spacing.xs }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.semibold, textTransform: 'uppercase' }}>
+              Morning check-in reminder
+            </Text>
+            <ReminderCard
+              state={reminder}
+              onSave={(next) => morningReminder.save(reminder.id, next)}
+              onRemove={() => morningReminder.removeReminder(reminder.id)}
+              color={theme.colors.moduleJournal}
+            />
+          </View>
+        ))}
+        {nightReminder.reminders.map((reminder) => (
+          <View key={reminder.id} style={{ gap: theme.spacing.xs }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.semibold, textTransform: 'uppercase' }}>
+              Night check-in reminder
+            </Text>
+            <ReminderCard
+              state={reminder}
+              onSave={(next) => nightReminder.save(reminder.id, next)}
+              onRemove={() => nightReminder.removeReminder(reminder.id)}
+              color={theme.colors.moduleJournal}
+            />
+          </View>
+        ))}
 
         {reminders.map((reminder) => (
           <ReminderCard
@@ -114,23 +155,13 @@ export default function JournalScreen() {
         <TextField placeholder="Search entries" value={search} onChangeText={setSearch} />
 
         {dateFilter ? (
-          <Pressable
+          <Chip
+            label={`${formatDisplayDate(dateFilter)}  ✕`}
+            selected
+            color={theme.colors.moduleJournal}
+            mutedColor={theme.colors.moduleJournalMuted}
             onPress={() => setDateFilter(null)}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              alignSelf: 'flex-start',
-              gap: 6,
-              paddingVertical: theme.spacing.xs,
-              paddingHorizontal: theme.spacing.md,
-              borderRadius: theme.radius.full,
-              backgroundColor: theme.colors.moduleJournalMuted,
-            }}>
-            <Text style={{ color: theme.colors.moduleJournal, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
-              {formatDisplayDate(dateFilter)}
-            </Text>
-            <Ionicons name="close" size={14} color={theme.colors.moduleJournal} />
-          </Pressable>
+          />
         ) : null}
 
         {!loading && filteredEntries.length === 0 ? (
@@ -139,7 +170,7 @@ export default function JournalScreen() {
             title={search ? 'No matching entries' : dateFilter ? 'No entries on this day' : 'No journal entries yet'}
             subtitle={search ? 'Try a different search term.' : dateFilter ? 'Pick another date, or write one now.' : 'Write your first entry to start your history.'}
             ctaLabel={search ? undefined : 'Write an entry'}
-            onPressCta={search ? undefined : () => (journalGate.allowed ? router.push('/journal/new') : setShowUpsell(true))}
+            onPressCta={search ? undefined : () => (journalGate.allowed ? router.push('/journal-new') : setShowUpsell(true))}
           />
         ) : (
           <View style={{ gap: theme.spacing.md }}>
@@ -193,12 +224,14 @@ export default function JournalScreen() {
 
 function CheckinButton({
   label,
+  icon,
   done,
   color,
   mutedColor,
   onPress,
 }: {
   label: string;
+  icon: keyof typeof Ionicons.glyphMap;
   done: boolean;
   color: string;
   mutedColor: string;
@@ -207,11 +240,17 @@ function CheckinButton({
   const theme = useAppTheme();
   return (
     <Pressable onPress={onPress} style={{ flex: 1 }}>
-      <Card style={{ alignItems: 'center', gap: 4, backgroundColor: done ? mutedColor : theme.colors.surface }}>
-        <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={color} />
-        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium, textAlign: 'center' }}>
+      <Card style={{ alignItems: 'center', gap: theme.spacing.xs, backgroundColor: done ? mutedColor : theme.colors.surfaceElevated }}>
+        <IconBadge name={icon} color={color} tone={done ? 'tinted' : 'neutral'} />
+        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold, textAlign: 'center' }}>
           {label}
         </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+          <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={13} color={done ? color : theme.colors.textTertiary} />
+          <Text style={{ color: done ? color : theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+            {done ? 'Done' : 'Not yet'}
+          </Text>
+        </View>
       </Card>
     </Pressable>
   );

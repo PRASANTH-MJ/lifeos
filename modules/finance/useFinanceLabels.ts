@@ -42,6 +42,20 @@ export function useFinanceLabels() {
     [db, refresh]
   );
 
+  const editLabel = useCallback(
+    async (id: string, name: string, color: string) => {
+      await db.runAsync('UPDATE finance_labels SET name = ?, color = ?, updated_at = ? WHERE id = ?', [
+        name,
+        color,
+        new Date().toISOString(),
+        Number(id),
+      ]);
+      await pushLocalRow(db, 'finance_labels', Number(id));
+      await refresh();
+    },
+    [db, refresh]
+  );
+
   const removeLabel = useCallback(
     async (id: string) => {
       await recordDeleteBeforeRemoving(db, 'finance_labels', Number(id));
@@ -51,7 +65,7 @@ export function useFinanceLabels() {
     [db, refresh]
   );
 
-  return { labels, loading, addLabel, removeLabel };
+  return { labels, loading, addLabel, editLabel, removeLabel };
 }
 
 /** Labels attached to one transaction, plus a setter that replaces the full set in one go
@@ -87,15 +101,34 @@ export function useTransactionLabels(transactionId: string | null) {
 
   const setLabelsFor = useCallback(
     async (targetTransactionId: string, nextLabelIds: string[]) => {
+      // Tombstone the old links before the transaction below deletes them, and push each new
+      // link after inserting it — finance_transaction_labels is a synced table (SYNC_TABLES), but
+      // this was never wired up: writes here used to go straight to SQLite with no sync_id and no
+      // pushLocalRow/recordDeleteBeforeRemoving call, so which labels were on a transaction never
+      // left the device.
+      const oldRows = await db.getAllAsync<{ rowid: number }>(
+        'SELECT rowid FROM finance_transaction_labels WHERE transaction_id = ?',
+        [Number(targetTransactionId)]
+      );
+      for (const row of oldRows) {
+        await recordDeleteBeforeRemoving(db, 'finance_transaction_labels', row.rowid);
+      }
+
+      const now = new Date().toISOString();
+      const insertedRowIds: number[] = [];
       await db.withTransactionAsync(async () => {
         await db.runAsync('DELETE FROM finance_transaction_labels WHERE transaction_id = ?', [Number(targetTransactionId)]);
         for (const labelId of nextLabelIds) {
-          await db.runAsync('INSERT INTO finance_transaction_labels (transaction_id, label_id) VALUES (?, ?)', [
-            Number(targetTransactionId),
-            Number(labelId),
-          ]);
+          const result = await db.runAsync(
+            'INSERT INTO finance_transaction_labels (transaction_id, label_id, sync_id, updated_at) VALUES (?, ?, ?, ?)',
+            [Number(targetTransactionId), Number(labelId), Crypto.randomUUID(), now]
+          );
+          insertedRowIds.push(result.lastInsertRowId);
         }
       });
+      for (const rowid of insertedRowIds) {
+        await pushLocalRow(db, 'finance_transaction_labels', rowid);
+      }
       await refresh();
     },
     [db, refresh]

@@ -1,23 +1,27 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { Card, Chip, FAB_BOTTOM_OFFSET, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
+import { Card, Chip, FAB_BOTTOM_OFFSET, IconBadge, ProgressBar, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
 import { addDays, buildMonthGrid, monthCursorOf, shiftMonth, todayKey, weekdayOf } from '@/lib/date';
 import { useCategories } from '@/modules/categories';
+import { ClubHabitsSection, ClubTasksSection } from '@/modules/clubs';
 import { LIMIT_LABELS, useFreeTierGate, type LimitKind } from '@/modules/premium';
 import {
   HabitLogSheet,
   isDue,
+  parseReminderTimes,
   parseTargetDays,
   useHabits,
   type Habit,
   type HabitLog,
 } from '@/modules/habits';
-import { CalendarMonthGrid } from '@/modules/calendar';
+import { CalendarMonthGrid, type CalendarEvent } from '@/modules/calendar';
 import { CheckinSheet, useCheckins } from '@/modules/journal';
+import { useModuleReminders } from '@/modules/reminders';
+import { formatTimeDisplay, useSettings } from '@/modules/settings';
 import {
   TaskLogSheet,
   clearOneTimeTaskLog,
@@ -34,7 +38,7 @@ function weekStartOf(dateKey: string): string {
   return addDays(dateKey, -weekdayOf(dateKey));
 }
 
-type FilterKey = 'all' | 'important' | 'habits' | 'tasks' | 'recurring';
+type FilterKey = 'all' | 'important' | 'habits' | 'tasks' | 'recurring' | 'overdue' | 'thisWeek' | 'thisMonth';
 
 const FILTER_LABELS: Record<FilterKey, string> = {
   all: 'All',
@@ -42,7 +46,32 @@ const FILTER_LABELS: Record<FilterKey, string> = {
   habits: 'Habits',
   tasks: 'Task',
   recurring: 'Recurring Task',
+  overdue: 'Overdue',
+  thisWeek: 'This Week',
+  thisMonth: 'This Month',
 };
+
+// "Overdue"/"This Week"/"This Month" filter by a task's stored `due_date`, which only
+// one-time tasks have — habits and recurring tasks are "due" purely via `isDue(date, frequency,
+// targetDays)` recomputed per day, with no fixed date to compare against "today". So these three
+// filters hide habits/recurring tasks entirely (same precedent as the existing "Important" filter
+// already hiding habits) rather than inventing a fuzzy notion of an overdue habit.
+//
+// They also can't reuse the screen's normal single-selected-day data: `refresh()` only loads
+// what's due on `selectedDate`. A "This Week" or "This Month" view needs one-time tasks whose
+// due_date falls anywhere in that range, so selecting one of these filters switches the task list
+// to a separate range query (see the effect below) instead of the day-scoped `tasksDue`. The date
+// strip at top keeps working (it still drives the day-scoped filters), it just stops being the
+// source of the visible list until the user switches back to All/Important/Habits/Task/Recurring.
+function isDateRangeFilter(filter: FilterKey): boolean {
+  return filter === 'overdue' || filter === 'thisWeek' || filter === 'thisMonth';
+}
+
+type TimelineEntry =
+  | { id: string; time: string | null; kind: 'event'; event: CalendarEvent }
+  | { id: string; time: string | null; kind: 'task'; task: Task; completion?: TaskCompletion; isRecurring: boolean }
+  | { id: string; time: string | null; kind: 'habit'; habit: Habit; log?: HabitLog }
+  | { id: string; time: string | null; kind: 'reminder'; label: string };
 
 export default function TodayScreen() {
   const theme = useAppTheme();
@@ -51,7 +80,15 @@ export default function TodayScreen() {
   const swipeHandlers = useTabSwipeNavigation('/');
 
   const [selectedDate, setSelectedDate] = useState(todayKey());
+  // The date the app last believed was "today" — compared against a fresh todayKey() whenever
+  // the app resumes from background, so a habit/task checked off before midnight and reopened
+  // after doesn't keep showing yesterday's completed state forever (this screen stays mounted
+  // across tab switches and app backgrounding, so nothing else would ever notice the day rolled
+  // over). Only auto-advances selectedDate when it was tracking today specifically — someone
+  // deliberately browsing a past day shouldn't get yanked back to today under them.
+  const todayRef = useRef(todayKey());
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [showCompleted, setShowCompleted] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<number | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const { categories } = useCategories();
@@ -59,6 +96,7 @@ export default function TodayScreen() {
   const [tasksDue, setTasksDue] = useState<{ task: Task; completion?: TaskCompletion; isRecurring: boolean }[]>([]);
   const [allHabits, setAllHabits] = useState<Habit[]>([]);
   const [allRecurringTasks, setAllRecurringTasks] = useState<Task[]>([]);
+  const [rangeTasksDue, setRangeTasksDue] = useState<{ task: Task; completion?: TaskCompletion; isRecurring: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
   const [habitSheetId, setHabitSheetId] = useState<number | null>(null);
   const [taskSheetId, setTaskSheetId] = useState<number | null>(null);
@@ -73,21 +111,29 @@ export default function TodayScreen() {
   const [checkinSheet, setCheckinSheet] = useState<'morning' | 'night' | null>(null);
   const [monthCursor, setMonthCursor] = useState(() => monthCursorOf(selectedDate));
   const [markedDates, setMarkedDates] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
+  const [eventsForDate, setEventsForDate] = useState<CalendarEvent[]>([]);
 
   const { upsertLog, clearLog } = useHabits();
   const { toggleComplete } = useTasks();
   const { upsertCompletion, clearCompletion } = useRecurringTasks();
+  const { settings } = useSettings();
+  // "Any scheduled workout activity reminder" for the unified timeline (cardio has no equivalent
+  // per-module reminder to merge in — see modules/reminders' moduleKey usage across the app).
+  const { reminders: workoutReminders } = useModuleReminders('workout', 'Time to work out', "Let's get moving today.");
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const [habitRows, singleTaskRows, recurringTaskRows] = await Promise.all([
+    const [habitRows, singleTaskRows, recurringTaskRows, eventRows] = await Promise.all([
       db.getAllAsync<Habit>('SELECT * FROM habits WHERE archived = 0'),
       db.getAllAsync<Task>(
-        'SELECT * FROM tasks WHERE archived = 0 AND parent_task_id IS NULL AND is_recurring = 0 AND completed_at IS NULL AND due_date IS NOT NULL AND due_date <= ?',
+        'SELECT * FROM tasks WHERE archived = 0 AND parent_task_id IS NULL AND is_recurring = 0 AND due_date IS NOT NULL AND due_date <= ?',
         [selectedDate]
       ),
       db.getAllAsync<Task>('SELECT * FROM tasks WHERE archived = 0 AND is_recurring = 1'),
+      db.getAllAsync<CalendarEvent>('SELECT * FROM calendar_events WHERE date = ? ORDER BY (start_time IS NULL), start_time ASC', [selectedDate]),
     ]);
+    setEventsForDate(eventRows);
 
     setAllHabits(habitRows);
     setAllRecurringTasks(recurringTaskRows);
@@ -127,6 +173,88 @@ export default function TodayScreen() {
     refresh();
   }, [refresh]);
 
+  // Range query backing the "Overdue"/"This Week"/"This Month" filters — see isDateRangeFilter's
+  // comment for why these need a separate, non-day-scoped fetch of one-time tasks by due_date.
+  const refreshRange = useCallback(async (rangeFilter: FilterKey) => {
+    if (!isDateRangeFilter(rangeFilter)) return;
+    setLoading(true);
+    const today = todayKey();
+    let rows: Task[];
+    if (rangeFilter === 'overdue') {
+      rows = await db.getAllAsync<Task>(
+        'SELECT * FROM tasks WHERE archived = 0 AND parent_task_id IS NULL AND is_recurring = 0 AND due_date IS NOT NULL AND due_date < ? AND completed_at IS NULL',
+        [today]
+      );
+    } else {
+      let startDate: string;
+      let endDate: string;
+      if (rangeFilter === 'thisWeek') {
+        startDate = weekStartOf(today);
+        endDate = addDays(startDate, 6);
+      } else {
+        const [year, month] = today.split('-');
+        const daysInMonth = new Date(Number(year), Number(month), 0).getDate();
+        startDate = `${year}-${month}-01`;
+        endDate = `${year}-${month}-${String(daysInMonth).padStart(2, '0')}`;
+      }
+      rows = await db.getAllAsync<Task>(
+        'SELECT * FROM tasks WHERE archived = 0 AND parent_task_id IS NULL AND is_recurring = 0 AND due_date IS NOT NULL AND due_date BETWEEN ? AND ?',
+        [startDate, endDate]
+      );
+    }
+    setRangeTasksDue(rows.map((task) => ({ task, completion: undefined, isRecurring: false })));
+    setLoading(false);
+  }, [db]);
+
+  useEffect(() => {
+    refreshRange(filter);
+  }, [filter, refreshRange]);
+
+  const refreshIfNewDay = useCallback(() => {
+    const newToday = todayKey();
+    if (newToday !== todayRef.current) {
+      setSelectedDate((current) => (current === todayRef.current ? newToday : current));
+      todayRef.current = newToday;
+    }
+  }, []);
+
+  // Covers the app being backgrounded overnight and resumed the next morning — foregrounding
+  // alone doesn't remount this screen or fire any other effect, so without this, a habit/task
+  // marked done "yesterday evening" would still read as done indefinitely.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshIfNewDay();
+    });
+    return () => subscription.remove();
+  }, [refreshIfNewDay]);
+
+  // Also re-fetch (and re-check the day) every time this tab regains focus — habits/tasks
+  // completed from the Tasks/Habits tab otherwise wouldn't show up back here until something else
+  // happened to change selectedDate, since this screen never unmounts on a tab switch.
+  useFocusEffect(
+    useCallback(() => {
+      refreshIfNewDay();
+      refresh();
+    }, [refresh, refreshIfNewDay])
+  );
+
+  // The tab navigator keeps this screen mounted when you switch tabs, but RN's Modal renders as
+  // a top-level native overlay regardless of which tab is focused — so a sheet left open here
+  // would otherwise keep floating over Habits/Journal/etc. after navigating away. Close
+  // everything on blur so leaving the tab always leaves it in a clean state.
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setHabitSheetId(null);
+        setTaskSheetId(null);
+        setMonthVisible(false);
+        setCreateMenuVisible(false);
+        setUpsellKind(null);
+        setCheckinSheet(null);
+      };
+    }, [])
+  );
+
   const logOneTimeStatus = useCallback(
     (task: Task, status: TaskCompletion['status'], date: string) => logOneTimeTaskStatus(db, task, status, date, toggleComplete),
     [db, toggleComplete]
@@ -163,27 +291,81 @@ export default function TodayScreen() {
   }, [monthVisible, monthCursor, allHabits, allRecurringTasks, db]);
 
   const habitSheetEntry = habitsDue.find((entry) => entry.habit.id === habitSheetId);
-  const taskSheetEntry = tasksDue.find((entry) => entry.task.id === taskSheetId);
+  // Tapping a card opened from a range-filter result (a task not necessarily due on
+  // selectedDate) needs its entry looked up from rangeTasksDue too, not just the day-scoped list.
+  const taskSheetEntry =
+    tasksDue.find((entry) => entry.task.id === taskSheetId) ?? rangeTasksDue.find((entry) => entry.task.id === taskSheetId);
 
   const query = searchQuery.trim().toLowerCase();
   const matchesQuery = (label: string) => !query || label.toLowerCase().includes(query);
 
   const matchesCategory = (categoryId: number | null) => categoryFilter === 'all' || categoryId === categoryFilter;
 
-  const filteredHabits = (filter === 'tasks' || filter === 'important' || filter === 'recurring' ? [] : habitsDue).filter(
-    ({ habit }) => matchesQuery(habit.name) && matchesCategory(habit.category_id)
-  );
+  const rangeFilterActive = isDateRangeFilter(filter);
+  const filteredHabits = (
+    filter === 'tasks' || filter === 'important' || filter === 'recurring' || rangeFilterActive ? [] : habitsDue
+  ).filter(({ habit }) => matchesQuery(habit.name) && matchesCategory(habit.category_id));
   const filteredTasks = (
-    filter === 'habits'
-      ? []
-      : filter === 'important'
-        ? tasksDue.filter((t) => t.task.important)
-        : filter === 'tasks'
-          ? tasksDue.filter((t) => !t.isRecurring)
-          : filter === 'recurring'
-            ? tasksDue.filter((t) => t.isRecurring)
-            : tasksDue
+    rangeFilterActive
+      ? rangeTasksDue
+      : filter === 'habits'
+        ? []
+        : filter === 'important'
+          ? tasksDue.filter((t) => t.task.important)
+          : filter === 'tasks'
+            ? tasksDue.filter((t) => !t.isRecurring)
+            : filter === 'recurring'
+              ? tasksDue.filter((t) => t.isRecurring)
+              : tasksDue
   ).filter(({ task }) => matchesQuery(task.title) && matchesCategory(task.category_id));
+
+  const pendingHabits = filteredHabits.filter(({ log }) => log?.status !== 'done');
+  const completedHabits = filteredHabits.filter(({ log }) => log?.status === 'done');
+  const isTaskDone = (task: Task, completion?: TaskCompletion) => (completion?.status ?? (task.completed_at ? 'done' : undefined)) === 'done';
+  const pendingTasks = filteredTasks.filter(({ task, completion }) => !isTaskDone(task, completion));
+  const completedTasks = filteredTasks.filter(({ task, completion }) => isTaskDone(task, completion));
+  const completedCount = completedHabits.length + completedTasks.length;
+
+  // Unified daily timeline (viewMode === 'timeline') — merges the same filtered habits/tasks
+  // shown in the List view with calendar events and any due workout reminder for selectedDate,
+  // sorted chronologically by time; anything without a specific time (most habits) falls back to
+  // an "Anytime today" group. A distinct view from the List above, not a replacement for it.
+  const earliestReminderTime = (habit: Habit): string | null => {
+    const times = parseReminderTimes(habit.reminder_time).slice().sort();
+    return times[0] ?? null;
+  };
+  const dueWorkoutReminders =
+    categoryFilter === 'all'
+      ? workoutReminders.filter(
+          (reminder) =>
+            reminder.reminderType !== 'none' &&
+            Boolean(reminder.time) &&
+            (reminder.scheduleType === 'daily' ||
+              (reminder.scheduleType === 'specific_days' && reminder.scheduleDays.includes(weekdayOf(selectedDate) + 1)))
+        )
+      : [];
+  const timelineEntries: TimelineEntry[] = [
+    ...eventsForDate
+      .filter((event) => matchesQuery(event.title))
+      .map((event): TimelineEntry => ({ id: `event-${event.id}`, time: event.start_time, kind: 'event', event })),
+    ...filteredTasks.map((entry): TimelineEntry => ({ id: `task-${entry.task.id}`, time: entry.task.due_time, kind: 'task', ...entry })),
+    ...filteredHabits.map((entry): TimelineEntry => ({ id: `habit-${entry.habit.id}`, time: earliestReminderTime(entry.habit), kind: 'habit', ...entry })),
+    ...dueWorkoutReminders.map((reminder): TimelineEntry => ({ id: `workout-reminder-${reminder.id}`, time: reminder.time, kind: 'reminder', label: "Time to work out" })),
+  ];
+  const timedTimelineEntries = timelineEntries.filter((entry) => entry.time).sort((a, b) => (a.time! < b.time! ? -1 : a.time! > b.time! ? 1 : 0));
+  const anytimeTimelineEntries = timelineEntries.filter((entry) => !entry.time);
+
+  const onPressTimelineEntry = (entry: TimelineEntry) => {
+    if (entry.kind === 'event') router.push({ pathname: '/calendar/[id]', params: { id: String(entry.event.id) } });
+    else if (entry.kind === 'task') setTaskSheetId(entry.task.id);
+    else if (entry.kind === 'habit') setHabitSheetId(entry.habit.id);
+    else router.push('/workout');
+  };
+
+  // Compact dashboard tiles reflect the whole day's due habits/tasks (habitsDue/tasksDue),
+  // not whatever filter chip is currently narrowing the list below.
+  const doneHabitsToday = habitsDue.filter(({ log }) => log?.status === 'done').length;
+  const doneTasksToday = tasksDue.filter(({ task, completion }) => isTaskDone(task, completion)).length;
 
   const usedCategoryIds = new Set(
     [...habitsDue.map((h) => h.habit.category_id), ...tasksDue.map((t) => t.task.category_id)].filter((id): id is number => id != null)
@@ -198,13 +380,42 @@ export default function TodayScreen() {
     setMonthVisible(true);
   };
 
+  const refreshCurrent = useCallback(async () => {
+    await refresh();
+    await refreshRange(filter);
+  }, [refresh, refreshRange, filter]);
+
   return (
     <View style={{ flex: 1 }} {...swipeHandlers}>
-    <ScreenContainer onRefresh={refresh}>
+    <ScreenContainer onRefresh={refreshCurrent}>
       <View style={{ gap: theme.spacing.xl }}>
-        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>
-          Today
-        </Text>
+        <View>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>
+            Today
+          </Text>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm, marginTop: 2 }}>
+            {habitsDue.length + tasksDue.length === 0 ? 'Nothing scheduled' : `${completedCount} of ${habitsDue.length + tasksDue.length} complete`}
+          </Text>
+        </View>
+
+        {habitsDue.length + tasksDue.length > 0 ? (
+          <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+            <CompactStatTile
+              icon="checkmark-done-outline"
+              label="Habits"
+              value={`${doneHabitsToday}/${habitsDue.length}`}
+              progress={habitsDue.length > 0 ? doneHabitsToday / habitsDue.length : 0}
+              color={theme.colors.moduleHabits}
+            />
+            <CompactStatTile
+              icon="checkbox-outline"
+              label="Tasks"
+              value={`${doneTasksToday}/${tasksDue.length}`}
+              progress={tasksDue.length > 0 ? doneTasksToday / tasksDue.length : 0}
+              color={theme.colors.moduleTasks}
+            />
+          </View>
+        ) : null}
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
           <Pressable onPress={() => setSelectedDate((d) => addDays(d, -7))} hitSlop={8}>
@@ -287,7 +498,7 @@ export default function TodayScreen() {
         </View>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
-          {(['all', 'important', 'habits', 'tasks', 'recurring'] as FilterKey[]).map((key) => (
+          {(['all', 'important', 'habits', 'tasks', 'recurring', 'overdue', 'thisWeek', 'thisMonth'] as FilterKey[]).map((key) => (
             <Chip key={key} label={FILTER_LABELS[key]} selected={filter === key} onPress={() => setFilter(key)} />
           ))}
         </View>
@@ -307,49 +518,102 @@ export default function TodayScreen() {
           </ScrollView>
         ) : null}
 
-        {!loading && filteredHabits.length === 0 && filteredTasks.length === 0 ? (
+        <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+          <Chip label="List" selected={viewMode === 'list'} onPress={() => setViewMode('list')} />
+          <Chip label="Timeline" selected={viewMode === 'timeline'} onPress={() => setViewMode('timeline')} />
+        </View>
+
+        {viewMode === 'timeline' ? (
+          timedTimelineEntries.length === 0 && anytimeTimelineEntries.length === 0 ? (
+            <Card>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
+                Nothing scheduled for this day.
+              </Text>
+            </Card>
+          ) : (
+            <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+              {timedTimelineEntries.map((entry) => (
+                <TimelineRow
+                  key={entry.id}
+                  entry={entry}
+                  timeLabel={formatTimeDisplay(entry.time, settings?.timeFormat ?? '24h')}
+                  onPress={() => onPressTimelineEntry(entry)}
+                />
+              ))}
+              {anytimeTimelineEntries.length > 0 ? (
+                <>
+                  <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium, marginTop: timedTimelineEntries.length > 0 ? theme.spacing.sm : 0 }}>
+                    Anytime today
+                  </Text>
+                  {anytimeTimelineEntries.map((entry) => (
+                    <TimelineRow key={entry.id} entry={entry} timeLabel={null} onPress={() => onPressTimelineEntry(entry)} />
+                  ))}
+                </>
+              ) : null}
+            </Card>
+          )
+        ) : !loading && filteredHabits.length === 0 && filteredTasks.length === 0 ? (
           <Card>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Nothing scheduled for this day.</Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
+              {rangeFilterActive ? 'Nothing found for this range.' : 'Nothing scheduled for this day.'}
+            </Text>
           </Card>
         ) : (
-          <View style={{ gap: theme.spacing.sm }}>
-            {filteredHabits.map(({ habit, log }) => (
-              <Pressable key={`habit-${habit.id}`} onPress={() => setHabitSheetId(habit.id)}>
-                <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                  <Ionicons name={habit.icon as never} size={18} color={theme.colors.moduleHabits} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>{habit.name}</Text>
-                    <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Habit</Text>
-                  </View>
-                  <StatusDot status={log?.status} color={theme.colors.moduleHabits} />
-                </Card>
-              </Pressable>
-            ))}
-            {filteredTasks.map(({ task, completion, isRecurring }) => (
-              <Pressable key={`task-${task.id}`} onPress={() => setTaskSheetId(task.id)}>
-                <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                  {task.important ? <Ionicons name="star" size={16} color={theme.colors.warning} /> : null}
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        color: theme.colors.textPrimary,
-                        fontSize: theme.typography.size.base,
-                        textDecorationLine: task.completed_at ? 'line-through' : 'none',
-                      }}>
-                      {task.title}
-                    </Text>
-                    <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-                      {isRecurring ? 'Recurring task' : 'Task'}
-                    </Text>
-                  </View>
-                  <StatusDot status={completion?.status ?? (task.completed_at ? 'done' : undefined)} color={theme.colors.moduleTasks} />
-                </Card>
-              </Pressable>
-            ))}
-          </View>
+          <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+            {pendingHabits.length === 0 && pendingTasks.length === 0 ? (
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
+                {rangeFilterActive ? 'All caught up! 🎉' : 'All done for today! 🎉'}
+              </Text>
+            ) : (
+              <>
+                {pendingHabits.map(({ habit, log }) => (
+                  <TodayHabitRow key={`habit-${habit.id}`} habit={habit} log={log} onPress={() => setHabitSheetId(habit.id)} />
+                ))}
+                {pendingTasks.map(({ task, completion, isRecurring }) => (
+                  <TodayTaskRow
+                    key={`task-${task.id}`}
+                    task={task}
+                    completion={completion}
+                    isRecurring={isRecurring}
+                    onPress={() => setTaskSheetId(task.id)}
+                  />
+                ))}
+              </>
+            )}
+
+            {completedCount > 0 ? (
+              <>
+                <Pressable
+                  onPress={() => setShowCompleted((v) => !v)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, paddingVertical: theme.spacing.xs }}>
+                  <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm, flex: 1 }}>
+                    {showCompleted ? 'Hide' : 'Show'} completed ({completedCount})
+                  </Text>
+                  <Ionicons name={showCompleted ? 'chevron-up' : 'chevron-down'} size={16} color={theme.colors.textTertiary} />
+                </Pressable>
+
+                {showCompleted ? (
+                  <>
+                    {completedHabits.map(({ habit, log }) => (
+                      <TodayHabitRow key={`habit-${habit.id}`} habit={habit} log={log} onPress={() => setHabitSheetId(habit.id)} />
+                    ))}
+                    {completedTasks.map(({ task, completion, isRecurring }) => (
+                      <TodayTaskRow
+                        key={`task-${task.id}`}
+                        task={task}
+                        completion={completion}
+                        isRecurring={isRecurring}
+                        onPress={() => setTaskSheetId(task.id)}
+                      />
+                    ))}
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </Card>
         )}
 
-        <Pressable onPress={() => router.push('/journal/new')}>
+        <Pressable onPress={() => router.push('/journal-new')}>
           <Card
             style={{
               flexDirection: 'row',
@@ -358,7 +622,7 @@ export default function TodayScreen() {
               backgroundColor: theme.colors.moduleJournalMuted,
               borderColor: theme.colors.moduleJournalMuted,
             }}>
-            <Ionicons name="book" size={22} color={theme.colors.moduleJournal} />
+            <IconBadge name="book" color={theme.colors.moduleJournal} size="md" />
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold, flex: 1 }}>
               Write in your journal
             </Text>
@@ -368,13 +632,26 @@ export default function TodayScreen() {
 
         <Pressable onPress={() => router.push('/analytics')}>
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-            <Ionicons name="stats-chart" size={22} color={theme.colors.primary} />
+            <IconBadge name="stats-chart" color={theme.colors.primary} size="md" />
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold, flex: 1 }}>
               View your insights
             </Text>
             <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
           </Card>
         </Pressable>
+
+        <Pressable onPress={() => router.push('/weekly-review')}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <IconBadge name="calendar-outline" color={theme.colors.moduleTasks} size="md" />
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold, flex: 1 }}>
+              Weekly review
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+          </Card>
+        </Pressable>
+
+        <ClubHabitsSection />
+        <ClubTasksSection />
       </View>
 
       {habitSheetEntry ? (
@@ -409,6 +686,7 @@ export default function TodayScreen() {
               await logOneTimeStatus(taskSheetEntry.task, status, selectedDate);
             }
             await refresh();
+            await refreshRange(filter);
           }}
           onClear={async () => {
             if (taskSheetEntry.isRecurring) {
@@ -417,6 +695,7 @@ export default function TodayScreen() {
               await clearOneTimeLog(taskSheetEntry.task, selectedDate);
             }
             await refresh();
+            await refreshRange(filter);
           }}
         />
       ) : null}
@@ -490,13 +769,13 @@ export default function TodayScreen() {
                 label: 'Habit',
                 icon: 'checkmark-circle-outline',
                 color: theme.colors.moduleHabits,
-                onPress: () => (habitGate.allowed ? router.push('/habits/new') : setUpsellKind('habits')),
+                onPress: () => (habitGate.allowed ? router.push('/habits-new') : setUpsellKind('habits')),
               },
               {
                 label: 'Task',
                 icon: 'checkbox-outline',
                 color: theme.colors.moduleTasks,
-                onPress: () => (taskGate.allowed ? router.push('/tasks/new') : setUpsellKind('tasks')),
+                onPress: () => (taskGate.allowed ? router.push('/tasks-new') : setUpsellKind('tasks')),
               },
               {
                 label: 'Recurring Task',
@@ -504,19 +783,19 @@ export default function TodayScreen() {
                 color: theme.colors.moduleTasks,
                 onPress: () =>
                   recurringGate.allowed
-                    ? router.push({ pathname: '/tasks/new', params: { recurring: '1' } })
+                    ? router.push({ pathname: '/tasks-new', params: { recurring: '1' } })
                     : setUpsellKind('recurringTasks'),
               },
               {
                 label: 'Journal Entry',
                 icon: 'book-outline',
                 color: theme.colors.moduleJournal,
-                onPress: () => (journalGate.allowed ? router.push('/journal/new') : setUpsellKind('journalEntries')),
+                onPress: () => (journalGate.allowed ? router.push('/journal-new') : setUpsellKind('journalEntries')),
               },
               { label: 'Morning check-in', icon: 'sunny-outline', color: theme.colors.moduleJournal, onPress: () => setCheckinSheet('morning') },
               { label: 'Night check-in', icon: 'moon-outline', color: theme.colors.moduleJournal, onPress: () => setCheckinSheet('night') },
-              { label: 'Expense', icon: 'cash-outline', color: theme.colors.primary, onPress: () => router.push('/finance/new') },
-              { label: 'Food Log', icon: 'restaurant-outline', color: theme.colors.moduleTasks, onPress: () => router.push('/food/new') },
+              { label: 'Expense', icon: 'cash-outline', color: theme.colors.primary, onPress: () => router.push('/finance-new') },
+              { label: 'Food Log', icon: 'restaurant-outline', color: theme.colors.moduleTasks, onPress: () => router.push('/food-new') },
             ] as const
           ).map((item) => (
             <Pressable
@@ -526,17 +805,7 @@ export default function TodayScreen() {
                 item.onPress();
               }}
               style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, paddingVertical: theme.spacing.md }}>
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: theme.radius.md,
-                  backgroundColor: theme.colors.background,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                <Ionicons name={item.icon} size={18} color={item.color} />
-              </View>
+              <IconBadge name={item.icon} color={item.color} size="md" />
               <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>{item.label}</Text>
             </Pressable>
           ))}
@@ -568,6 +837,162 @@ export default function TodayScreen() {
       onSaveNight={saveNight}
     />
     </View>
+  );
+}
+
+/** Compact 2-up dashboard tile — icon+label header, big bold number, thin progress-bar footer.
+ * Local to this screen (mirrors the habits tab's identical tile), since the shared StatCard
+ * intentionally stays icon/progress-free. */
+function CompactStatTile({
+  icon,
+  label,
+  value,
+  progress,
+  color,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  progress: number;
+  color: string;
+}) {
+  const theme = useAppTheme();
+  return (
+    <Card style={{ flex: 1, gap: theme.spacing.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+        <IconBadge name={icon} color={color} size="sm" />
+        <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium, flex: 1 }} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+      <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
+        {value}
+      </Text>
+      <ProgressBar progress={progress} color={color} height={5} />
+    </Card>
+  );
+}
+
+function TodayHabitRow({
+  habit,
+  log,
+  onPress,
+  timeLabel,
+}: {
+  habit: Habit;
+  log?: HabitLog;
+  onPress: () => void;
+  timeLabel?: string | null;
+}) {
+  const theme = useAppTheme();
+  const done = log?.status === 'done';
+  return (
+    <Pressable onPress={onPress}>
+      <Card style={[{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }, done ? { opacity: 0.7 } : null]}>
+        <IconBadge name={habit.icon as never} color={theme.colors.moduleHabits} size="sm" />
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontSize: theme.typography.size.base,
+              textDecorationLine: done ? 'line-through' : 'none',
+            }}>
+            {habit.name}
+          </Text>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Habit</Text>
+        </View>
+        {timeLabel ? (
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>
+            {timeLabel}
+          </Text>
+        ) : null}
+        <StatusDot status={log?.status} color={theme.colors.moduleHabits} />
+      </Card>
+    </Pressable>
+  );
+}
+
+function TodayTaskRow({
+  task,
+  completion,
+  isRecurring,
+  onPress,
+  timeLabel,
+}: {
+  task: Task;
+  completion?: TaskCompletion;
+  isRecurring: boolean;
+  onPress: () => void;
+  timeLabel?: string | null;
+}) {
+  const theme = useAppTheme();
+  const status = completion?.status ?? (task.completed_at ? 'done' : undefined);
+  const done = status === 'done';
+  return (
+    <Pressable onPress={onPress}>
+      <Card style={[{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }, done ? { opacity: 0.7 } : null]}>
+        <IconBadge name={isRecurring ? 'repeat-outline' : 'checkbox-outline'} color={theme.colors.moduleTasks} size="sm" />
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {task.important ? <Ionicons name="star" size={13} color={theme.colors.warning} /> : null}
+            <Text
+              style={{
+                color: theme.colors.textPrimary,
+                fontSize: theme.typography.size.base,
+                textDecorationLine: done ? 'line-through' : 'none',
+                flexShrink: 1,
+              }}
+              numberOfLines={1}>
+              {task.title}
+            </Text>
+          </View>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+            {isRecurring ? 'Recurring task' : 'Task'}
+          </Text>
+        </View>
+        {timeLabel ? (
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>
+            {timeLabel}
+          </Text>
+        ) : null}
+        <StatusDot status={status} color={theme.colors.moduleTasks} />
+      </Card>
+    </Pressable>
+  );
+}
+
+/** One row of the unified daily timeline (viewMode === 'timeline' above) — dispatches to the
+ * existing habit/task row components for those two kinds (so they look identical to the List
+ * view, just with a time label added) and renders a plain Card+IconBadge row for calendar events
+ * and the workout reminder, matching the same visual pattern rather than inventing a new one. */
+function TimelineRow({ entry, timeLabel, onPress }: { entry: TimelineEntry; timeLabel: string | null; onPress: () => void }) {
+  const theme = useAppTheme();
+  if (entry.kind === 'task') {
+    return <TodayTaskRow task={entry.task} completion={entry.completion} isRecurring={entry.isRecurring} onPress={onPress} timeLabel={timeLabel} />;
+  }
+  if (entry.kind === 'habit') {
+    return <TodayHabitRow habit={entry.habit} log={entry.log} onPress={onPress} timeLabel={timeLabel} />;
+  }
+  const isEvent = entry.kind === 'event';
+  return (
+    <Pressable onPress={onPress}>
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+        <IconBadge name={isEvent ? 'calendar' : 'barbell'} color={isEvent ? theme.colors.primary : theme.colors.warning} size="sm" />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base }} numberOfLines={1}>
+            {isEvent ? entry.event.title : entry.label}
+          </Text>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+            {isEvent ? 'Event' : 'Workout reminder'}
+          </Text>
+        </View>
+        {timeLabel ? (
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>
+            {timeLabel}
+          </Text>
+        ) : null}
+      </Card>
+    </Pressable>
   );
 }
 

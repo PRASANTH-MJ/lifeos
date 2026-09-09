@@ -1,8 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 
-import { Button, Card, Chip, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Card, Chip, IconBadge, LoadingState, ScreenContainer, SplitExpenseModal, TextField, showAlert } from '@/components';
 import { formatDisplayDate, monthCursorOf, shiftMonth } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { formatCurrency, useAccounts, useFinanceCategories, useFinanceLabels, useTransactionLabels, useTransactions } from '@/modules/finance';
@@ -25,6 +25,7 @@ export default function TransactionDetailScreen() {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(new Date().toISOString().slice(0, 10)));
+  const [splitModalVisible, setSplitModalVisible] = useState(false);
 
   useEffect(() => {
     if (transaction) {
@@ -44,7 +45,7 @@ export default function TransactionDetailScreen() {
   }
 
   const onDelete = () => {
-    Alert.alert('Delete transaction?', 'This cannot be undone, and will reverse its effect on the account balance.', [
+    showAlert('Delete transaction?', 'This cannot be undone, and will reverse its effect on the account balance.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -71,10 +72,15 @@ export default function TransactionDetailScreen() {
   return (
     <ScreenContainer>
       <View style={{ gap: theme.spacing.xl }}>
-        <View>
+        <Card tier="panel" style={{ alignItems: 'center', gap: theme.spacing.sm }}>
+          <IconBadge
+            name={isTransfer ? 'swap-horizontal' : isIncome ? 'arrow-down-circle' : 'arrow-up-circle'}
+            color={isTransfer ? theme.colors.primary : isIncome ? theme.colors.success : theme.colors.danger}
+            size="lg"
+          />
           <Text
             style={{
-              color: isIncome ? theme.colors.success : theme.colors.textPrimary,
+              color: isIncome ? theme.colors.success : isTransfer ? theme.colors.textPrimary : theme.colors.danger,
               fontSize: theme.typography.size['3xl'],
               fontWeight: theme.typography.weight.bold,
             }}>
@@ -84,7 +90,7 @@ export default function TransactionDetailScreen() {
           <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.base }}>
             {isTransfer ? `${account?.name ?? 'Account'} → ${toAccount?.name ?? 'Account'}` : `${account?.name ?? ''}`}
           </Text>
-        </View>
+        </Card>
 
         <TextField
           label="Amount"
@@ -161,6 +167,8 @@ export default function TransactionDetailScreen() {
           To change the account or type, delete this transaction and log a new one.
         </Text>
 
+        {!isTransfer ? <Button label="Split this expense" variant="secondary" onPress={() => setSplitModalVisible(true)} /> : null}
+
         <Button label="Delete transaction" variant="danger" onPress={onDelete} />
       </View>
 
@@ -183,6 +191,12 @@ export default function TransactionDetailScreen() {
           </Card>
         </View>
       </Modal>
+
+      <SplitExpenseModal
+        visible={splitModalVisible}
+        onClose={() => setSplitModalVisible(false)}
+        transaction={{ id: transaction.id, amount: transaction.amount, note: transaction.note, currency: account?.currency }}
+      />
     </ScreenContainer>
   );
 }

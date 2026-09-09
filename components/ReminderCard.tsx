@@ -9,8 +9,10 @@ import { TimeField } from './TimeField';
 export type ReminderCardState = {
   reminderType: 'none' | 'notification' | 'alarm';
   time: string | null;
-  scheduleType: 'daily' | 'specific_days';
+  scheduleType: 'daily' | 'specific_days' | 'hourly';
   scheduleDays: number[];
+  hourlyStart: string | null;
+  hourlyEnd: string | null;
 };
 
 type Props = {
@@ -38,7 +40,7 @@ const WEEKDAYS = [
 export function ReminderCard({ state, onSave, onRemove, color }: Props) {
   const theme = useAppTheme();
   const accentColor = color ?? theme.colors.textSecondary;
-  const { reminderType, time, scheduleType, scheduleDays } = state;
+  const { reminderType, time, scheduleType, scheduleDays, hourlyStart, hourlyEnd } = state;
 
   const toggleDay = (day: number) => {
     const next = scheduleDays.includes(day) ? scheduleDays.filter((d) => d !== day) : [...scheduleDays, day];
@@ -77,8 +79,6 @@ export function ReminderCard({ state, onSave, onRemove, color }: Props) {
 
       {reminderType !== 'none' ? (
         <>
-          <TimeField value={time} onChange={(next) => onSave({ ...state, time: next })} />
-
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
             <Chip label="Every day" selected={scheduleType === 'daily'} color={accentColor} onPress={() => onSave({ ...state, scheduleType: 'daily' })} />
             <Chip
@@ -87,7 +87,29 @@ export function ReminderCard({ state, onSave, onRemove, color }: Props) {
               color={accentColor}
               onPress={() => onSave({ ...state, scheduleType: 'specific_days' })}
             />
+            <Chip
+              label="Every hour"
+              selected={scheduleType === 'hourly'}
+              color={accentColor}
+              onPress={() =>
+                onSave({ ...state, scheduleType: 'hourly', hourlyStart: hourlyStart ?? '08:00', hourlyEnd: hourlyEnd ?? '21:00' })
+              }
+            />
           </View>
+
+          {scheduleType === 'hourly' ? (
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <TimeField value={hourlyStart} onChange={(next) => onSave({ ...state, hourlyStart: next })} />
+              </View>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>to</Text>
+              <View style={{ flex: 1 }}>
+                <TimeField value={hourlyEnd} onChange={(next) => onSave({ ...state, hourlyEnd: next })} />
+              </View>
+            </View>
+          ) : (
+            <TimeField value={time} onChange={(next) => onSave({ ...state, time: next })} />
+          )}
 
           {scheduleType === 'specific_days' ? (
             <View style={{ flexDirection: 'row', gap: theme.spacing.xs }}>

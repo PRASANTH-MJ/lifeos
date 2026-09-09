@@ -1,4 +1,4 @@
-import { Card, DonutChart, Legend, LoadingState, ScreenContainer, TrendChart } from '@/components';
+import { Card, DonutChart, IconBadge, Legend, LoadingState, PremiumGate, ScreenContainer, TrendChart } from '@/components';
 import { formatDisplayDate } from '@/lib/date';
 import { useFoodWeekAnalytics } from '@/modules/food';
 import { useAppTheme } from '@/theme';
@@ -20,9 +20,17 @@ export default function FoodAnalyticsScreen() {
 
   return (
     <ScreenContainer>
+      <PremiumGate
+        feature="foodAnalytics"
+        icon="pie-chart-outline"
+        title="Advanced Insights is a Pro feature"
+        message="See your weekly calorie trend and macro breakdown. Go Pro to unlock analytics across every module.">
       <View style={{ gap: theme.spacing.xl }}>
-        <Card style={{ gap: 4 }}>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Daily average</Text>
+        <Card style={{ gap: theme.spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+            <IconBadge name="flame" color={theme.colors.primary} size="sm" />
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Daily average</Text>
+          </View>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.xl, fontWeight: theme.typography.weight.bold }}>
             {dailyAverageCalories} cal
           </Text>
@@ -31,7 +39,7 @@ export default function FoodAnalyticsScreen() {
           </Text>
         </Card>
 
-        <Card>
+        <Card tier="panel">
           <TrendChart
             label="Calories per day (last 7 days)"
             data={days.map((d) => ({ date: formatDisplayDate(d.date), value: d.calories }))}
@@ -39,10 +47,13 @@ export default function FoodAnalyticsScreen() {
           />
         </Card>
 
-        <Card style={{ alignItems: 'center', gap: theme.spacing.md }}>
-          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
-            Macros this week
-          </Text>
+        <Card tier="panel" style={{ alignItems: 'center', gap: theme.spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+            <IconBadge name="pie-chart-outline" color={theme.colors.moduleTasks} size="sm" />
+            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+              Macros this week
+            </Text>
+          </View>
           {macroTotal > 0 ? (
             <>
               <DonutChart
@@ -65,6 +76,7 @@ export default function FoodAnalyticsScreen() {
           )}
         </Card>
       </View>
+      </PremiumGate>
     </ScreenContainer>
   );
 }

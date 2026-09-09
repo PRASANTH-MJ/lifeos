@@ -21,6 +21,12 @@ type Props = {
   onMoveDown?: () => void;
   onArchive?: () => void;
   onDelete?: () => void;
+  /** Logs today's occurrence as 'skip' (see TaskLogSheet's identical Skip action) without opening
+   * the log sheet first — undefined once today is already logged or not due, so the icon simply
+   * doesn't render rather than repeating a no-op action. computeStreak/computeLongestStreak
+   * (modules/habits/streak.ts) already treat 'skip' as neutral: it neither extends nor breaks a
+   * streak, it's just excluded from the walk-back — so this can't invent or break one. */
+  onSkipToday?: () => void;
 };
 
 export function RecurringTaskListItem({
@@ -36,6 +42,7 @@ export function RecurringTaskListItem({
   onMoveDown,
   onArchive,
   onDelete,
+  onSkipToday,
 }: Props) {
   const theme = useAppTheme();
 
@@ -77,6 +84,11 @@ export function RecurringTaskListItem({
           </View>
         </Pressable>
       </Link>
+      {onSkipToday ? (
+        <Pressable accessibilityLabel={`Skip ${task.title} today`} onPress={onSkipToday} hitSlop={8}>
+          <Ionicons name="play-skip-forward-outline" size={18} color={theme.colors.textTertiary} />
+        </Pressable>
+      ) : null}
       {due ? (
         <CompletionPulse active={todayLog?.status === 'done'} size={30}>
           <Pressable

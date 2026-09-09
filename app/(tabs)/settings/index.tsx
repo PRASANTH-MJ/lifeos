@@ -1,24 +1,31 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, AppState, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as LocalAuthentication from 'expo-local-authentication';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AppState, Image, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
-import { Button, Card, GlowSurface, LoadingState, ScreenContainer, SegmentedControl, TextField, UpsellModal } from '@/components';
+import { Button, Card, GlowSurface, IconBadge, LoadingState, ScreenContainer, SegmentedControl, TextField, UpsellModal, showAlert } from '@/components';
 import { formatDisplayDateTime } from '@/lib/date';
 import {
+  cancelReminder,
   getNotificationPermissionSnapshot,
   type NotificationPermissionSnapshot,
   openAlarmSettings,
   openNotificationSettings,
   requestNotificationPermissions,
+  scheduleWeeklyReminder,
+  SCOREBOARD_WEEKLY_REMINDER_ID,
 } from '@/notifications';
 import { useCloudBackup } from '@/modules/backup';
-import { useDataExport } from '@/modules/export';
+import { useAccountDataExport, useBackupVerification, useDataExport } from '@/modules/export';
 import { useAuth } from '@/modules/auth';
-import { PLANS, usePremium } from '@/modules/premium';
+import { isAdminUser } from '@/modules/admin';
+import { registerPushToken } from '@/modules/notifications';
+import { FREE_LIMITS, PLANS, trialUrgencyHeadline, trialUrgencyLevel, usePremium } from '@/modules/premium';
 import { useProfile } from '@/modules/profile';
 import { useSettings } from '@/modules/settings';
+import { useManualSync, useSyncStatus } from '@/modules/sync';
 import { useAppTheme } from '@/theme';
 import { THEME_COLORS, THEME_LABELS, type ThemeName } from '@/theme/tokens';
 
@@ -29,15 +36,53 @@ function SectionHeader({ label }: { label: string }) {
   return (
     <Text
       style={{
-        color: theme.colors.textTertiary,
+        color: theme.colors.textSecondary,
         fontSize: theme.typography.size.xs,
         fontWeight: theme.typography.weight.semibold,
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        letterSpacing: 0.8,
+        marginLeft: theme.spacing.xs,
       }}>
       {label}
     </Text>
   );
+}
+
+/** A single settings row inside a panel: leading IconBadge, title (+ optional subtitle), trailing
+ * content (value text, chevron, switch-like control). Matches the mockups' list-row pattern —
+ * used for rows that are primarily navigational/informational rather than a bespoke widget. */
+function SettingsRow({
+  icon,
+  iconColor,
+  title,
+  subtitle,
+  trailing,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor?: string;
+  title: string;
+  subtitle?: string;
+  trailing?: ReactNode;
+  onPress?: () => void;
+}) {
+  const theme = useAppTheme();
+  const content = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+      <IconBadge name={icon} color={iconColor} size="md" />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
+          {title}
+        </Text>
+        {subtitle ? <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{subtitle}</Text> : null}
+      </View>
+      {trailing}
+      {onPress ? <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} /> : null}
+    </View>
+  );
+
+  if (!onPress) return content;
+  return <Pressable onPress={onPress}>{content}</Pressable>;
 }
 
 function daysSinceSignup(creationTime: string | undefined): number | null {
@@ -51,19 +96,36 @@ export default function SettingsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { premium, plan } = usePremium();
-  const { settings, setTimeFormat } = useSettings();
-  const { profile, setName, setAvatarUri, setPin, disablePin } = useProfile();
+  const { premium, plan, trialActive, trialDaysLeft } = usePremium();
+  const { settings, setTimeFormat, setScoreboardWeeklyReminder } = useSettings();
+  const { profile, setName, setAvatarUri, setPin, disablePin, setBiometricEnabled } = useProfile();
   const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
   useEffect(() => {
     setNameDraft(profile?.name ?? '');
   }, [profile?.name]);
   const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState<string | null>(null);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    LocalAuthentication.hasHardwareAsync().then(async (hasHardware) => {
+      if (!hasHardware) return;
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!enrolled) return;
+      // Android-only app — always "Fingerprint", never "Face ID" (an Apple trademark/UX term
+      // that doesn't apply here even on the minority of Android phones with camera-based face
+      // unlock, which isn't the same secure biometric class Face ID implies).
+      setBiometricLabel('Fingerprint');
+    });
+  }, []);
   const [themeUpsellVisible, setThemeUpsellVisible] = useState(false);
   const [backupUpsellVisible, setBackupUpsellVisible] = useState(false);
   const [exportUpsellVisible, setExportUpsellVisible] = useState(false);
   const { backingUp, restoring, lastBackupAt, error: backupError, backupNow, restoreLatest, refreshLastBackupAt } = useCloudBackup();
+  const { syncing, lastSyncedAt, error: syncError, syncNow } = useManualSync();
+  const { pendingCount } = useSyncStatus();
   const { exporting, error: exportError, exportPdf, exportExcel } = useDataExport();
+  const { exporting: exportingAccountData, error: accountDataExportError, downloadMyData } = useAccountDataExport();
+  const { verifying: verifyingBackup, result: backupVerificationResult, verifyBackup } = useBackupVerification();
   const [permissionSnapshot, setPermissionSnapshot] = useState<NotificationPermissionSnapshot | null>(null);
 
   const refreshPermissionSnapshot = useCallback(() => {
@@ -111,6 +173,31 @@ export default function SettingsScreen() {
     if (nicknameDirty) setName(nameDraft.trim());
   };
 
+  /** Toggled from the Notifications card below — schedules/cancels a single fixed-identifier
+   * weekly reminder (Sunday 6pm) rather than anything per-module, since there's only ever one of
+   * these. scheduleWeeklyReminder already cancels its own identifier before re-creating it, so
+   * this stays idempotent even if the toggle is flipped on repeatedly. */
+  const onToggleScoreboardReminder = async (enabled: boolean) => {
+    await setScoreboardWeeklyReminder(enabled);
+    if (!enabled) {
+      await cancelReminder(SCOREBOARD_WEEKLY_REMINDER_ID);
+      return;
+    }
+    const granted = await requestNotificationPermissions();
+    if (!granted) {
+      await setScoreboardWeeklyReminder(false);
+      return;
+    }
+    await scheduleWeeklyReminder({
+      identifier: SCOREBOARD_WEEKLY_REMINDER_ID,
+      title: 'Life Scoreboard check-in',
+      body: "See how physical, mental, spiritual, financial, and relationship balance look this week.",
+      weekday: 1,
+      hour: 18,
+      minute: 0,
+    });
+  };
+
   return (
     <ScreenContainer>
       <View style={{ gap: theme.spacing.xl }}>
@@ -120,7 +207,7 @@ export default function SettingsScreen() {
 
         <View style={{ gap: theme.spacing.sm }}>
           <SectionHeader label="Profile" />
-          <Card glow style={{ gap: theme.spacing.md }}>
+          <Card glow tier="panel" style={{ gap: theme.spacing.md }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
               <Pressable onPress={onPickAvatar}>
                 <GlowSurface intensity="md" borderRadius={32}>
@@ -177,29 +264,41 @@ export default function SettingsScreen() {
 
             <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border }} />
 
-            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{user?.email}</Text>
+            {/* Long-press is the only way in — deliberately no visible entry point for regular
+                users. isAdminUser makes this a no-op for anyone but the developer's own account. */}
+            <Pressable onLongPress={() => isAdminUser(user) && router.push('/admin-analytics')} delayLongPress={1500}>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{user?.email}</Text>
+            </Pressable>
             <View>
               <Button label="Log out" variant="danger" onPress={signOut} />
             </View>
+            <Pressable onPress={() => router.push('/delete-account')} style={{ alignItems: 'center', paddingVertical: theme.spacing.xs }}>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Delete my account</Text>
+            </Pressable>
           </Card>
         </View>
 
         <View style={{ gap: theme.spacing.sm }}>
           <SectionHeader label="Personal Details" />
-          <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-              Height, weight, date of birth, and your health/financial goals — used to personalize the app.
-            </Text>
-            <Button label="Edit personal details" variant="secondary" onPress={() => router.push('/onboarding')} />
+          <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+            <SettingsRow
+              icon="body-outline"
+              title="Personal details"
+              subtitle="Height, weight, date of birth, and your health/financial goals."
+              onPress={() => router.push('/onboarding')}
+            />
           </Card>
         </View>
 
         <View style={{ gap: theme.spacing.sm }}>
           <SectionHeader label="Appearance" />
-          <Card style={{ gap: theme.spacing.md }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-              {premium ? 'Pick the look of the whole app.' : "You're on the default theme for your device — Pro unlocks switching between all 4."}
-            </Text>
+          <Card tier="panel" style={{ gap: theme.spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="color-palette-outline" size="md" />
+              <Text style={{ flex: 1, color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                {premium ? 'Pick the look of the whole app.' : "You're on the default theme for your device — Pro unlocks switching between all 4."}
+              </Text>
+            </View>
             <View style={{ flexDirection: 'row', gap: theme.spacing.md, flexWrap: 'wrap' }}>
               {THEME_NAMES.map((name) => (
                 <ThemeSwatch
@@ -216,15 +315,40 @@ export default function SettingsScreen() {
 
         <View style={{ gap: theme.spacing.sm }}>
           <SectionHeader label="App Lock & Security" />
-          <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-              A PIN required to open the app on this device — not an account, just a local lock.
-            </Text>
+          <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="lock-closed-outline" size="md" />
+              <Text style={{ flex: 1, color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                A PIN required to open the app on this device — not an account, just a local lock.
+              </Text>
+            </View>
             {profile.pinEnabled ? (
-              <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
-                <Button label="Change PIN" variant="secondary" onPress={() => setPinModalVisible(true)} />
-                <Button label="Turn off" variant="danger" onPress={disablePin} />
-              </View>
+              <>
+                <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
+                  <Button label="Change PIN" variant="secondary" onPress={() => setPinModalVisible(true)} />
+                  <Button label="Turn off" variant="danger" onPress={disablePin} />
+                </View>
+                {biometricLabel ? (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginTop: theme.spacing.sm,
+                      paddingTop: theme.spacing.sm,
+                      borderTopWidth: 1,
+                      borderTopColor: theme.colors.border,
+                    }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+                      <Ionicons name="finger-print-outline" size={18} color={theme.colors.textSecondary} />
+                      <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                        Unlock with {biometricLabel}
+                      </Text>
+                    </View>
+                    <Switch value={profile.biometricEnabled} onValueChange={setBiometricEnabled} />
+                  </View>
+                ) : null}
+              </>
             ) : (
               <View style={{ marginTop: theme.spacing.xs }}>
                 <Button label="Set up PIN lock" variant="secondary" onPress={() => setPinModalVisible(true)} />
@@ -236,17 +360,21 @@ export default function SettingsScreen() {
         {permissionSnapshot && permissionSnapshot.notifications !== 'unsupported' ? (
           <View style={{ gap: theme.spacing.sm }}>
             <SectionHeader label="Notifications" />
-            <Card style={{ gap: theme.spacing.sm }}>
-              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-                Required for reminders and alarms in every module to actually go off.
-              </Text>
+            <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                <IconBadge name="notifications-outline" size="md" />
+                <Text style={{ flex: 1, color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                  Required for reminders and alarms in every module to actually go off.
+                </Text>
+              </View>
 
               <PermissionRow
                 label="Notifications"
                 state={permissionSnapshot.notifications}
                 onFix={async () => {
                   if (permissionSnapshot.canAskAgain) {
-                    await requestNotificationPermissions();
+                    const granted = await requestNotificationPermissions();
+                    if (granted && user) await registerPushToken(user.uid).catch(() => {});
                     refreshPermissionSnapshot();
                   } else {
                     await openNotificationSettings();
@@ -263,16 +391,40 @@ export default function SettingsScreen() {
                   fixLabel="Open settings"
                 />
               ) : null}
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginTop: theme.spacing.sm,
+                  paddingTop: theme.spacing.sm,
+                  borderTopWidth: 1,
+                  borderTopColor: theme.colors.border,
+                }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                    Weekly Scoreboard check-in
+                  </Text>
+                  <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                    A Sunday evening nudge to see how your five areas are trending
+                  </Text>
+                </View>
+                <Switch value={settings.scoreboardWeeklyReminder} onValueChange={onToggleScoreboardReminder} />
+              </View>
             </Card>
           </View>
         ) : null}
 
         <View style={{ gap: theme.spacing.sm }}>
           <SectionHeader label="Time Format" />
-          <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-              Applies everywhere a time is shown or entered, e.g. task due times.
-            </Text>
+          <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="time-outline" size="md" />
+              <Text style={{ flex: 1, color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                Applies everywhere a time is shown or entered, e.g. task due times.
+              </Text>
+            </View>
             <View style={{ marginTop: theme.spacing.xs }}>
               <SegmentedControl
                 options={[
@@ -288,33 +440,110 @@ export default function SettingsScreen() {
 
         <View style={{ gap: theme.spacing.sm }}>
           <SectionHeader label="Pro" />
-          <Card glow={!premium} style={{ gap: theme.spacing.sm }}>
-            {premium ? (
-              <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
-                ✓ You're on Pro{plan ? ` (${PLANS[plan].label})` : ''} — every limit is lifted.
-              </Text>
-            ) : (
-              <>
-                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-                  Free plan: up to 5 habits, 20 active tasks, 2 recurring tasks, 15 journal entries, 1 finance account.
+          <Card tier="panel" glow={!premium} style={{ gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge
+                name="diamond-outline"
+                color={trialActive && trialUrgencyLevel(trialDaysLeft) !== 'normal' ? theme.colors.danger : theme.colors.warning}
+                size="md"
+              />
+              {trialActive ? (
+                <Text
+                  style={{
+                    flex: 1,
+                    color: trialUrgencyLevel(trialDaysLeft) === 'normal' ? theme.colors.warning : theme.colors.danger,
+                    fontSize: theme.typography.size.sm,
+                    fontWeight: theme.typography.weight.semibold,
+                  }}>
+                  {trialUrgencyHeadline(trialDaysLeft)} — every Pro feature is still unlocked.
                 </Text>
-                <View style={{ marginTop: theme.spacing.xs }}>
-                  <Button label="Upgrade to Pro" variant="gradient" onPress={() => router.push('/premium')} />
+              ) : premium ? (
+                <Text style={{ flex: 1, color: theme.colors.success, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+                  You're on Pro{plan ? ` (${PLANS[plan].label})` : ''} — every limit is lifted.
+                </Text>
+              ) : (
+                <Text style={{ flex: 1, color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                  Free plan: up to {FREE_LIMITS.habits} habit, {FREE_LIMITS.tasks} active tasks, {FREE_LIMITS.journalEntries} journal
+                  entries, {FREE_LIMITS.financeTransactions} transactions/month. No recurring tasks, finance accounts, or custom
+                  workouts. Analytics, muscle recovery, the exercise library, themes, backup, and export are Pro-only.
+                </Text>
+              )}
+            </View>
+            {!premium || trialActive ? (
+              <Button
+                label={
+                  trialActive
+                    ? trialUrgencyLevel(trialDaysLeft) === 'final'
+                      ? 'Subscribe now — trial ends today'
+                      : 'Subscribe before your trial ends'
+                    : 'Upgrade to Pro'
+                }
+                variant="gradient"
+                onPress={() => router.push('/premium')}
+              />
+            ) : null}
+            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border, marginVertical: theme.spacing.xs }} />
+            <SettingsRow
+              icon="people-outline"
+              title="Family Plan"
+              subtitle="Share Pro with up to 5 people"
+              onPress={() => router.push('/family-plan')}
+            />
+          </Card>
+        </View>
+
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Cloud Sync" />
+          <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="sync-outline" size="md" />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                  {premium
+                    ? 'Your data syncs across devices in real time.'
+                    : 'Your data syncs across devices automatically at least once a day — tap "Sync now" any time for an immediate sync, or upgrade to Pro for real-time sync.'}
+                </Text>
+                <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs }}>
+                  {lastSyncedAt ? `Last synced ${formatDisplayDateTime(new Date(lastSyncedAt).toISOString())}` : 'Not synced yet'}
+                </Text>
+              </View>
+              {pendingCount > 0 ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    backgroundColor: theme.colors.warningMuted,
+                    borderRadius: theme.radius.full,
+                    paddingHorizontal: theme.spacing.sm,
+                    paddingVertical: 3,
+                  }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.warning }} />
+                  <Text style={{ color: theme.colors.warning, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.semibold }}>
+                    {pendingCount} pending
+                  </Text>
                 </View>
-              </>
-            )}
+              ) : null}
+            </View>
+            {syncError ? <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.xs }}>{syncError}</Text> : null}
+            <Button label="Sync now" variant="secondary" loading={syncing} onPress={syncNow} />
           </Card>
         </View>
 
         <View style={{ gap: theme.spacing.sm }}>
           <SectionHeader label="Cloud Backup" />
-          <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-              Back up your habits, tasks, journal, and finance data — restore it any time, even on a new device.
-            </Text>
-            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs }}>
-              {lastBackupAt ? `Last backed up ${formatDisplayDateTime(lastBackupAt)}` : 'No backup yet'}
-            </Text>
+          <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="cloud-upload-outline" size="md" />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                  Back up your habits, tasks, journal, and finance data — restore it any time, even on a new device.
+                </Text>
+                <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs }}>
+                  {lastBackupAt ? `Last backed up ${formatDisplayDateTime(lastBackupAt)}` : 'No backup yet'}
+                </Text>
+              </View>
+            </View>
             {backupError ? <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.xs }}>{backupError}</Text> : null}
             <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
               <Button
@@ -332,7 +561,7 @@ export default function SettingsScreen() {
                     setBackupUpsellVisible(true);
                     return;
                   }
-                  Alert.alert(
+                  showAlert(
                     'Restore backup?',
                     'This replaces all habits, tasks, journal entries, and finance data on this device with your last backup. This can\'t be undone.',
                     [
@@ -348,10 +577,13 @@ export default function SettingsScreen() {
 
         <View style={{ gap: theme.spacing.sm }}>
           <SectionHeader label="Export Data" />
-          <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-              Take your habits, tasks, journal, and finance data with you as a PDF or spreadsheet.
-            </Text>
+          <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="download-outline" size="md" />
+              <Text style={{ flex: 1, color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                Take your habits, tasks, journal, and finance data with you as a PDF or spreadsheet.
+              </Text>
+            </View>
             {exportError ? <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.xs }}>{exportError}</Text> : null}
             <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
               <Button
@@ -373,17 +605,50 @@ export default function SettingsScreen() {
         </View>
 
         <View style={{ gap: theme.spacing.sm }}>
-          <SectionHeader label="Help" />
-          <Card style={{ gap: theme.spacing.sm }}>
-            <Button label="Help & Support" variant="secondary" onPress={() => router.push('/help')} />
+          <SectionHeader label="Your Data" />
+          <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="cloud-download-outline" size="md" />
+              <Text style={{ flex: 1, color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                Download everything tied to your account — synced records, your profile, and your posts — as a single JSON file.
+              </Text>
+            </View>
+            {accountDataExportError ? (
+              <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.xs }}>{accountDataExportError}</Text>
+            ) : null}
+            <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+              <Button label="Download my data" variant="secondary" loading={exportingAccountData} onPress={downloadMyData} />
+              <Button label="Verify my backup" variant="secondary" loading={verifyingBackup} onPress={verifyBackup} />
+            </View>
+            {backupVerificationResult ? (
+              <Text
+                style={{
+                  color: backupVerificationResult.ok ? theme.colors.success : theme.colors.warning,
+                  fontSize: theme.typography.size.xs,
+                }}>
+                {backupVerificationResult.summary}
+              </Text>
+            ) : null}
           </Card>
+        </View>
 
-          <SectionHeader label="Feedback" />
-          <Card style={{ gap: theme.spacing.sm }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-              Bug reports, feature ideas, anything on your mind — it goes straight to the developer.
-            </Text>
-            <Button label="Send feedback" variant="secondary" onPress={() => router.push('/feedback')} />
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Support" />
+          <Card tier="panel" style={{ gap: theme.spacing.md }}>
+            <SettingsRow
+              icon="calendar-outline"
+              title="Weekly Review"
+              subtitle="Overdue tasks, what's due this week, and upcoming events."
+              onPress={() => router.push('/weekly-review')}
+            />
+            <SettingsRow icon="help-circle-outline" title="Help & Support" onPress={() => router.push('/help')} />
+            <SettingsRow
+              icon="chatbubble-ellipses-outline"
+              title="Send feedback"
+              subtitle="Bug reports, feature ideas, anything on your mind."
+              onPress={() => router.push('/feedback')}
+            />
+            <SettingsRow icon="document-text-outline" title="Privacy Policy" onPress={() => router.push('/privacy-policy')} />
           </Card>
         </View>
       </View>
@@ -414,6 +679,7 @@ export default function SettingsScreen() {
         message="Exporting to PDF and Excel is a Pro feature — take your data with you any time."
         onClose={() => setExportUpsellVisible(false)}
       />
+
     </ScreenContainer>
   );
 }
@@ -438,7 +704,7 @@ function ThemeSwatch({
         style={{
           width: 64,
           height: 64,
-          borderRadius: theme.radius.lg,
+          borderRadius: theme.radius.card,
           backgroundColor: palette.background,
           borderWidth: selected ? 2 : 1,
           borderColor: selected ? palette.primary : theme.colors.border,
@@ -492,7 +758,7 @@ function PinSetupModal({ visible, onClose, onSave }: { visible: boolean; onClose
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+      <KeyboardAvoidingView style={{ flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay }} onPress={onClose} />
         <View
           style={{
@@ -553,7 +819,7 @@ function PinSetupModal({ visible, onClose, onSave }: { visible: boolean; onClose
             }}
           />
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -574,13 +840,10 @@ function PermissionRow({
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
-      <View
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 4,
-          backgroundColor: granted ? theme.colors.success : theme.colors.danger,
-        }}
+      <IconBadge
+        name={granted ? 'checkmark-circle' : 'alert-circle-outline'}
+        color={granted ? theme.colors.success : theme.colors.danger}
+        size="sm"
       />
       <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.sm }}>{label}</Text>
       {granted ? (

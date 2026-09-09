@@ -1,10 +1,10 @@
 import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, dateKeyToTimestamp, toDateKey, todayKey } from '@/lib/date';
-import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
+import { onLocalWrite, pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 type WorkoutLog = { id: number; workout_key: string; completed_at: string; duration_seconds: number | null };
 
@@ -25,6 +25,15 @@ export function useWorkoutLogs() {
       refresh();
     }, [refresh])
   );
+
+  // See onLocalWrite's doc comment (modules/sync/syncEngine.ts) — picks up a workout_logs write
+  // made through a different useWorkoutLogs() instance (e.g. usePublicProfileStatsSync's, mounted
+  // once at the root layout and never "focused" again by navigation).
+  useEffect(() => {
+    return onLocalWrite((table) => {
+      if (table === 'workout_logs') refresh();
+    });
+  }, [refresh]);
 
   const logCompletion = useCallback(
     async (workoutKey: string, dateKey?: string, durationSeconds?: number) => {

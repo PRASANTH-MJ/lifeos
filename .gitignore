@@ -51,3 +51,7 @@ server/data.sqlite*
 *.apk
 *.aab
 local-build*.log
+
+# data pipeline: regenerable fetch output + its own node_modules
+scripts/node_modules/
+scripts/output/

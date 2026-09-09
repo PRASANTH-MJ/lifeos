@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
+import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import type { JournalEntry } from './types';
 
 export function useJournalDetail(entryId: number) {
@@ -31,12 +32,14 @@ export function useJournalDetail(entryId: number) {
         new Date().toISOString(),
         entryId,
       ]);
+      await pushLocalRow(db, 'journal_entries', entryId);
       await refresh();
     },
     [db, entryId, refresh]
   );
 
   const deleteEntry = useCallback(async () => {
+    await recordDeleteBeforeRemoving(db, 'journal_entries', entryId);
     await db.runAsync('DELETE FROM journal_entries WHERE id = ?', [entryId]);
   }, [db, entryId]);
 

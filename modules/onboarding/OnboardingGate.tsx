@@ -1,6 +1,7 @@
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/theme';
+import type { Gender } from '@/modules/profile/types';
 import { OnboardingForm } from './OnboardingForm';
 import type { UserDetails, UserDetailsInput } from './types';
 
@@ -8,8 +9,12 @@ type Props = {
   details: UserDetails | null;
   name: string;
   email: string | null;
+  gender: Gender | null;
+  avatarUri: string | null;
   onSave: (input: UserDetailsInput) => Promise<void>;
   onSaveName: (name: string) => void;
+  onGenderChange: (gender: Gender | null) => void;
+  onAvatarChange: (avatarUri: string | null) => void;
   onSkip: () => Promise<void>;
 };
 
@@ -20,11 +25,11 @@ type Props = {
  * two independent hook instances would each hold their own stale state, so a save from this
  * screen would never be seen by the gate check in app/_layout.tsx that's deciding whether to
  * keep rendering this screen (same reason PinLockScreen takes verifyPin as a prop). */
-export function OnboardingGate({ details, name, email, onSave, onSaveName, onSkip }: Props) {
+export function OnboardingGate({ details, name, email, gender, avatarUri, onSave, onSaveName, onGenderChange, onAvatarChange, onSkip }: Props) {
   const theme = useAppTheme();
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.colors.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={{ padding: theme.spacing.xl, gap: theme.spacing.xl }} keyboardShouldPersistTaps="handled">
         <View style={{ gap: theme.spacing.xs }}>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
@@ -39,9 +44,13 @@ export function OnboardingGate({ details, name, email, onSave, onSaveName, onSki
           initial={details}
           name={name}
           email={email}
+          gender={gender}
+          avatarUri={avatarUri}
           saveLabel="Save & continue"
           onSave={onSave}
           onSaveName={onSaveName}
+          onGenderChange={onGenderChange}
+          onAvatarChange={onAvatarChange}
           onSkip={onSkip}
         />
       </ScrollView>

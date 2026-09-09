@@ -13,6 +13,10 @@ export type SyncTableConfig = {
  * and its premium flag already has its own dedicated, Cloud-Function-gated sync path (see
  * modules/premium/usePremium.ts) — folding it into this generic mechanism would just be a
  * redundant, unnecessary second writer of the same field.
+ *
+ * `routine_progress`/`routine_day_logs` were scaffolded (schema + sync_id columns) well before
+ * the program-progress feature (useRoutineProgress.ts) that actually writes to them existed —
+ * see that file's doc comment.
  */
 export const SYNC_TABLES: SyncTableConfig[] = [
   { table: 'categories' },
@@ -22,12 +26,36 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   { table: 'finance_goals' },
   { table: 'finance_debts' },
   { table: 'finance_labels' },
+  { table: 'task_labels' },
   { table: 'shopping_lists' },
   { table: 'habits', foreignKeys: [{ column: 'category_id', referencesTable: 'categories' }] },
-  { table: 'tasks', foreignKeys: [{ column: 'category_id', referencesTable: 'categories' }, { column: 'parent_task_id', referencesTable: 'tasks' }] },
+  // habit_sync_ids is a JSON array of habit sync_ids, not a single scalar foreign key column — see
+  // db/schema.ts's v59 migration comment for why it's stored that way instead of via `foreignKeys`.
+  { table: 'habit_chains' },
+  {
+    table: 'tasks',
+    foreignKeys: [
+      { column: 'category_id', referencesTable: 'categories' },
+      { column: 'parent_task_id', referencesTable: 'tasks' },
+      { column: 'blocked_by_task_id', referencesTable: 'tasks' },
+    ],
+  },
   { table: 'habit_logs', foreignKeys: [{ column: 'habit_id', referencesTable: 'habits' }] },
   { table: 'task_completions', foreignKeys: [{ column: 'task_id', referencesTable: 'tasks' }] },
-  { table: 'timer_logs', foreignKeys: [{ column: 'habit_id', referencesTable: 'habits' }] },
+  {
+    table: 'task_task_labels',
+    foreignKeys: [
+      { column: 'task_id', referencesTable: 'tasks' },
+      { column: 'label_id', referencesTable: 'task_labels' },
+    ],
+  },
+  {
+    table: 'timer_logs',
+    foreignKeys: [
+      { column: 'habit_id', referencesTable: 'habits' },
+      { column: 'task_id', referencesTable: 'tasks' },
+    ],
+  },
   { table: 'shopping_items', foreignKeys: [{ column: 'list_id', referencesTable: 'shopping_lists' }] },
   {
     table: 'finance_transactions',
@@ -68,10 +96,25 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   { table: 'exercise_logs' },
   { table: 'water_preferences' },
   { table: 'water_logs' },
+  { table: 'cycle_preferences' },
+  { table: 'cycle_logs' },
+  { table: 'cardio_activities' },
+  { table: 'cardio_logs' },
+  { table: 'cardio_favorite_routes' },
   { table: 'custom_workouts' },
+  { table: 'routine_progress' },
+  { table: 'routine_day_logs' },
   { table: 'app_settings' },
   { table: 'module_reminders' },
   { table: 'user_details' },
+  { table: 'body_measurements' },
+  { table: 'relationship_people' },
+  { table: 'relationship_checkins', foreignKeys: [{ column: 'person_id', referencesTable: 'relationship_people' }] },
+  // Trend-cache tables, not new user input — see db/schema.ts's v66 migration comment for why
+  // these joined the sync pipeline (so the Scoreboard/Net Worth charts match across devices)
+  // despite being derived from tables that already sync on their own.
+  { table: 'life_score_snapshots' },
+  { table: 'finance_networth_snapshots' },
 ];
 
 export function syncConfigFor(table: string): SyncTableConfig | undefined {

@@ -60,6 +60,11 @@ export default function NewEventScreen() {
         </View>
         <TextField label="Notes (optional)" placeholder="Add details" value={notes} onChangeText={setNotes} multiline numberOfLines={3} />
         <Button label="Save event" onPress={onSave} disabled={title.trim().length === 0} loading={saving} />
+        {title.trim().length === 0 ? (
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, textAlign: 'center' }}>
+            Enter a title to continue
+          </Text>
+        ) : null}
       </View>
     </ScreenContainer>
   );

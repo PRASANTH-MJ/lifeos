@@ -2,6 +2,9 @@ export type TimeFormat = '12h' | '24h';
 
 export type AppSettings = {
   timeFormat: TimeFormat;
+  scoreboardWeeklyReminder: boolean;
+  lastWeeklyRecapShownAt: string | null;
+  lastSeenChangelogVersion: string | null;
 };
 
 /** `time24` is a "HH:MM" 24-hour string, as stored everywhere in the DB. */

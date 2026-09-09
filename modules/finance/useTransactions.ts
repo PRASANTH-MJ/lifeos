@@ -1,11 +1,49 @@
 import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 
+import { showAlert } from '@/components';
 import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 import type { Transaction, TransactionType } from './types';
+
+/** Guards against the two realistic double-log causes (a double "Save" tap, or a flaky-network
+ * retry) — same account+category+amount logged again on the same day within this window is
+ * treated as "probably the same transaction" and prompts a confirm rather than silently writing
+ * a second row. Bulk paths (CSV import, sample data) pass skipDuplicateCheck: legitimately
+ * repeated same-day/same-amount rows there (e.g. two coffees) shouldn't each stop for a popup. */
+const DUPLICATE_WINDOW_MS = 10_000;
+
+async function findRecentSimilarTransaction(
+  db: SQLiteDatabase,
+  accountId: number,
+  categoryId: number | null,
+  amount: number,
+  date: string
+): Promise<boolean> {
+  const cutoff = new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
+  const row = await db.getFirstAsync<{ id: number }>(
+    `SELECT id FROM finance_transactions
+     WHERE account_id = ? AND amount = ? AND date = ? AND created_at >= ? AND category_id IS ?`,
+    [accountId, amount, date, cutoff, categoryId]
+  );
+  return row != null;
+}
+
+function confirmSaveDuplicate(): Promise<boolean> {
+  return new Promise((resolve) => {
+    showAlert(
+      'Possible duplicate',
+      'This looks like a duplicate of an entry from a moment ago — save anyway?',
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Save anyway', onPress: () => resolve(true) },
+      ]
+    );
+  });
+}
 
 type TransactionRow = {
   id: number;
@@ -73,37 +111,37 @@ export function useTransactions(start?: string, end?: string, accountId?: string
   );
 
   const addTransaction = useCallback(
-    async (values: {
-      accountId: string;
-      toAccountId?: string | null;
-      categoryId?: string | null;
-      type: TransactionType;
-      amount: number;
-      date: string;
-      note?: string | null;
-    }) => {
+    async (
+      values: {
+        accountId: string;
+        toAccountId?: string | null;
+        categoryId?: string | null;
+        type: TransactionType;
+        amount: number;
+        date: string;
+        note?: string | null;
+      },
+      options?: { skipDuplicateCheck?: boolean }
+    ) => {
+      const accountIdNum = Number(values.accountId);
+      const categoryId = values.type === 'transfer' ? null : values.categoryId ? Number(values.categoryId) : null;
+
+      if (!options?.skipDuplicateCheck) {
+        const isDuplicate = await findRecentSimilarTransaction(db, accountIdNum, categoryId, values.amount, values.date);
+        if (isDuplicate && !(await confirmSaveDuplicate())) return null;
+      }
+
       const now = new Date().toISOString();
       const toAccountId = values.type === 'transfer' && values.toAccountId ? Number(values.toAccountId) : null;
       const result = await db.runAsync(
         `INSERT INTO finance_transactions (account_id, category_id, type, amount, date, note, to_account_id, created_at, updated_at, sync_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          Number(values.accountId),
-          values.type === 'transfer' ? null : values.categoryId ? Number(values.categoryId) : null,
-          values.type,
-          values.amount,
-          values.date,
-          values.note ?? null,
-          toAccountId,
-          now,
-          now,
-          Crypto.randomUUID(),
-        ]
+        [accountIdNum, categoryId, values.type, values.amount, values.date, values.note ?? null, toAccountId, now, now, Crypto.randomUUID()]
       );
       await pushLocalRow(db, 'finance_transactions', result.lastInsertRowId);
       // The insert trigger recomputes current_balance directly via SQL, not through this file's
       // own runAsync calls — push the affected account(s) so the recalculated balance syncs too.
-      await pushLocalRow(db, 'finance_accounts', Number(values.accountId));
+      await pushLocalRow(db, 'finance_accounts', accountIdNum);
       if (toAccountId) await pushLocalRow(db, 'finance_accounts', toAccountId);
       await refresh();
       return String(result.lastInsertRowId);
@@ -158,6 +196,14 @@ export function useTransactions(start?: string, end?: string, accountId?: string
         'SELECT account_id, to_account_id FROM finance_transactions WHERE id = ?',
         [Number(id)]
       );
+      // finance_transaction_labels.transaction_id is ON DELETE CASCADE — tombstone those links
+      // before deleting the transaction, or other devices never learn they were removed.
+      const labelRows = await db.getAllAsync<{ rowid: number }>('SELECT rowid FROM finance_transaction_labels WHERE transaction_id = ?', [
+        Number(id),
+      ]);
+      for (const labelRow of labelRows) {
+        await recordDeleteBeforeRemoving(db, 'finance_transaction_labels', labelRow.rowid);
+      }
       await recordDeleteBeforeRemoving(db, 'finance_transactions', Number(id));
       await db.runAsync('DELETE FROM finance_transactions WHERE id = ?', [Number(id)]);
       // The delete trigger recomputes current_balance for the transaction's account(s) — push

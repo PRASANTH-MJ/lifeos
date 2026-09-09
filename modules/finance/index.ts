@@ -1,4 +1,5 @@
 export { useAccounts } from './useAccounts';
+export { parseTransactionsCsv, type ImportTransactionsResult, type ParsedTransactionRow } from './importTransactionsCsv';
 export { useTransactions } from './useTransactions';
 export { useFinanceSummary } from './useFinanceSummary';
 export { useFinanceCategories } from './useFinanceCategories';
@@ -18,6 +19,9 @@ export { syncPlannedPaymentNotification, cancelPlannedPaymentNotification, plann
 export { useFinanceLabels, useTransactionLabels } from './useFinanceLabels';
 export { useFinanceBudgetPlans } from './useFinanceBudgetPlans';
 export { useFinanceRecords, type RecordEntry, type RecordGroup } from './useFinanceRecords';
+export { useNetWorthHistory } from './useNetWorthHistory';
+export { useSpendingAnomalies } from './useSpendingAnomalies';
+export { useSplitExpenses, type SplitExpense } from './useSplitExpenses';
 export {
   ACCOUNT_TYPE_LABELS,
   BUDGET_PERIOD_LABELS,
@@ -27,6 +31,7 @@ export {
   PRIORITY_LABELS,
   formatCurrency,
   formatCurrencyCompact,
+  getDisplayCurrency,
   type Account,
   type AccountType,
   type BudgetPeriod,
@@ -42,8 +47,10 @@ export {
   type Goal,
   type GoalContribution,
   type Label,
+  type NetWorthSnapshot,
   type PlannedPayment,
   type PlannedPaymentFrequency,
+  type SpendingAnomaly,
   type SpendingPriority,
   type Transaction,
   type TransactionType,

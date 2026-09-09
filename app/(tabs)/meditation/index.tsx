@@ -1,17 +1,40 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Button, Card, FAB_BOTTOM_OFFSET, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
-import { todayKey } from '@/lib/date';
+import { Button, Card, FAB_BOTTOM_OFFSET, HeatmapCalendar, IconBadge, LogPastEntryModal, ReminderCard, ScreenContainer, ShareCardModal, StreakBadge, type ShareCardData } from '@/components';
+import { todayKey, toDateKey } from '@/lib/date';
 import { MEDITATION_SESSIONS, findSession, useMeditationLogs } from '@/modules/meditation';
+import { useMindfulnessStreak } from '@/modules/mindfulness';
 import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 export default function MeditationScreen() {
   const theme = useAppTheme();
-  const { totalMinutesThisWeek, refresh, logSession } = useMeditationLogs();
+  const { logs, totalMinutesThisWeek, refresh, logSession } = useMeditationLogs();
+  const streak = useMindfulnessStreak();
+
+  const heatmapValues = useMemo(() => {
+    const values: Record<string, number> = {};
+    for (const log of logs) {
+      const dateKey = toDateKey(new Date(log.completed_at));
+      values[dateKey] = (values[dateKey] ?? 0) + log.duration_seconds / 60;
+    }
+    return values;
+  }, [logs]);
+  const heatmapMax = Math.max(1, ...Object.values(heatmapValues));
+  const [shareCard, setShareCard] = useState<ShareCardData | null>(null);
+  const onShareStreak = () => {
+    setShareCard({
+      eyebrow: 'Mindfulness streak',
+      value: String(streak),
+      valueLabel: `day streak${streak === 1 ? '' : 's'}`,
+      detail: 'Meditating & breathing on Flowsy',
+      icon: 'moon',
+      accentColor: theme.colors.moduleJournal,
+    });
+  };
   const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders(
     'meditation',
     'Time to meditate',
@@ -33,10 +56,18 @@ export default function MeditationScreen() {
     <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.xl }}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-          <Ionicons name="time" size={22} color={theme.colors.moduleJournal} />
+          <IconBadge name="time" color={theme.colors.moduleJournal} />
           <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>
             {totalMinutesThisWeek} min meditated this week
           </Text>
+          <StreakBadge streak={streak} onPress={onShareStreak} />
+        </Card>
+
+        <Card style={{ gap: theme.spacing.sm }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+            Last 4 months
+          </Text>
+          <HeatmapCalendar values={heatmapValues} weeks={17} maxIntensity={heatmapMax} accentColor={theme.colors.moduleJournal} />
         </Card>
 
         {reminders.map((reminder) => (
@@ -58,17 +89,7 @@ export default function MeditationScreen() {
             <Link key={session.key} href={{ pathname: '/meditation/[sessionKey]', params: { sessionKey: session.key } }} asChild>
               <Pressable>
                 <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                  <View
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: theme.radius.md,
-                      backgroundColor: theme.colors.moduleJournalMuted,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                    <Ionicons name="moon" size={20} color={theme.colors.moduleJournal} />
-                  </View>
+                  <IconBadge name={session.icon} color={theme.colors.moduleJournal} shape="square" />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
                       {session.title}
@@ -86,10 +107,27 @@ export default function MeditationScreen() {
           ))}
         </View>
 
+        <Link href="/meditation/chakras" asChild>
+          <Pressable>
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="color-palette" color={theme.colors.moduleJournal} shape="square" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+                  Chakra Meditation
+                </Text>
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                  7 sessions, one per chakra, with mantra & color
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+            </Card>
+          </Pressable>
+        </Link>
+
         <Link href="/meditation/timer" asChild>
           <Pressable>
             <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-              <Ionicons name="timer-outline" size={22} color={theme.colors.textSecondary} />
+              <IconBadge name="timer-outline" tone="neutral" shape="square" />
               <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
                 Freeform timer
               </Text>
@@ -97,21 +135,6 @@ export default function MeditationScreen() {
             </Card>
           </Pressable>
         </Link>
-
-        <Pressable
-          onPress={() => {
-            setLogSessionKey(MEDITATION_SESSIONS[0].key);
-            setLogDate(todayKey());
-            setLogModalVisible(true);
-          }}>
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-            <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-              Add calendar entry
-            </Text>
-            <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
-          </Card>
-        </Pressable>
       </View>
 
       <LogPastEntryModal
@@ -154,6 +177,7 @@ export default function MeditationScreen() {
       }}>
       <Ionicons name="add" size={28} color="#fff" />
     </Pressable>
+    <ShareCardModal visible={!!shareCard} onClose={() => setShareCard(null)} data={shareCard} />
     </View>
   );
 }

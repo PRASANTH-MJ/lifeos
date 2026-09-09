@@ -1,10 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { Card, EmptyState, LoadingState, RangeChip, ScreenContainer } from '@/components';
-import { BUDGET_PERIOD_LABELS, BUDGET_STATUS_LABELS, formatCurrency, useFinanceBudgetPlans, useFinanceCategories, type BudgetPeriod, type BudgetStatus } from '@/modules/finance';
+import { Card, EmptyState, IconBadge, LoadingState, ProgressBar, RangeChip, ScreenContainer, showAlert } from '@/components';
+import {
+  BUDGET_PERIOD_LABELS,
+  BUDGET_STATUS_LABELS,
+  formatCurrency,
+  useAccounts,
+  useFinanceBudgetPlans,
+  useFinanceCategories,
+  type BudgetPeriod,
+  type BudgetStatus,
+} from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 const PERIODS: BudgetPeriod[] = ['weekly', 'monthly', 'yearly', 'one_time'];
@@ -19,6 +28,7 @@ export default function BudgetsScreen() {
   const theme = useAppTheme();
   const { plans, loading, removeBudgetPlan } = useFinanceBudgetPlans();
   const { categories } = useFinanceCategories();
+  const { displayCurrency } = useAccounts();
   const [period, setPeriod] = useState<BudgetPeriod>('monthly');
 
   if (loading) {
@@ -34,7 +44,7 @@ export default function BudgetsScreen() {
   const totalSpent = filtered.reduce((sum, p) => sum + p.spent, 0);
 
   const onDelete = (planId: string) => {
-    Alert.alert('Delete budget?', 'This removes the budget plan.', [
+    showAlert('Delete budget?', 'This removes the budget plan.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => removeBudgetPlan(planId) },
     ]);
@@ -75,10 +85,10 @@ export default function BudgetsScreen() {
           />
         ) : (
           <>
-            <Card style={{ gap: 4 }}>
+            <Card tier="panel" style={{ gap: 4 }}>
               <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Total spend</Text>
               <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.xl, fontWeight: theme.typography.weight.bold }}>
-                {formatCurrency(totalSpent)} of {formatCurrency(totalBudget)}
+                {formatCurrency(totalSpent, displayCurrency)} of {formatCurrency(totalBudget, displayCurrency)}
               </Text>
             </Card>
             <View style={{ gap: theme.spacing.md }}>
@@ -86,30 +96,45 @@ export default function BudgetsScreen() {
                 const category = plan.category_id ? categories.find((c) => c.id === plan.category_id) : null;
                 const progress = Math.min(plan.spent / plan.amount, 1);
                 const forecastPercent = Math.round((plan.forecastSpend / plan.amount) * 100);
+                const statusColor = STATUS_COLORS[plan.status];
                 return (
                   <Link key={plan.id} href={{ pathname: '/finance/budgets/[id]', params: { id: plan.id } }} asChild>
                     <Pressable>
-                      <Card style={{ gap: theme.spacing.sm }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-                            {plan.name}
-                            {category ? ` · ${category.name}` : ''}
-                          </Text>
+                      <Card tier="elevated" style={{ gap: theme.spacing.sm }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                          <IconBadge name={(category?.icon as never) ?? 'albums-outline'} color={category?.color ?? theme.colors.primary} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+                              {plan.name}
+                            </Text>
+                            {category ? (
+                              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{category.name}</Text>
+                            ) : null}
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+                              {formatCurrency(plan.spent, displayCurrency)}
+                            </Text>
+                            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                              of {formatCurrency(plan.amount, displayCurrency)}
+                            </Text>
+                          </View>
                           <Pressable onPress={() => onDelete(plan.id)} hitSlop={8}>
                             <Ionicons name="trash-outline" size={16} color={theme.colors.textTertiary} />
                           </Pressable>
                         </View>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{formatCurrency(plan.spent)}</Text>
-                          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>of {formatCurrency(plan.amount)}</Text>
-                        </View>
-                        <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
-                          <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: STATUS_COLORS[plan.status] }} />
-                        </View>
+                        <ProgressBar progress={progress} color={statusColor} />
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: STATUS_COLORS[plan.status] }} />
-                            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs }}>{BUDGET_STATUS_LABELS[plan.status]}</Text>
+                          <View
+                            style={{
+                              paddingHorizontal: theme.spacing.sm,
+                              paddingVertical: 3,
+                              borderRadius: theme.radius.full,
+                              backgroundColor: `${statusColor}22`,
+                            }}>
+                            <Text style={{ color: statusColor, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>
+                              {BUDGET_STATUS_LABELS[plan.status]}
+                            </Text>
                           </View>
                           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
                             Forecasted spend at end: {forecastPercent}%

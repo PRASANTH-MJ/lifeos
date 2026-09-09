@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "lifeos-8f0bf"
-  }
+  },
+  "targets": {
+    "lifeos-8f0bf": {
+      "hosting": {
+        "flowsy-download": [
+          "flowsy-download"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

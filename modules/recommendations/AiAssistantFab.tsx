@@ -4,11 +4,11 @@ import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, PanResponder, View } from 'react-native';
 
-import { FAB_BOTTOM_OFFSET } from '@/components/tabBarMetrics';
+import { AI_FAB_SIZE, FAB_BOTTOM_OFFSET } from '@/components/tabBarMetrics';
 import { useBudgetAlert } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
-const BUTTON_SIZE = 52;
+const BUTTON_SIZE = AI_FAB_SIZE;
 const POSITION_KEY = 'ai-assistant-fab-position';
 const DRAG_THRESHOLD = 6;
 
@@ -73,6 +73,8 @@ export function AiAssistantFab() {
   return (
     <Animated.View
       {...panResponder.panHandlers}
+      accessibilityRole="button"
+      accessibilityLabel="AI Assistant"
       style={{
         position: 'absolute',
         transform: pan.getTranslateTransform(),

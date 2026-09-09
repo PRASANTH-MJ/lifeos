@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/theme';
@@ -20,6 +20,14 @@ export function BalloonRiskGame({ onScore }: { onScore: (score: number) => void 
   const [pumps, setPumps] = useState(0);
   const [popAt, setPopAt] = useState(randomPopThreshold());
   const [banked, setBanked] = useState(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    },
+    []
+  );
 
   const start = () => {
     setBalloonIndex(0);
@@ -49,7 +57,7 @@ export function BalloonRiskGame({ onScore }: { onScore: (score: number) => void 
     const next = pumps + 1;
     if (next >= popAt) {
       setPhase('popped');
-      setTimeout(() => nextBalloon(banked), 900);
+      timeoutRef.current = setTimeout(() => nextBalloon(banked), 900);
       return;
     }
     setPumps(next);

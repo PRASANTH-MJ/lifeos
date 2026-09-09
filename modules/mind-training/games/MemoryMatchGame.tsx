@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/theme';
@@ -25,6 +25,14 @@ export function MemoryMatchGame({ onScore }: { onScore: (score: number) => void 
   const [flipped, setFlipped] = useState<number[]>([]);
   const [moves, setMoves] = useState(0);
   const busyRef = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    },
+    []
+  );
 
   const start = () => {
     setDeck(shuffledDeck());
@@ -45,7 +53,7 @@ export function MemoryMatchGame({ onScore }: { onScore: (score: number) => void 
     const isMatch = deck[a].icon === deck[b].icon;
     setMoves((m) => m + 1);
 
-    setTimeout(
+    timeoutRef.current = setTimeout(
       () => {
         setDeck((current) => {
           const next = current.map((card, i) => (isMatch && (i === a || i === b) ? { ...card, matched: true } : card));

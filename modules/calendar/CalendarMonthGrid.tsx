@@ -10,12 +10,17 @@ type Props = {
   year: number;
   month: number;
   selectedDate: string;
+  /** Optional multi-select set, on top of the single `selectedDate` — a cell renders selected
+   * styling if it matches either. Used by cycle-backfill.tsx to let several days be picked at
+   * once; every existing single-select caller (LogPastEntryModal.tsx) leaves this unset and is
+   * unaffected. */
+  selectedDates?: Set<string>;
   markedDates: Set<string>;
   onSelectDate: (dateKey: string) => void;
   onChangeMonth: (delta: number) => void;
 };
 
-export function CalendarMonthGrid({ year, month, selectedDate, markedDates, onSelectDate, onChangeMonth }: Props) {
+export function CalendarMonthGrid({ year, month, selectedDate, selectedDates, markedDates, onSelectDate, onChangeMonth }: Props) {
   const theme = useAppTheme();
   const cells = buildMonthGrid(year, month);
   const today = todayKey();
@@ -53,19 +58,21 @@ export function CalendarMonthGrid({ year, month, selectedDate, markedDates, onSe
           {week.map((dateKey) => {
             const inMonth = Number(dateKey.split('-')[1]) - 1 === month;
             const isToday = dateKey === today;
-            const isSelected = dateKey === selectedDate;
+            const isSelected = dateKey === selectedDate || (selectedDates?.has(dateKey) ?? false);
             const dayNumber = Number(dateKey.split('-')[2]);
 
             return (
               <Pressable key={dateKey} onPress={() => onSelectDate(dateKey)} style={{ flex: 1, alignItems: 'center' }}>
                 <View
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: theme.radius.full,
+                    width: 34,
+                    height: 34,
+                    borderRadius: theme.radius.md,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: isSelected ? theme.colors.primary : isToday ? theme.colors.primaryMuted : 'transparent',
+                    borderWidth: isSelected ? 0 : isToday ? 1 : 0,
+                    borderColor: theme.colors.primary,
                   }}>
                   <Text
                     style={{
@@ -81,7 +88,7 @@ export function CalendarMonthGrid({ year, month, selectedDate, markedDates, onSe
                     width: 4,
                     height: 4,
                     borderRadius: 2,
-                    marginTop: 2,
+                    marginTop: 3,
                     backgroundColor: markedDates.has(dateKey) ? theme.colors.moduleTasks : 'transparent',
                   }}
                 />

@@ -1,10 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { Button, Card, DonutChart, Legend, LoadingState, RangeChip, ScreenContainer, TrendChart } from '@/components';
-import { FLOATING_TAB_BAR_CLEARANCE } from '@/components/tabBarMetrics';
+import { Button, Card, DonutChart, HeatmapCalendar, IconBadge, Legend, LoadingState, RangeChip, ScreenContainer, SegmentedControl, TrendChart, showAlert } from '@/components';
 import { addDays, buildMonthGrid, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { useCategories } from '@/modules/categories';
@@ -18,9 +17,11 @@ import {
   rangeBounds,
   tallyStatus,
   useHabitDetail,
+  useHabits,
   type LogStatus,
   type RangeKey,
 } from '@/modules/habits';
+import { formatDurationShort, useTimeSpent } from '@/modules/timer';
 import { useAppTheme } from '@/theme';
 
 type DetailTab = 'calendar' | 'statistics' | 'edit';
@@ -37,6 +38,7 @@ export default function HabitDetailScreen() {
     habit,
     logs,
     loading,
+    heatmapValues,
     streak,
     longestStreak,
     periodProgress,
@@ -48,6 +50,11 @@ export default function HabitDetailScreen() {
     restartProgress,
   } = useHabitDetail(habitId);
   const { categories } = useCategories('habit');
+  const { habits: allHabits } = useHabits();
+  const { totalSeconds: timeSpentTotalSeconds, todaySeconds: timeSpentTodaySeconds } = useTimeSpent({ habitId });
+  const existingGroups = Array.from(
+    new Set(allHabits.map(({ habit: h }) => h.routine_group).filter((group): group is string => Boolean(group)))
+  ).sort((a, b) => a.localeCompare(b));
 
   const [tab, setTab] = useState<DetailTab>(initialTab ?? 'calendar');
   const [sheetDate, setSheetDate] = useState<string | null>(null);
@@ -71,7 +78,7 @@ export default function HabitDetailScreen() {
   const logForSheet = sheetDate ? logByDate.get(sheetDate) : undefined;
 
   const onArchive = () => {
-    Alert.alert('Archive habit?', 'You can still see its history, but it will leave your active list.', [
+    showAlert('Archive habit?', 'You can still see its history, but it will leave your active list.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Archive',
@@ -85,14 +92,14 @@ export default function HabitDetailScreen() {
   };
 
   const onRestart = () => {
-    Alert.alert('Restart progress?', 'This clears all logged history for this habit — streaks and stats start over. This can’t be undone.', [
+    showAlert('Restart progress?', 'This clears all logged history for this habit — streaks and stats start over. This can’t be undone.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Restart', style: 'destructive', onPress: () => restartProgress() },
     ]);
   };
 
   const onDelete = () => {
-    Alert.alert('Delete habit?', 'This permanently deletes the habit and all its history.', [
+    showAlert('Delete habit?', 'This permanently deletes the habit and all its history.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -106,21 +113,10 @@ export default function HabitDetailScreen() {
   };
 
   return (
-    <ScreenContainer scroll={false} padded={false}>
-      <View style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.xl }} showsVerticalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: theme.radius.md,
-                backgroundColor: theme.colors.moduleHabitsMuted,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              <Ionicons name={habit.icon as never} size={24} color={theme.colors.moduleHabits} />
-            </View>
+    <ScreenContainer>
+      <View style={{ gap: theme.spacing.xl }}>
+        <Card tier="panel" style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <IconBadge name={habit.icon as never} color={theme.colors.moduleHabits} size="lg" shape="square" />
             <View style={{ flex: 1 }}>
               <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.xl, fontWeight: theme.typography.weight.bold }}>
                 {habit.name}
@@ -144,12 +140,54 @@ export default function HabitDetailScreen() {
                 <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>this period</Text>
               </View>
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Ionicons name="flame" size={16} color={theme.colors.warning} />
-                <Text style={{ color: theme.colors.warning, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>{streak}</Text>
+              <View style={{ alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="flame" size={16} color={theme.colors.warning} />
+                  <Text style={{ color: theme.colors.warning, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>{streak}</Text>
+                </View>
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>streak</Text>
               </View>
             )}
-          </View>
+          </Card>
+
+          <Pressable
+            onPress={() => router.push({ pathname: '/timer', params: { habitId: String(habit.id), habitTitle: habit.name } })}>
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="timer-outline" color={theme.colors.moduleHabits} size="md" />
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold, flex: 1 }}>
+                Focus on this
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+            </Card>
+          </Pressable>
+
+          {timeSpentTotalSeconds > 0 ? (
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="time-outline" color={theme.colors.moduleHabits} size="md" />
+              <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>
+                Today: {formatDurationShort(timeSpentTodaySeconds)} · All time: {formatDurationShort(timeSpentTotalSeconds)}
+              </Text>
+            </Card>
+          ) : null}
+
+          {habit.frequency !== 'periodic' ? (
+            <Card style={{ gap: theme.spacing.sm }}>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                Last 7 days
+              </Text>
+              <HeatmapCalendar values={heatmapValues} weeks={1} accentColor={theme.colors.moduleHabits} />
+            </Card>
+          ) : null}
+
+          <SegmentedControl
+            options={[
+              { value: 'calendar', label: 'Calendar' },
+              { value: 'statistics', label: 'Statistics' },
+              { value: 'edit', label: 'Edit' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
 
           {tab === 'calendar' ? (
             <CalendarTab
@@ -178,6 +216,7 @@ export default function HabitDetailScreen() {
             <HabitForm
               habit={habit}
               submitLabel="Save changes"
+              existingGroups={existingGroups}
               onSave={(values) => updateHabit(values)}
               extraActions={
                 <View style={{ gap: theme.spacing.sm, marginTop: theme.spacing.sm }}>
@@ -188,37 +227,6 @@ export default function HabitDetailScreen() {
               }
             />
           ) : null}
-        </ScrollView>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
-            backgroundColor: theme.colors.surface,
-            marginBottom: FLOATING_TAB_BAR_CLEARANCE,
-          }}>
-          {(
-            [
-              { key: 'calendar', label: 'Calendar', icon: 'calendar-outline' },
-              { key: 'statistics', label: 'Statistics', icon: 'stats-chart-outline' },
-              { key: 'edit', label: 'Edit', icon: 'create-outline' },
-            ] as const
-          ).map((entry) => {
-            const active = tab === entry.key;
-            return (
-              <Pressable
-                key={entry.key}
-                onPress={() => setTab(entry.key)}
-                style={{ flex: 1, alignItems: 'center', gap: 2, paddingVertical: theme.spacing.sm }}>
-                <Ionicons name={entry.icon} size={20} color={active ? theme.colors.moduleHabits : theme.colors.textTertiary} />
-                <Text style={{ color: active ? theme.colors.moduleHabits : theme.colors.textTertiary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>
-                  {entry.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
       </View>
 
       {sheetDate ? (
@@ -261,7 +269,7 @@ function CalendarTab({
     <View style={{ gap: theme.spacing.lg }}>
       {frequency !== 'periodic' ? (
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
-          <Ionicons name="flame" size={18} color={theme.colors.warning} />
+          <IconBadge name="flame" color={theme.colors.warning} size="sm" />
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
             Current streak: {streak} {streak === 1 ? 'day' : 'days'}
           </Text>
@@ -402,7 +410,12 @@ function StatisticsTab({
                     borderWidth: 1,
                     borderColor: unlocked ? theme.colors.warning : theme.colors.border,
                   }}>
-                  <Ionicons name={unlocked ? 'trophy' : 'lock-closed'} size={20} color={unlocked ? theme.colors.warning : theme.colors.textTertiary} />
+                  <IconBadge
+                    name={unlocked ? 'trophy' : 'lock-closed'}
+                    color={theme.colors.warning}
+                    tone={unlocked ? 'tinted' : 'neutral'}
+                    size="sm"
+                  />
                   <Text
                     style={{
                       color: unlocked ? theme.colors.textPrimary : theme.colors.textTertiary,

@@ -67,17 +67,9 @@ export function LineChart({ label, data, color, formatValue = (v) => String(Math
             />
           ))}
           <Path d={linePath} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-          {coords.map((c, index) => (
-            <Circle
-              key={index}
-              cx={c.x}
-              cy={c.y}
-              r={selectedIndex === index ? 5 : 3}
-              fill={selectedIndex === index ? theme.colors.textPrimary : color}
-              stroke={selectedIndex === index ? color : 'none'}
-              strokeWidth={selectedIndex === index ? 2 : 0}
-            />
-          ))}
+          {selectedIndex !== null ? (
+            <Circle cx={coords[selectedIndex].x} cy={coords[selectedIndex].y} r={5} fill={theme.colors.textPrimary} stroke={color} strokeWidth={2} />
+          ) : null}
         </Svg>
         {/* Hit targets are plain RN Pressables positioned by percentage (not SVG onPress) — SVG
             touch-responder props leak through as invalid DOM attributes on react-native-web. Since

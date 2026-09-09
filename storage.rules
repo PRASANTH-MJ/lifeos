@@ -9,10 +9,50 @@ service firebase.storage {
       allow write: if request.auth != null && request.auth.uid == uid;
     }
 
+    // Club photos — any signed-in user can view (clubs are public-discover, see firestore.rules),
+    // but only a club admin can upload/replace one, checked via a cross-service read of the
+    // club's own `admins` array (Firestore rules can't safely be duplicated here, so this reads
+    // the same source of truth rather than trusting the client).
+    match /club-photos/{clubId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.auth.uid in firestore.get(/databases/(default)/documents/clubs/$(clubId)).data.admins;
+    }
+
+    // Post-event photo album — any signed-in club member can view, but only an event attendee can
+    // upload, checked via a cross-service read of the requester's own attendees/{uid} doc
+    // (mirroring club-photos' admins check above) rather than trusting the client.
+    match /event-photos/{clubId}/{eventId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/clubs/$(clubId)/events/$(eventId)/attendees/$(request.auth.uid));
+    }
+
     // Cloud backups — unlike avatars, this is a full data export, so only the account owner can
     // read or write their own.
     match /backups/{uid}/{fileName} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Social post photos — posts are public by default (see firestore.rules), and that public
+    // read needs to reach a signed-out web visitor too: app/post/[postId].tsx's unauthenticated
+    // branch (modules/social/PublicPostPreview.tsx) renders a shared post's photoUrl with no
+    // Firebase Auth session at all, so this can't require request.auth the way avatars/backups
+    // do — Storage enforces these rules on the download URL itself, auth or not. Only the post's
+    // own author can upload into their own path.
+    match /posts/{uid}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // A public APK download path, for anyone who needs to download the app without signing in
+    // first — the one deliberately public path in this bucket. Never write here from client
+    // code; only ever uploaded manually (or by a future release script) with the Admin
+    // SDK/gsutil/Console, which bypasses these rules entirely — this rule only governs the
+    // public client read.
+    match /downloads/{fileName} {
+      allow read: if true;
+      allow write: if false;
     }
   }
 }

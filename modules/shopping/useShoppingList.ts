@@ -1,11 +1,11 @@
 import { useCallback, useMemo } from 'react';
 
 import { useLocalTable } from '@/db';
-import type { ShoppingItem } from './types';
+import { itemLineTotal } from './quantity';
+import type { ShoppingItem, ShoppingUnit } from './types';
 
 function itemTotal(item: ShoppingItem): number {
-  const qty = Number(item.quantity) || 1;
-  return (item.price ?? 0) * qty;
+  return itemLineTotal(item.price, item.quantity, item.unit);
 }
 
 export function useShoppingList(listId: number) {
@@ -16,12 +16,14 @@ export function useShoppingList(listId: number) {
   });
 
   const addItem = useCallback(
-    async (name: string, quantity?: string | null, price?: number | null) => {
+    async (name: string, quantity?: string | null, price?: number | null, unit?: ShoppingUnit | null, notes?: string | null) => {
       await table.insert({
         list_id: listId,
         name,
         quantity: quantity?.trim() || '1',
+        unit: unit ?? 'pcs',
         price: price ?? null,
+        notes: notes?.trim() || null,
         checked: 0,
         sort_order: table.rows.length,
         created_at: new Date().toISOString(),
@@ -33,6 +35,19 @@ export function useShoppingList(listId: number) {
   const toggleChecked = useCallback(
     async (item: ShoppingItem) => {
       await table.update(item.id, { checked: item.checked ? 0 : 1 } as Partial<ShoppingItem>);
+    },
+    [table]
+  );
+
+  const updateItem = useCallback(
+    async (id: number, values: { name: string; quantity?: string | null; price?: number | null; unit?: ShoppingUnit | null; notes?: string | null }) => {
+      await table.update(id, {
+        name: values.name,
+        quantity: values.quantity?.trim() || '1',
+        price: values.price ?? null,
+        unit: values.unit ?? 'pcs',
+        notes: values.notes?.trim() || null,
+      } as Partial<ShoppingItem>);
     },
     [table]
   );
@@ -57,6 +72,7 @@ export function useShoppingList(listId: number) {
     loading: table.loading,
     refresh: table.refresh,
     addItem,
+    updateItem,
     toggleChecked,
     removeItem,
     clearChecked,

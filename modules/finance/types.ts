@@ -115,6 +115,18 @@ export type PlannedPayment = {
   note: string | null;
   is_active: boolean;
   created_at: string;
+  is_subscription: boolean;
+  remind_days_before: number;
+};
+
+export type NetWorthSnapshot = { date: string; net_worth: number };
+
+export type SpendingAnomaly = {
+  categoryId: string | null;
+  categoryName: string;
+  current: number;
+  average: number;
+  ratio: number;
 };
 
 export type Label = { id: string; name: string; color: string };
@@ -165,4 +177,30 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
 // to avoid relying on autosize-to-fit, which react-native-web doesn't support.
 export function formatCurrencyCompact(amount: number, currency = 'USD'): string {
   return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+}
+
+/** Best display currency for a figure that aggregates across accounts (net worth, budget spend,
+ * goal/debt amounts, planned payments, category totals) and so has no single account of its own
+ * to take a currency from — the most common currency among the user's actual accounts, rather than
+ * hardcoding 'USD'. Falls back to 'USD' when there are no accounts yet.
+ *
+ * This is NOT currency conversion — the app has no exchange-rate logic anywhere. If a user's
+ * accounts genuinely span more than one currency, a sum across them (e.g. total net worth) still
+ * just adds the raw numbers unconverted; picking a display label for that sum doesn't make it
+ * correct, only labeled. Real multi-currency conversion is a separate, larger feature. */
+export function getDisplayCurrency(accounts: { currency: string }[]): string {
+  if (accounts.length === 0) return 'USD';
+  const counts = new Map<string, number>();
+  for (const account of accounts) {
+    counts.set(account.currency, (counts.get(account.currency) ?? 0) + 1);
+  }
+  let best = 'USD';
+  let bestCount = 0;
+  for (const [currency, count] of counts) {
+    if (count > bestCount) {
+      best = currency;
+      bestCount = count;
+    }
+  }
+  return best;
 }

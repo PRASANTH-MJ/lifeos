@@ -3,7 +3,10 @@ import { useState } from 'react';
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Card } from '@/components';
+import { FOOD_DATA_LICENSE_NOTICE } from '@/modules/food';
 import { useAppTheme } from '@/theme';
+
+const EXERCISE_DATA_NOTICE = 'Exercise data from wger.de, CC BY-SA 4.0';
 
 type FaqItem = { question: string; answer: string };
 type FaqSection = { title: string; icon: keyof typeof Ionicons.glyphMap; items: FaqItem[] };
@@ -30,7 +33,6 @@ const SECTIONS: FaqSection[] = [
     icon: 'restaurant',
     items: [
       { question: 'Can I search for Indian dishes?', answer: 'Yes — Log Food → Search covers common Indian dishes (dosa, idli, biryani, etc.) plus packaged foods.' },
-      { question: 'How does barcode scanning work?', answer: 'Tap the barcode icon next to search, point your camera at a packaged food\'s barcode, and it auto-fills the nutrition.' },
       { question: 'What does the quantity field do?', answer: 'After picking a search result, enter grams (packaged foods) or number of servings (Indian dishes) to scale the nutrition to your actual portion.' },
     ],
   },
@@ -61,7 +63,21 @@ const SECTIONS: FaqSection[] = [
     title: 'Premium',
     icon: 'star',
     items: [
-      { question: 'What does Premium unlock?', answer: 'Cloud backup & restore, custom themes, and higher usage limits on habits/tasks/journal entries.' },
+      {
+        question: 'What does Premium unlock?',
+        answer:
+          'Cloud backup & restore, custom themes, higher usage limits on habits/tasks/journal entries/custom workouts, the full meal plan library, and the full workout program library.',
+      },
+      {
+        question: "I paid but Premium isn't unlocked — what do I do?",
+        answer:
+          'Purchases go through Google Play, and Flowsy verifies them on our server right after checkout — this can take a few seconds. If it still hasn\'t unlocked, open Premium and tap "Restore Purchases" to re-check your Google account for an active purchase.',
+      },
+      {
+        question: 'How do I cancel or manage my subscription?',
+        answer:
+          "Flowsy doesn't process payments itself — subscriptions are billed and managed by Google Play. To cancel, change plans, or update payment details, open the Play Store app on your device, go to Payments & subscriptions, and manage Flowsy from there.",
+      },
     ],
   },
 ];
@@ -110,6 +126,19 @@ export default function HelpScreen() {
           })}
         </View>
       ))}
+
+      <View style={{ gap: theme.spacing.sm }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <Ionicons name="information-circle" size={18} color={theme.colors.primary} />
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.bold }}>
+            Data Sources
+          </Text>
+        </View>
+        <Card style={{ gap: theme.spacing.xs }}>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, lineHeight: 20 }}>{FOOD_DATA_LICENSE_NOTICE}</Text>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, lineHeight: 20 }}>{EXERCISE_DATA_NOTICE}</Text>
+        </Card>
+      </View>
 
       <Card style={{ gap: theme.spacing.sm, alignItems: 'center' }}>
         <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, textAlign: 'center' }}>

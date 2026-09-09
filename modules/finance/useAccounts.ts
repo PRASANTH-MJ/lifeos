@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
+import { getDisplayCurrency } from './types';
 import type { Account, AccountType } from './types';
 
 type AccountRow = {
@@ -103,6 +104,27 @@ export function useAccounts() {
 
   const removeAccount = useCallback(
     async (id: string) => {
+      // finance_transactions.account_id is declared ON DELETE CASCADE (db/schema.ts) and
+      // foreign_keys is ON for every connection, so deleting the account row below silently
+      // hard-deletes every transaction logged against it too — SQLite does this itself, not this
+      // function. Tombstone each of those transactions first (same recordDeleteBeforeRemoving +
+      // delete pattern useTransactions().removeTransaction uses for a single row) so the cascade
+      // is still recorded for sync instead of rows vanishing on this device with no tombstone for
+      // other devices to reconcile against.
+      const transactionRows = await db.getAllAsync<{ id: number }>('SELECT id FROM finance_transactions WHERE account_id = ?', [
+        Number(id),
+      ]);
+      for (const row of transactionRows) {
+        // finance_transaction_labels.transaction_id is also ON DELETE CASCADE, one level deeper.
+        const labelRows = await db.getAllAsync<{ rowid: number }>(
+          'SELECT rowid FROM finance_transaction_labels WHERE transaction_id = ?',
+          [row.id]
+        );
+        for (const labelRow of labelRows) {
+          await recordDeleteBeforeRemoving(db, 'finance_transaction_labels', labelRow.rowid);
+        }
+        await recordDeleteBeforeRemoving(db, 'finance_transactions', row.id);
+      }
       await recordDeleteBeforeRemoving(db, 'finance_accounts', Number(id));
       await db.runAsync('DELETE FROM finance_accounts WHERE id = ?', [Number(id)]);
       await refresh();
@@ -111,6 +133,10 @@ export function useAccounts() {
   );
 
   const netWorth = useMemo(() => accounts.reduce((sum, a) => sum + Number(a.current_balance), 0), [accounts]);
+  // Most common currency among the user's accounts — a display default for aggregate figures
+  // (net worth, budget totals, etc.) that don't come from one account and so have no currency of
+  // their own. See getDisplayCurrency's doc comment: this is a label choice, not conversion.
+  const displayCurrency = useMemo(() => getDisplayCurrency(accounts), [accounts]);
   const accountsByType = useMemo(() => {
     const groups = new Map<string, Account[]>();
     for (const account of accounts) {
@@ -121,5 +147,5 @@ export function useAccounts() {
     return groups;
   }, [accounts]);
 
-  return { accounts, accountsByType, netWorth, loading, refresh, addAccount, editAccount, archiveAccount, removeAccount };
+  return { accounts, accountsByType, netWorth, displayCurrency, loading, refresh, addAccount, editAccount, archiveAccount, removeAccount };
 }

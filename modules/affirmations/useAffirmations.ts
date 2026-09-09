@@ -26,6 +26,11 @@ export function useAffirmations() {
     [table]
   );
 
+  // Restricted to user-created rows — the built-in seed affirmations aren't meant to be edited or
+  // removed individually (there's no re-seed path if one were deleted by mistake).
+  const editCustom = useCallback((id: number, text: string) => table.update(id, { text } as Partial<Affirmation>), [table]);
+  const removeCustom = useCallback((id: number) => table.remove(id), [table]);
+
   return {
     affirmations: table.rows,
     loading: table.loading,
@@ -33,6 +38,8 @@ export function useAffirmations() {
     favorites,
     toggleFavorite,
     createCustom,
+    editCustom,
+    removeCustom,
     refresh: table.refresh,
   };
 }

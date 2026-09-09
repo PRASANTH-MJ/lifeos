@@ -1,9 +1,9 @@
 import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSQLiteContext, type SQLiteBindParams } from 'expo-sqlite';
 
-import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
+import { onLocalWrite, pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 type Row = { id: number };
 
@@ -50,6 +50,16 @@ export function useLocalTable<T extends Row>(table: string, options: QueryOption
       refresh();
     }, [refresh])
   );
+
+  // A write made through a DIFFERENT instance of this same hook (e.g. usePublicProfileStatsSync's
+  // own independent useLocalTable('habits', ...) call, mounted once at the root layout and never
+  // "focused" again by navigation) wouldn't otherwise be seen by this instance until its own next
+  // focus — see onLocalWrite's doc comment.
+  useEffect(() => {
+    return onLocalWrite((changedTable) => {
+      if (changedTable === table) refresh();
+    });
+  }, [table, refresh]);
 
   const insert = useCallback(
     async (values: Partial<T>) => {

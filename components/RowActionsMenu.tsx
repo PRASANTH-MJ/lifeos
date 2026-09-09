@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Alert, Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 
+import { showAlert } from './showAlert';
 import { useAppTheme } from '@/theme';
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
   onMoveDown?: () => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
+  onEdit?: () => void;
   onArchive?: () => void;
   onDelete: () => void;
 };
@@ -17,13 +19,13 @@ type Props = {
 /** Small per-row overflow menu — optional reorder chevrons plus an Archive/Delete action sheet —
  * shared by any list that lets a user manually order or quick-manage items (Habits, Recurring
  * tasks) without opening the item's detail screen first. */
-export function RowActionsMenu({ itemLabel, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onArchive, onDelete }: Props) {
+export function RowActionsMenu({ itemLabel, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onEdit, onArchive, onDelete }: Props) {
   const theme = useAppTheme();
   const [menuVisible, setMenuVisible] = useState(false);
 
   const confirmDelete = () => {
     setMenuVisible(false);
-    Alert.alert(`Delete ${itemLabel}?`, 'This cannot be undone.', [
+    showAlert(`Delete ${itemLabel}?`, 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: onDelete },
     ]);
@@ -55,6 +57,16 @@ export function RowActionsMenu({ itemLabel, onMoveUp, onMoveDown, canMoveUp, can
               padding: theme.spacing.xl,
               gap: theme.spacing.sm,
             }}>
+            {onEdit ? (
+              <MenuRow
+                icon="pencil-outline"
+                label="Edit"
+                onPress={() => {
+                  setMenuVisible(false);
+                  onEdit();
+                }}
+              />
+            ) : null}
             {onArchive ? (
               <MenuRow
                 icon="archive-outline"

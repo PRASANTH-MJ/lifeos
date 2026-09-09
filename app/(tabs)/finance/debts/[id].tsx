@@ -1,19 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { Button, Card, Chip, EmptyState, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Card, Chip, EmptyState, IconBadge, LoadingState, ScreenContainer, TextField, showAlert } from '@/components';
 import { formatDisplayDate, todayKey } from '@/lib/date';
-import { formatCurrency, useDebtPayments, useFinanceDebts, type DebtDirection } from '@/modules/finance';
+import { formatCurrency, useAccounts, useDebtPayments, useFinanceDebts, type DebtDirection } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 export default function DebtDetailScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { debts, remainingById, refresh: refreshDebts, editDebt, setClosed, removeDebt } = useFinanceDebts();
+  const { debts, remainingById, loading, refresh: refreshDebts, editDebt, setClosed, removeDebt } = useFinanceDebts();
   const { payments, addPayment, removePayment } = useDebtPayments(id);
+  const { displayCurrency } = useAccounts();
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -38,10 +39,18 @@ export default function DebtDetailScreen() {
     }, [debt?.id])
   );
 
-  if (!debt) {
+  if (loading) {
     return (
       <ScreenContainer>
         <LoadingState />
+      </ScreenContainer>
+    );
+  }
+
+  if (!debt) {
+    return (
+      <ScreenContainer>
+        <EmptyState icon="cash-outline" title="Debt not found" subtitle="It may have been deleted." ctaLabel="Go back" onPressCta={() => router.back()} />
       </ScreenContainer>
     );
   }
@@ -77,7 +86,7 @@ export default function DebtDetailScreen() {
   };
 
   const onDelete = () => {
-    Alert.alert('Delete debt?', 'This removes the debt and its payment history.', [
+    showAlert('Delete debt?', 'This removes the debt and its payment history.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -104,7 +113,7 @@ export default function DebtDetailScreen() {
       />
       <View style={{ gap: theme.spacing.xl }}>
         {editing ? (
-          <Card style={{ gap: theme.spacing.lg }}>
+          <Card tier="panel" style={{ gap: theme.spacing.lg }}>
             <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
               <Chip
                 label="I lent money"
@@ -128,24 +137,31 @@ export default function DebtDetailScreen() {
           </Card>
         ) : null}
 
-        <Card style={{ gap: theme.spacing.sm }}>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
-            {isLent ? `${debt.person_name} owes you` : `You owe ${debt.person_name}`}
+        <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <IconBadge name={isLent ? 'arrow-up-circle' : 'arrow-down-circle'} color={isLent ? theme.colors.success : theme.colors.danger} size="lg" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
+                {isLent ? `${debt.person_name} owes you` : `You owe ${debt.person_name}`}
+              </Text>
+              <Text
+                style={{
+                  color: isLent ? theme.colors.success : theme.colors.danger,
+                  fontSize: theme.typography.size['2xl'],
+                  fontWeight: theme.typography.weight.bold,
+                }}>
+                {formatCurrency(remaining, displayCurrency)}
+              </Text>
+            </View>
+          </View>
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+            of {formatCurrency(debt.amount, displayCurrency)} total
           </Text>
-          <Text
-            style={{
-              color: isLent ? theme.colors.success : theme.colors.danger,
-              fontSize: theme.typography.size['2xl'],
-              fontWeight: theme.typography.weight.bold,
-            }}>
-            {formatCurrency(remaining)}
-          </Text>
-          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>of {formatCurrency(debt.amount)} total</Text>
           {debt.note ? <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{debt.note}</Text> : null}
         </Card>
 
         {!debt.is_closed && remaining > 0 ? (
-          <Card style={{ gap: theme.spacing.md }}>
+          <Card tier="panel" style={{ gap: theme.spacing.md }}>
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
               Log a repayment
             </Text>
@@ -167,10 +183,11 @@ export default function DebtDetailScreen() {
           ) : (
             <View style={{ gap: theme.spacing.sm }}>
               {payments.map((payment) => (
-                <Card key={payment.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                <Card key={payment.id} tier="elevated" style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                  <IconBadge name="checkmark-circle-outline" color={theme.colors.success} size="sm" />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
-                      {formatCurrency(payment.amount)}
+                      {formatCurrency(payment.amount, displayCurrency)}
                     </Text>
                     <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{formatDisplayDate(payment.date)}</Text>
                   </View>

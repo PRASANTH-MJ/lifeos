@@ -1,13 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Pressable, Share, Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 
-import { Button, Card, EmptyState, ExerciseMotionPreview, ScreenContainer } from '@/components';
-import { COOL_DOWN_EXERCISES, computeWorkoutStreak, useCustomWorkouts, useWorkoutLogs, WARM_UP_EXERCISES, WORKOUTS } from '@/modules/workout';
+import { Button, Card, EmptyState, ExerciseMotionPreview, ScreenContainer, ShareCardModal, type ShareCardData } from '@/components';
+import { computeWorkoutStreak, useCustomWorkouts, useWorkoutLogs, WORKOUTS } from '@/modules/workout';
 import { useAppTheme } from '@/theme';
-
-type Phase = 'warmup' | 'main' | 'cooldown';
 
 function parseExerciseLine(line: string): { name: string; detail: string | null } {
   const emDashIndex = line.indexOf('—');
@@ -36,8 +34,6 @@ function formatClock(totalSeconds: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-const PHASE_LABEL: Record<Phase, string> = { warmup: 'Warm-Up', main: '', cooldown: 'Cool-Down' };
-
 export default function WorkoutSessionScreen() {
   const theme = useAppTheme();
   const router = useRouter();
@@ -46,19 +42,27 @@ export default function WorkoutSessionScreen() {
   const workout = useMemo(() => [...WORKOUTS, ...customWorkouts].find((w) => w.key === key), [customWorkouts, key]);
   const { logs, logCompletion } = useWorkoutLogs();
 
-  const [phase, setPhase] = useState<Phase>('warmup');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [restSecondsLeft, setRestSecondsLeft] = useState<number | null>(null);
   const [exerciseSecondsLeft, setExerciseSecondsLeft] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [shareCard, setShareCard] = useState<ShareCardData | null>(null);
 
-  const steps = phase === 'warmup' ? WARM_UP_EXERCISES : phase === 'cooldown' ? COOL_DOWN_EXERCISES : (workout?.exercises ?? []);
-  const totalSteps = steps.length;
+  const totalSteps = workout?.exercises.length ?? 0;
   const clampedIndex = Math.min(currentIndex, Math.max(totalSteps - 1, 0));
   const isLastStep = currentIndex >= totalSteps - 1;
-  const current = totalSteps > 0 ? parseExerciseLine(steps[clampedIndex]) : { name: '', detail: null as string | null };
-  const phaseLabel = phase === 'main' ? (workout?.title ?? '') : PHASE_LABEL[phase];
+
+  const current = totalSteps > 0 ? parseExerciseLine(workout!.exercises[clampedIndex]) : { name: '', detail: null as string | null };
+
+  // Bracket grouped exercises together even in this one-at-a-time player, not just the flat
+  // workout-detail list — "also in this superset" names the OTHER exercises sharing the current
+  // one's group so it's clear this isn't a fully standalone step.
+  const currentGroup = workout?.exerciseGroups?.[clampedIndex] ?? null;
+  const supersetPartners =
+    currentGroup != null && workout
+      ? workout.exercises.filter((_, i) => i !== clampedIndex && workout.exerciseGroups?.[i] === currentGroup).map((line) => parseExerciseLine(line).name)
+      : [];
 
   const finishSession = async () => {
     if (!workout) return;
@@ -68,29 +72,11 @@ export default function WorkoutSessionScreen() {
 
   const onAdvance = (startRest: boolean) => {
     if (!isLastStep) {
-      if (startRest && phase === 'main') setRestSecondsLeft(60);
+      if (startRest) setRestSecondsLeft(60);
       setCurrentIndex((i) => i + 1);
       return;
     }
-    if (phase === 'warmup') {
-      setPhase('main');
-      setCurrentIndex(0);
-      setRestSecondsLeft(null);
-      return;
-    }
-    if (phase === 'main') {
-      setPhase('cooldown');
-      setCurrentIndex(0);
-      setRestSecondsLeft(null);
-      return;
-    }
     finishSession();
-  };
-
-  const skipToMain = () => {
-    setPhase('main');
-    setCurrentIndex(0);
-    setRestSecondsLeft(null);
   };
 
   // Kept fresh every render so the auto-advance effect below never calls a stale closure.
@@ -113,13 +99,13 @@ export default function WorkoutSessionScreen() {
     return () => clearTimeout(timeout);
   }, [restSecondsLeft]);
 
-  // Once rest (if any) clears, arm an auto-countdown for timed steps — reruns whenever the phase,
-  // step, or rest state changes, using `current.detail` from this same render.
+  // Once rest (if any) clears, arm an auto-countdown for timed steps — reruns whenever the step
+  // or rest state changes, using `current.detail` from this same render.
   useEffect(() => {
     if (finished || restSecondsLeft !== null) return;
     setExerciseSecondsLeft(parseDurationSeconds(current.detail));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, currentIndex, restSecondsLeft, finished]);
+  }, [currentIndex, restSecondsLeft, finished]);
 
   useEffect(() => {
     if (exerciseSecondsLeft === null) return;
@@ -142,7 +128,14 @@ export default function WorkoutSessionScreen() {
   const streak = computeWorkoutStreak([...logs, { completed_at: new Date().toISOString() }]);
 
   const onShare = () => {
-    Share.share({ message: `Just crushed "${workout.title}" on Flowsy! 🔥 ${streak} day streak. Session took ${formatClock(elapsedSeconds)}.` });
+    setShareCard({
+      eyebrow: workout.title,
+      value: String(streak),
+      valueLabel: `day streak${streak === 1 ? '' : 's'}`,
+      detail: formatClock(elapsedSeconds),
+      icon: 'flame',
+      accentColor: theme.colors.moduleTasks,
+    });
   };
 
   const onOpenYoutube = () => {
@@ -184,30 +177,21 @@ export default function WorkoutSessionScreen() {
             </View>
           </View>
         </View>
+        <ShareCardModal visible={!!shareCard} onClose={() => setShareCard(null)} data={shareCard} />
       </ScreenContainer>
     );
   }
 
-  const showMotion = phase !== 'main' || workout.goal === 'flexibility';
-
-  const primaryLabel =
-    isLastStep && phase === 'cooldown'
-      ? 'Finish workout'
-      : isLastStep && phase === 'main'
-        ? 'Start Cool-Down'
-        : isLastStep && phase === 'warmup'
-          ? 'Start Workout'
-          : phase === 'main'
-            ? 'Mark done & rest'
-            : 'Next';
+  const showMotion = workout.goal === 'flexibility';
+  const primaryLabel = isLastStep ? 'Finish workout' : 'Mark done & rest';
 
   return (
     <ScreenContainer scroll={false}>
-      <Stack.Screen options={{ title: phaseLabel || workout.title }} />
+      <Stack.Screen options={{ title: workout.title }} />
       <View style={{ flex: 1, gap: theme.spacing.xl }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
-            {phaseLabel} · {clampedIndex + 1} of {totalSteps}
+            {clampedIndex + 1} of {totalSteps}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Ionicons name="stopwatch-outline" size={16} color={theme.colors.textSecondary} />
@@ -227,7 +211,19 @@ export default function WorkoutSessionScreen() {
           />
         </View>
 
-        <Card style={{ alignItems: 'center', gap: theme.spacing.sm, paddingVertical: theme.spacing['2xl'] }}>
+        <Card
+          style={{
+            alignItems: 'center',
+            gap: theme.spacing.sm,
+            paddingVertical: theme.spacing['2xl'],
+            borderLeftWidth: supersetPartners.length > 0 ? 3 : undefined,
+            borderLeftColor: supersetPartners.length > 0 ? theme.colors.moduleTasks : undefined,
+          }}>
+          {supersetPartners.length > 0 ? (
+            <Text style={{ color: theme.colors.moduleTasks, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.bold }}>
+              SUPERSET · ALSO: {supersetPartners.join(', ')}
+            </Text>
+          ) : null}
           {showMotion ? <ExerciseMotionPreview name={current.name} /> : null}
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold, textAlign: 'center' }}>
             {current.name}
@@ -268,26 +264,14 @@ export default function WorkoutSessionScreen() {
           </Card>
         ) : null}
 
-        {phase === 'warmup' ? (
-          <Pressable onPress={skipToMain} style={{ alignItems: 'center' }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Skip warm-up</Text>
-          </Pressable>
-        ) : null}
-
         <View style={{ flex: 1 }} />
 
         <View style={{ gap: theme.spacing.md }}>
-          <Button label={primaryLabel} onPress={() => onAdvance(true)} />
-          {!(isLastStep && phase === 'cooldown') ? <Button label="Skip this one" variant="secondary" onPress={() => onAdvance(false)} /> : null}
-          {phase === 'cooldown' ? (
-            <Pressable onPress={finishSession} style={{ alignItems: 'center', paddingVertical: theme.spacing.sm }}>
-              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Skip cool-down & finish</Text>
-            </Pressable>
-          ) : (
-            <Pressable onPress={finishSession} style={{ alignItems: 'center', paddingVertical: theme.spacing.sm }}>
-              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Finish now</Text>
-            </Pressable>
-          )}
+          <Button label={primaryLabel} onPress={() => onAdvance(true)} glow />
+          {!isLastStep ? <Button label="Skip this one" variant="secondary" onPress={() => onAdvance(false)} /> : null}
+          <Pressable onPress={finishSession} style={{ alignItems: 'center', paddingVertical: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>Finish now</Text>
+          </Pressable>
         </View>
       </View>
     </ScreenContainer>

@@ -28,8 +28,7 @@ export function StatCard({ label, value, color, glass }: Props) {
           color: color ?? theme.colors.textPrimary,
           fontSize: theme.typography.size.xl,
           fontWeight: theme.typography.weight.bold,
-        }}
-        numberOfLines={1}>
+        }}>
         {value}
       </Text>
       <View>

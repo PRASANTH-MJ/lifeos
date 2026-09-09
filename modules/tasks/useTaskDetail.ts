@@ -6,13 +6,14 @@ import * as Crypto from 'expo-crypto';
 import { computeLongestStreak, computePeriodProgress, computeStreak } from '@/modules/habits';
 import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 import { cancelTaskNotifications, syncTaskNotifications } from './scheduleTaskNotifications';
-import { parseRecurrenceDays, type Task, type TaskCompletion, type TaskLogStatus } from './types';
+import { isBlockedByIncompleteTask, parseRecurrenceDays, type Task, type TaskCompletion, type TaskLogStatus } from './types';
 
 export function useTaskDetail(taskId: number) {
   const db = useSQLiteContext();
   const [task, setTask] = useState<Task | null>(null);
   const [subtasks, setSubtasks] = useState<Task[]>([]);
   const [completions, setCompletions] = useState<TaskCompletion[]>([]);
+  const [blockingTask, setBlockingTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -28,6 +29,9 @@ export function useTaskDetail(taskId: number) {
     setTask(taskRow);
     setSubtasks(subtaskRows);
     setCompletions(completionRows);
+    setBlockingTask(
+      taskRow?.blocked_by_task_id ? await db.getFirstAsync<Task>('SELECT * FROM tasks WHERE id = ?', [taskRow.blocked_by_task_id]) : null
+    );
     setLoading(false);
   }, [db, taskId]);
 
@@ -55,6 +59,7 @@ export function useTaskDetail(taskId: number) {
           | 'period_length_days'
           | 'reminder_offset_minutes'
           | 'alarm_enabled'
+          | 'blocked_by_task_id'
         >
       >
     ) => {
@@ -77,6 +82,9 @@ export function useTaskDetail(taskId: number) {
   const toggleComplete = useCallback(async () => {
     if (!task) return;
     const completing = !task.completed_at;
+    // The UI is what actually surfaces "why" (see the task detail screen and TaskLogSheet), but
+    // the hook itself still refuses a blocked completion so nothing can slip past a stale UI.
+    if (completing && isBlockedByIncompleteTask(task, blockingTask)) return;
     const now = new Date().toISOString();
     await db.runAsync('UPDATE tasks SET completed_at = ?, updated_at = ? WHERE id = ?', [
       completing ? now : null,
@@ -86,7 +94,7 @@ export function useTaskDetail(taskId: number) {
     await pushLocalRow(db, 'tasks', taskId);
     (completing ? cancelTaskNotifications(taskId) : syncTaskNotifications(task)).catch(() => {});
     await refresh();
-  }, [db, task, taskId, refresh]);
+  }, [db, task, blockingTask, taskId, refresh]);
 
   const addSubtask = useCallback(
     async (title: string) => {
@@ -123,6 +131,21 @@ export function useTaskDetail(taskId: number) {
   }, [db, taskId]);
 
   const deleteTask = useCallback(async () => {
+    // tasks.parent_task_id and task_completions.task_id are both ON DELETE CASCADE
+    // (db/schema.ts) — SQLite silently wipes subtasks and every completion (this task's own, and
+    // each subtask's) once the task is deleted below, so all of it must be tombstoned first or
+    // other devices never learn any of it was removed.
+    const subtasks = await db.getAllAsync<{ id: number }>('SELECT id FROM tasks WHERE parent_task_id = ?', [taskId]);
+    const taskIds = [taskId, ...subtasks.map((t) => t.id)];
+    for (const id of taskIds) {
+      const completions = await db.getAllAsync<{ id: number }>('SELECT id FROM task_completions WHERE task_id = ?', [id]);
+      for (const row of completions) {
+        await recordDeleteBeforeRemoving(db, 'task_completions', row.id);
+      }
+    }
+    for (const subtask of subtasks) {
+      await recordDeleteBeforeRemoving(db, 'tasks', subtask.id);
+    }
     await recordDeleteBeforeRemoving(db, 'tasks', taskId);
     await db.runAsync('DELETE FROM tasks WHERE id = ?', [taskId]);
     cancelTaskNotifications(taskId).catch(() => {});
@@ -192,6 +215,8 @@ export function useTaskDetail(taskId: number) {
     periodProgress,
     streak,
     longestStreak,
+    blockingTask,
+    isBlocked: task ? isBlockedByIncompleteTask(task, blockingTask) : false,
     loading,
     updateTask,
     toggleComplete,

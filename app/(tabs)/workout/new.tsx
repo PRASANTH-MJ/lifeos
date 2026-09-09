@@ -6,16 +6,38 @@ import { Pressable, Text, View } from 'react-native';
 import { Button, Chip, ScreenContainer, TextField } from '@/components';
 import {
   EQUIPMENT_OPTIONS,
-  findLibraryExercise,
   GOALS,
   equipmentLabel,
   goalLabel,
   openExercisePicker,
   useCustomWorkouts,
+  type CustomWorkoutExercise,
   type Equipment,
   type WorkoutGoal,
 } from '@/modules/workout';
 import { useAppTheme } from '@/theme';
+
+/** One builder row — `groupedWithNext` is the raw "Group with next" toggle state; resolved into
+ * the actual shared `supersetGroup` numbers at save time (see toSupersetExercises below), since a
+ * chain of 3+ toggled rows should all end up in the SAME group, not three separate pairs. */
+type BuilderExercise = { text: string; groupedWithNext: boolean };
+
+/** Walks the builder rows once, assigning every run of 2+ consecutive `groupedWithNext`-linked
+ * rows the same group number — a lone toggle on the last row (nothing to group it with) simply
+ * never starts a group. */
+function toSupersetExercises(items: BuilderExercise[]): CustomWorkoutExercise[] {
+  let currentGroup: number | null = null;
+  let nextGroupNumber = 1;
+  return items.map((item, index) => {
+    const groupedWithPrev = index > 0 && items[index - 1].groupedWithNext;
+    if (item.groupedWithNext || groupedWithPrev) {
+      if (currentGroup == null) currentGroup = nextGroupNumber++;
+    } else {
+      currentGroup = null;
+    }
+    return { text: item.text.trim(), supersetGroup: currentGroup };
+  });
+}
 
 export default function NewWorkoutScreen() {
   const theme = useAppTheme();
@@ -27,7 +49,10 @@ export default function NewWorkoutScreen() {
   const [goal, setGoal] = useState<WorkoutGoal>('general');
   const [equipment, setEquipment] = useState<Equipment>('none');
   const [minutesText, setMinutesText] = useState('30');
-  const [exercises, setExercises] = useState<string[]>(['', '']);
+  const [exercises, setExercises] = useState<BuilderExercise[]>([
+    { text: '', groupedWithNext: false },
+    { text: '', groupedWithNext: false },
+  ]);
   const [saving, setSaving] = useState(false);
 
   // Static route — expo-router reuses the same screen instance across repeated visits rather
@@ -38,31 +63,37 @@ export default function NewWorkoutScreen() {
       setGoal('general');
       setEquipment('none');
       setMinutesText('30');
-      setExercises(prefill ? [prefill, ''] : ['', '']);
+      setExercises(
+        prefill ? [{ text: prefill, groupedWithNext: false }, { text: '', groupedWithNext: false }] : [{ text: '', groupedWithNext: false }, { text: '', groupedWithNext: false }]
+      );
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefill])
   );
 
-  const updateExercise = (index: number, text: string) => setExercises((items) => items.map((item, i) => (i === index ? text : item)));
-  const addExercise = () => setExercises((items) => [...items, '']);
+  const updateExercise = (index: number, text: string) => setExercises((items) => items.map((item, i) => (i === index ? { ...item, text } : item)));
+  const addExercise = () => setExercises((items) => [...items, { text: '', groupedWithNext: false }]);
   const removeExercise = (index: number) => setExercises((items) => items.filter((_, i) => i !== index));
+  const toggleGroupedWithNext = (index: number) =>
+    setExercises((items) => items.map((item, i) => (i === index ? { ...item, groupedWithNext: !item.groupedWithNext } : item)));
 
   const onPickFromLibrary = () => {
-    openExercisePicker(router, (keys) => {
-      const names = keys.map((k) => findLibraryExercise(k)?.name).filter((n): n is string => !!n);
-      if (names.length === 0) return;
-      setExercises((items) => [...items.filter((e) => e.trim().length > 0), ...names]);
+    openExercisePicker(router, (picked) => {
+      if (picked.length === 0) return;
+      setExercises((items) => [
+        ...items.filter((e) => e.text.trim().length > 0),
+        ...picked.map((p) => ({ text: p.name, groupedWithNext: false })),
+      ]);
     });
   };
 
-  const trimmedExercises = exercises.map((e) => e.trim()).filter(Boolean);
+  const trimmedExercises = exercises.filter((e) => e.text.trim().length > 0);
   const minutes = Number(minutesText);
   const canSave = title.trim().length > 0 && minutes > 0 && trimmedExercises.length > 0;
 
   const onSave = async () => {
     setSaving(true);
     try {
-      await addWorkout({ title: title.trim(), goal, equipment, minutes, exercises: trimmedExercises });
+      await addWorkout({ title: title.trim(), goal, equipment, minutes, exercises: toSupersetExercises(trimmedExercises) });
       router.back();
     } finally {
       setSaving(false);
@@ -101,13 +132,22 @@ export default function NewWorkoutScreen() {
             Exercises
           </Text>
           {exercises.map((exercise, index) => (
-            <View key={index} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
-              <View style={{ flex: 1 }}>
-                <TextField placeholder="e.g. Push-ups — 3x12" value={exercise} onChangeText={(text) => updateExercise(index, text)} />
+            <View key={index} style={{ gap: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <TextField placeholder="e.g. Push-ups — 3x12" value={exercise.text} onChangeText={(text) => updateExercise(index, text)} />
+                </View>
+                <Pressable onPress={() => removeExercise(index)} hitSlop={8}>
+                  <Ionicons name="trash-outline" size={18} color={theme.colors.textTertiary} />
+                </Pressable>
               </View>
-              <Pressable onPress={() => removeExercise(index)} hitSlop={8}>
-                <Ionicons name="trash-outline" size={18} color={theme.colors.textTertiary} />
-              </Pressable>
+              {index < exercises.length - 1 ? (
+                <Chip
+                  label="Group with next (superset)"
+                  selected={exercise.groupedWithNext}
+                  onPress={() => toggleGroupedWithNext(index)}
+                />
+              ) : null}
             </View>
           ))}
           <View style={{ flexDirection: 'row', gap: theme.spacing.lg }}>

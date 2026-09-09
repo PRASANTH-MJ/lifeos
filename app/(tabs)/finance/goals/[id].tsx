@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { Button, Card, Chip, EmptyState, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Card, Chip, EmptyState, IconBadge, LoadingState, ProgressBar, ScreenContainer, TextField, showAlert } from '@/components';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { monthCursorOf, shiftMonth, formatDisplayDate, todayKey } from '@/lib/date';
-import { formatCurrency, useFinanceGoals, useGoalContributions } from '@/modules/finance';
+import { formatCurrency, useAccounts, useFinanceGoals, useGoalContributions } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 import { Modal } from 'react-native';
 
@@ -18,6 +18,7 @@ export default function GoalDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { goals, loading, refresh: refreshGoals, editGoal, closeGoal, removeGoal } = useFinanceGoals();
   const { contributions, addContribution, removeContribution } = useGoalContributions(id);
+  const { displayCurrency } = useAccounts();
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -44,10 +45,18 @@ export default function GoalDetailScreen() {
     }, [goal?.id])
   );
 
-  if (loading || !goal) {
+  if (loading) {
     return (
       <ScreenContainer>
         <LoadingState />
+      </ScreenContainer>
+    );
+  }
+
+  if (!goal) {
+    return (
+      <ScreenContainer>
+        <EmptyState icon="flag-outline" title="Goal not found" subtitle="It may have been deleted." ctaLabel="Go back" onPressCta={() => router.back()} />
       </ScreenContainer>
     );
   }
@@ -82,7 +91,7 @@ export default function GoalDetailScreen() {
   };
 
   const onDelete = () => {
-    Alert.alert('Delete goal?', 'This removes the goal and its contribution history.', [
+    showAlert('Delete goal?', 'This removes the goal and its contribution history.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -109,7 +118,7 @@ export default function GoalDetailScreen() {
       />
       <View style={{ gap: theme.spacing.xl }}>
         {editing ? (
-          <Card style={{ gap: theme.spacing.lg }}>
+          <Card tier="panel" style={{ gap: theme.spacing.lg }}>
             <TextField label="Goal name" value={name} onChangeText={setName} />
             <TextField label="Target amount" value={targetAmount} onChangeText={setTargetAmount} keyboardType="decimal-pad" />
             <View style={{ gap: theme.spacing.sm }}>
@@ -143,23 +152,28 @@ export default function GoalDetailScreen() {
           </Card>
         ) : null}
 
-        <Card style={{ gap: theme.spacing.md }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
-              {formatCurrency(goal.current_amount)}
-            </Text>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>of {formatCurrency(goal.target_amount)}</Text>
+        <Card tier="panel" style={{ gap: theme.spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <IconBadge name={goal.icon as never} color={goal.color} size="lg" />
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['2xl'], fontWeight: theme.typography.weight.bold }}>
+                  {formatCurrency(goal.current_amount, displayCurrency)}
+                </Text>
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
+                  of {formatCurrency(goal.target_amount, displayCurrency)}
+                </Text>
+              </View>
+            </View>
           </View>
-          <View style={{ height: 10, borderRadius: 5, backgroundColor: theme.colors.border, overflow: 'hidden' }}>
-            <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: goal.color }} />
-          </View>
+          <ProgressBar progress={progress} color={goal.color} height={10} glow />
           {goal.target_date ? (
             <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Target date: {formatDisplayDate(goal.target_date)}</Text>
           ) : null}
         </Card>
 
         {!goal.is_closed ? (
-          <Card style={{ gap: theme.spacing.md }}>
+          <Card tier="panel" style={{ gap: theme.spacing.md }}>
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
               Add a contribution
             </Text>
@@ -181,10 +195,11 @@ export default function GoalDetailScreen() {
           ) : (
             <View style={{ gap: theme.spacing.sm }}>
               {contributions.map((contribution) => (
-                <Card key={contribution.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                <Card key={contribution.id} tier="elevated" style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                  <IconBadge name="add-circle-outline" color={goal.color} size="sm" />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
-                      {formatCurrency(contribution.amount)}
+                      {formatCurrency(contribution.amount, displayCurrency)}
                     </Text>
                     <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{formatDisplayDate(contribution.date)}</Text>
                   </View>
@@ -214,7 +229,7 @@ export default function GoalDetailScreen() {
       <Modal visible={datePickerVisible} animationType="slide" transparent onRequestClose={() => setDatePickerVisible(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay }} onPress={() => setDatePickerVisible(false)} />
-          <Card style={{ borderTopLeftRadius: theme.radius.xl, borderTopRightRadius: theme.radius.xl, gap: theme.spacing.lg }}>
+          <Card tier="panel" style={{ borderTopLeftRadius: theme.radius.xl, borderTopRightRadius: theme.radius.xl, gap: theme.spacing.lg }}>
             <CalendarMonthGrid
               year={dateCursor.year}
               month={dateCursor.month}

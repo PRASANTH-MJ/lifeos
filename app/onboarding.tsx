@@ -8,7 +8,7 @@ import { useProfile } from '@/modules/profile';
 export default function EditPersonalDetailsScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { profile, setName } = useProfile();
+  const { profile, setName, setGender, setAvatarUri } = useProfile();
   const { details, loading, save } = useUserDetails();
 
   if (loading || !details || !profile) {
@@ -25,8 +25,12 @@ export default function EditPersonalDetailsScreen() {
         initial={details}
         name={profile.name ?? ''}
         email={user?.email ?? null}
+        gender={profile.gender ?? null}
+        avatarUri={profile.avatarUri ?? null}
         saveLabel="Save changes"
         onSaveName={setName}
+        onGenderChange={setGender}
+        onAvatarChange={setAvatarUri}
         onSave={async (input) => {
           await save(input);
           router.back();

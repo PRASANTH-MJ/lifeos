@@ -17,6 +17,7 @@ export type CreateTaskInput = {
   dueTime?: string | null;
   reminderOffsetMinutes?: number | null;
   alarmEnabled?: boolean;
+  blockedByTaskId?: number | null;
 };
 
 /** How long a completed task stays visible (checked off, sorted to the bottom) before it's
@@ -89,6 +90,7 @@ export function useTasks() {
         alarm_enabled: values.alarmEnabled ? 1 : 0,
         completed_at: null,
         parent_task_id: null,
+        blocked_by_task_id: values.blockedByTaskId ?? null,
         sort_order: 0,
         is_recurring: 0,
         recurrence_frequency: null,

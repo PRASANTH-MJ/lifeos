@@ -1,10 +1,10 @@
 import * as Crypto from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { addDays, dateKeyToTimestamp, toDateKey, todayKey } from '@/lib/date';
-import { pushLocalRow } from '@/modules/sync';
+import { onLocalWrite, pushLocalRow } from '@/modules/sync';
 import type { MeditationLog } from './types';
 
 export function useMeditationLogs() {
@@ -14,8 +14,10 @@ export function useMeditationLogs() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    // 400, not 60 — the heatmap on the Meditation hub needs roughly the last 4 months of history
+    // (see toDailyMinutes below), which a daily-or-more meditator can easily exceed at 60 rows.
     const rows = await db.getAllAsync<MeditationLog>(
-      'SELECT * FROM meditation_logs ORDER BY completed_at DESC LIMIT 60'
+      'SELECT * FROM meditation_logs ORDER BY completed_at DESC LIMIT 400'
     );
     setLogs(rows);
     setLoading(false);
@@ -26,6 +28,15 @@ export function useMeditationLogs() {
       refresh();
     }, [refresh])
   );
+
+  // See onLocalWrite's doc comment (modules/sync/syncEngine.ts) — picks up a meditation_logs
+  // write made through a different useMeditationLogs() instance (e.g. usePublicProfileStatsSync's,
+  // mounted once at the root layout and never "focused" again by navigation).
+  useEffect(() => {
+    return onLocalWrite((table) => {
+      if (table === 'meditation_logs') refresh();
+    });
+  }, [refresh]);
 
   const logSession = useCallback(
     async (sessionKey: string, durationSeconds: number, dateKey?: string) => {

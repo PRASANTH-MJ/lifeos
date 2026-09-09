@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 
-import { Card, LoadingState, ScreenContainer, TrendChart } from '@/components';
+import { Card, IconBadge, LoadingState, PremiumGate, ScreenContainer, TrendChart } from '@/components';
 import { formatDisplayDate } from '@/lib/date';
 import { useWorkoutLogs, useWorkoutWeekAnalytics, computeWorkoutStreak } from '@/modules/workout';
 import { useAppTheme } from '@/theme';
@@ -21,17 +21,28 @@ export default function WorkoutAnalyticsScreen() {
 
   return (
     <ScreenContainer>
+      <PremiumGate
+        feature="workoutAnalytics"
+        icon="bar-chart-outline"
+        title="Advanced Insights is a Pro feature"
+        message="See your weekly workout trend, streak, and totals in one place. Go Pro to unlock analytics across every module.">
       <View style={{ gap: theme.spacing.xl }}>
         <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-          <Card style={{ flex: 1, gap: 4 }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>This week</Text>
+          <Card style={{ flex: 1, gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+              <IconBadge name="calendar-outline" color={theme.colors.moduleTasks} size="sm" />
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>This week</Text>
+            </View>
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.xl, fontWeight: theme.typography.weight.bold }}>
               {totalCount} workout{totalCount === 1 ? '' : 's'}
             </Text>
             <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>{totalMinutes} min total</Text>
           </Card>
-          <Card style={{ flex: 1, gap: 4 }}>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Current streak</Text>
+          <Card style={{ flex: 1, gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+              <IconBadge name="flame" color={theme.colors.warning} size="sm" />
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>Current streak</Text>
+            </View>
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.xl, fontWeight: theme.typography.weight.bold }}>
               {streak} day{streak === 1 ? '' : 's'}
             </Text>
@@ -47,6 +58,7 @@ export default function WorkoutAnalyticsScreen() {
           />
         </Card>
       </View>
+      </PremiumGate>
     </ScreenContainer>
   );
 }

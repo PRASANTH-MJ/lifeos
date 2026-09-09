@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Button, ScreenContainer, TextField } from '@/components';
 import { useAffirmations } from '@/modules/affirmations';
@@ -41,7 +41,12 @@ export default function NewAffirmationScreen() {
           numberOfLines={3}
           autoFocus
         />
-        <Button label="Save affirmation" onPress={onSave} disabled={text.trim().length === 0} loading={saving} />
+        <Button label="Save affirmation" onPress={onSave} disabled={text.trim().length === 0} loading={saving} glow />
+        {text.trim().length === 0 ? (
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, textAlign: 'center' }}>
+            Write your affirmation to continue
+          </Text>
+        ) : null}
       </View>
     </ScreenContainer>
   );

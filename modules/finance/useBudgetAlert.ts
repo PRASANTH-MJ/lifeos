@@ -15,6 +15,11 @@ type BudgetAlert = { label: 'weekly' | 'monthly'; spent: number; budget: number;
 export function useBudgetAlert() {
   const db = useSQLiteContext();
   const [alert, setAlert] = useState<BudgetAlert | null>(null);
+  // Unconditional current-period spend/budget snapshot — unlike `alert`, populated whenever a
+  // budget is set at all, not just once spend crosses ALERT_THRESHOLD. Added for the Life
+  // Scoreboard's Financial score (see modules/scoreboard/useLifeScore.ts), which needs the real
+  // percent used even when comfortably under budget, not just a near-limit warning.
+  const [current, setCurrent] = useState<BudgetAlert | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -50,6 +55,15 @@ export function useBudgetAlert() {
         next = { label: 'weekly', spent: weekSpent, budget: weeklyBudget, percent: Math.round((weekSpent / weeklyBudget) * 100) };
       }
       setAlert(next);
+
+      // Prefer monthly when both are set — same priority order as the threshold check above.
+      setCurrent(
+        monthlyBudget
+          ? { label: 'monthly', spent: monthSpent, budget: monthlyBudget, percent: Math.round((monthSpent / monthlyBudget) * 100) }
+          : weeklyBudget
+            ? { label: 'weekly', spent: weekSpent, budget: weeklyBudget, percent: Math.round((weekSpent / weeklyBudget) * 100) }
+            : null
+      );
     } finally {
       setLoading(false);
     }
@@ -61,5 +75,5 @@ export function useBudgetAlert() {
     }, [refresh])
   );
 
-  return { alert, loading, refresh };
+  return { alert, current, loading, refresh };
 }

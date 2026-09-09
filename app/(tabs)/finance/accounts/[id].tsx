@@ -1,13 +1,20 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { Button, Chip, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Card, Chip, IconBadge, LoadingState, ScreenContainer, TextField, showAlert } from '@/components';
 import { ACCOUNT_TYPE_LABELS, useAccounts, type AccountType } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 const ACCOUNT_TYPES: AccountType[] = ['cash', 'general', 'investment', 'credit'];
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR'];
+const TYPE_ICON: Record<AccountType, keyof typeof Ionicons.glyphMap> = {
+  cash: 'cash-outline',
+  general: 'wallet-outline',
+  investment: 'trending-up-outline',
+  credit: 'card-outline',
+};
 
 export default function AccountDetailScreen() {
   const theme = useAppTheme();
@@ -43,7 +50,7 @@ export default function AccountDetailScreen() {
   };
 
   const onDelete = () => {
-    Alert.alert('Delete account?', 'This removes the account. Transactions already logged against it are not deleted.', [
+    showAlert('Delete account?', 'This permanently deletes the account and every transaction logged against it. This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -60,7 +67,19 @@ export default function AccountDetailScreen() {
     <ScreenContainer>
       <Stack.Screen options={{ title: account.name }} />
       <View style={{ gap: theme.spacing.xl }}>
-        <TextField label="Account name" value={name} onChangeText={setName} autoFocus />
+        <Card tier="panel" style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+          <IconBadge name={TYPE_ICON[type]} color={theme.colors.primary} size="lg" />
+          <View>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
+              {account.name}
+            </Text>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>
+              {ACCOUNT_TYPE_LABELS[account.type]} · {account.currency}
+            </Text>
+          </View>
+        </Card>
+
+        <TextField label="Bank name" value={name} onChangeText={setName} autoFocus />
 
         <View style={{ gap: theme.spacing.sm }}>
           <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>

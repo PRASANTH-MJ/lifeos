@@ -17,6 +17,7 @@ import {
 import { useAppTheme } from '@/theme';
 
 const FREQUENCIES: PlannedPaymentFrequency[] = ['once', 'weekly', 'monthly', 'yearly'];
+const REMIND_DAYS_OPTIONS = [0, 1, 3, 7] as const;
 
 export default function NewPlannedPaymentScreen() {
   const theme = useAppTheme();
@@ -36,6 +37,8 @@ export default function NewPlannedPaymentScreen() {
   const [dateCursor, setDateCursor] = useState(() => monthCursorOf(nextDate));
   const [notify, setNotify] = useState(true);
   const [note, setNote] = useState('');
+  const [isSubscription, setIsSubscription] = useState(false);
+  const [remindDaysBefore, setRemindDaysBefore] = useState<number>(0);
   const [saving, setSaving] = useState(false);
 
   // Static route — expo-router reuses the same screen instance across repeated visits rather
@@ -51,6 +54,8 @@ export default function NewPlannedPaymentScreen() {
       setNextDate(todayKey());
       setNotify(true);
       setNote('');
+      setIsSubscription(false);
+      setRemindDaysBefore(0);
     }, [])
   );
 
@@ -86,8 +91,18 @@ export default function NewPlannedPaymentScreen() {
         nextDate,
         notify,
         note: note.trim() || null,
+        isSubscription,
+        remindDaysBefore,
       });
-      await syncPlannedPaymentNotification({ id, payee: payee.trim(), amount: numericAmount, next_date: nextDate, notify, type });
+      await syncPlannedPaymentNotification({
+        id,
+        payee: payee.trim(),
+        amount: numericAmount,
+        next_date: nextDate,
+        notify,
+        type,
+        remind_days_before: remindDaysBefore,
+      });
       router.back();
     } finally {
       setSaving(false);
@@ -159,10 +174,35 @@ export default function NewPlannedPaymentScreen() {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
+            Subscription
+          </Text>
+          <Switch value={isSubscription} onValueChange={setIsSubscription} />
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
             Remind me
           </Text>
           <Switch value={notify} onValueChange={setNotify} />
         </View>
+
+        {notify ? (
+          <View style={{ gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+              Remind me
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+              {REMIND_DAYS_OPTIONS.map((days) => (
+                <Chip
+                  key={days}
+                  label={days === 0 ? 'On due date' : `${days} day${days === 1 ? '' : 's'} before`}
+                  selected={remindDaysBefore === days}
+                  onPress={() => setRemindDaysBefore(days)}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <TextField label="Note (optional)" placeholder="Add a note" value={note} onChangeText={setNote} />
 

@@ -4,7 +4,8 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 
 import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
-import type { ShoppingList } from './types';
+import { itemLineTotal } from './quantity';
+import type { ShoppingItem, ShoppingList } from './types';
 
 export type ShoppingListSummary = ShoppingList & { totalItems: number; checkedItems: number; estimate: number };
 
@@ -13,30 +14,34 @@ export function useShoppingLists() {
   const [lists, setLists] = useState<ShoppingListSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // The estimate is computed here in JS via the shared itemLineTotal — not a raw SQL SUM — so
+  // this overview screen can never again drift out of sync with the detail screen's own total
+  // the way it did when each had its own quantity-parsing arithmetic (see quantity.ts).
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await db.getAllAsync<
-        ShoppingList & { total_items: number; checked_items: number; estimate: number | null }
-      >(
-        `SELECT l.*,
-                COUNT(i.id) as total_items,
-                SUM(CASE WHEN i.checked THEN 1 ELSE 0 END) as checked_items,
-                SUM(COALESCE(i.price, 0) * COALESCE(NULLIF(i.quantity, ''), '1')) as estimate
-         FROM shopping_lists l
-         LEFT JOIN shopping_items i ON i.list_id = l.id
-         GROUP BY l.id
-         ORDER BY l.created_at ASC`
-      );
+      const [listRows, itemRows] = await Promise.all([
+        db.getAllAsync<ShoppingList>('SELECT * FROM shopping_lists ORDER BY created_at ASC'),
+        db.getAllAsync<ShoppingItem>('SELECT * FROM shopping_items'),
+      ]);
+      const itemsByList = new Map<number, ShoppingItem[]>();
+      for (const item of itemRows) {
+        const bucket = itemsByList.get(item.list_id);
+        if (bucket) bucket.push(item);
+        else itemsByList.set(item.list_id, [item]);
+      }
       setLists(
-        rows.map((row) => ({
-          id: row.id,
-          name: row.name,
-          created_at: row.created_at,
-          totalItems: row.total_items,
-          checkedItems: row.checked_items,
-          estimate: row.estimate ?? 0,
-        }))
+        listRows.map((row) => {
+          const items = itemsByList.get(row.id) ?? [];
+          return {
+            id: row.id,
+            name: row.name,
+            created_at: row.created_at,
+            totalItems: items.length,
+            checkedItems: items.reduce((sum, item) => sum + (item.checked ? 1 : 0), 0),
+            estimate: items.reduce((sum, item) => sum + itemLineTotal(item.price, item.quantity, item.unit), 0),
+          };
+        })
       );
     } finally {
       setLoading(false);

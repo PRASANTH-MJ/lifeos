@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { Button, Card, Chip, EmptyState, LoadingState, LogPastEntryModal, ReminderCard, ScreenContainer, SegmentedControl } from '@/components';
+import { Button, Card, Chip, EmptyState, IconBadge, LoadingState, LogPastEntryModal, ProBadge, ReminderCard, ScreenContainer, SegmentedControl, UpsellModal, showAlert } from '@/components';
 import { dayOfYear, formatDisplayDateTime, todayKey } from '@/lib/date';
+import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
+import { useProfile } from '@/modules/profile';
 import { useModuleReminders } from '@/modules/reminders';
 import {
   computeWorkoutStreak,
@@ -14,8 +16,10 @@ import {
   WORKOUTS,
   equipmentLabel,
   goalLabel,
+  openExercisePicker,
   pickRecommendedWorkout,
   useCustomWorkouts,
+  useMuscleRecovery,
   useWorkoutLogs,
   useWorkoutPreferences,
 } from '@/modules/workout';
@@ -32,6 +36,7 @@ export default function WorkoutScreen() {
   const { preferences, loading, updatePreferences, refresh: refreshPreferences } = useWorkoutPreferences();
   const { logs, completedThisWeek, logCompletion, removeLog, refresh: refreshLogs } = useWorkoutLogs();
   const { workouts: customWorkouts, refresh: refreshCustom } = useCustomWorkouts();
+  const { overallRecovery } = useMuscleRecovery();
   const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders('workout', 'Time to work out', "Let's get moving today.");
   const allWorkouts = useMemo(() => [...WORKOUTS, ...customWorkouts], [customWorkouts]);
   const refreshAll = async () => {
@@ -40,6 +45,27 @@ export default function WorkoutScreen() {
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [logWorkoutKey, setLogWorkoutKey] = useState<string | null>(null);
   const [logDate, setLogDate] = useState(todayKey());
+  const customWorkoutGate = useFreeTierGate('customWorkouts');
+  const [showCustomWorkoutUpsell, setShowCustomWorkoutUpsell] = useState(false);
+  const { profile } = useProfile();
+  const premium = profile?.premium ?? false;
+  const [showDatabaseUpsell, setShowDatabaseUpsell] = useState(false);
+  const [showRecoveryUpsell, setShowRecoveryUpsell] = useState(false);
+
+  const onCreateCustomWorkout = () => {
+    if (customWorkoutGate.allowed) router.push('/workout/new');
+    else setShowCustomWorkoutUpsell(true);
+  };
+
+  const onOpenExerciseLibrary = () => {
+    if (premium) router.push('/workout/exercises');
+    else setShowDatabaseUpsell(true);
+  };
+
+  const onOpenMuscleRecovery = () => {
+    if (premium) router.push('/workout/recovery');
+    else setShowRecoveryUpsell(true);
+  };
 
   const currentStreak = useMemo(() => computeWorkoutStreak(logs), [logs]);
 
@@ -57,6 +83,13 @@ export default function WorkoutScreen() {
 
   const startSession = (workoutKey: string) => {
     router.push({ pathname: '/workout/session/[key]', params: { key: workoutKey } });
+  };
+
+  const onStartWorkout = () => {
+    openExercisePicker(router, (picked) => {
+      if (picked.length === 0) return;
+      router.push({ pathname: '/workout/live-session', params: { keys: picked.map((p) => p.key).join(',') } });
+    });
   };
 
   const onSaveLog = async () => {
@@ -87,7 +120,7 @@ export default function WorkoutScreen() {
   }
 
   const onDeleteLog = (id: number) => {
-    Alert.alert('Remove this log?', undefined, [
+    showAlert('Remove this log?', undefined, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => removeLog(id) },
     ]);
@@ -132,16 +165,28 @@ export default function WorkoutScreen() {
                   return (
                     <Pressable key={log.id} onLongPress={() => onDeleteLog(log.id)}>
                       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                        <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+                        <IconBadge name="checkmark-circle" color={theme.colors.success} size="sm" />
                         <View style={{ flex: 1 }}>
                           <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
                             {workout?.title ?? log.workout_key}
                           </Text>
                           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
                             {formatDisplayDateTime(log.completed_at)}
-                            {log.duration_seconds ? ` · ${Math.round(log.duration_seconds / 60)} min` : ''}
                           </Text>
                         </View>
+                        {log.duration_seconds ? (
+                          <View
+                            style={{
+                              paddingHorizontal: theme.spacing.sm,
+                              paddingVertical: 4,
+                              borderRadius: theme.radius.full,
+                              backgroundColor: theme.colors.moduleTasksMuted,
+                            }}>
+                            <Text style={{ color: theme.colors.moduleTasks, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.semibold }}>
+                              {Math.round(log.duration_seconds / 60)} min
+                            </Text>
+                          </View>
+                        ) : null}
                       </Card>
                     </Pressable>
                   );
@@ -152,7 +197,7 @@ export default function WorkoutScreen() {
         ) : (
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={{ gap: theme.spacing.xl }}>
-              <Card style={{ alignItems: 'center', gap: theme.spacing.md }}>
+              <Card tier="panel" style={{ alignItems: 'center', gap: theme.spacing.md }}>
                 <View style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 9, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' }}>
                   <View
                     style={{
@@ -169,20 +214,42 @@ export default function WorkoutScreen() {
                   <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
                     {currentStreak}
                   </Text>
-                  <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>day streak</Text>
+                  <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                    day{currentStreak === 1 ? '' : 's'} streak
+                  </Text>
                 </View>
                 <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>
                   {completedThisWeek} of {WEEKLY_GOAL} workouts this week
                 </Text>
-                {heroWorkout ? (
-                  <View style={{ width: '100%', gap: theme.spacing.xs }}>
-                    <Button label={`Start: ${heroWorkout.title}`} onPress={() => startSession(heroWorkout.key)} />
-                    <Pressable onPress={() => router.push('/workout/all')} style={{ alignItems: 'center', paddingVertical: theme.spacing.xs }}>
-                      <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Pick a different workout</Text>
+                <View style={{ width: '100%', gap: theme.spacing.xs }}>
+                  <Button label="Start Workout" onPress={onStartWorkout} glow />
+                  {heroWorkout ? (
+                    <Pressable onPress={() => startSession(heroWorkout.key)} style={{ alignItems: 'center', paddingVertical: theme.spacing.xs }}>
+                      <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                        or start "{heroWorkout.title}"
+                      </Text>
                     </Pressable>
-                  </View>
-                ) : null}
+                  ) : null}
+                </View>
               </Card>
+
+              <Pressable onPress={onOpenMuscleRecovery}>
+                <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                  <IconBadge name="pulse" color={theme.colors.moduleTasks} />
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+                      <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+                        Muscle Recovery
+                      </Text>
+                      {!premium ? <ProBadge /> : null}
+                    </View>
+                    <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                      {premium ? `${overallRecovery}% recovered on average` : 'See which muscles are fatigued vs. ready to train'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+                </Card>
+              </Pressable>
 
               {reminders.map((reminder) => (
                 <ReminderCard
@@ -195,11 +262,24 @@ export default function WorkoutScreen() {
               ))}
               <Button label={reminders.length > 0 ? 'Add another reminder' : 'Add a reminder'} variant="secondary" onPress={addReminder} />
 
-              <Pressable onPress={() => router.push('/workout/exercises')}>
+              <Pressable onPress={onOpenExerciseLibrary}>
                 <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                  <Ionicons name="body" size={20} color={theme.colors.textSecondary} />
+                  <IconBadge name="body" tone="neutral" />
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+                    <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+                      Exercise Library
+                    </Text>
+                    {!premium ? <ProBadge /> : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+                </Card>
+              </Pressable>
+
+              <Pressable onPress={() => router.push('/workout/programs')}>
+                <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                  <IconBadge name="calendar-outline" tone="neutral" />
                   <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
-                    Exercise Library
+                    Suggested Programs
                   </Text>
                   <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
                 </Card>
@@ -257,7 +337,7 @@ export default function WorkoutScreen() {
 
                   <Pressable onPress={() => router.push('/workout/all')}>
                     <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                      <Ionicons name="list" size={20} color={theme.colors.textSecondary} />
+                      <IconBadge name="list" tone="neutral" />
                       <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
                         Browse all workouts
                       </Text>
@@ -265,9 +345,9 @@ export default function WorkoutScreen() {
                     </Card>
                   </Pressable>
 
-                  <Pressable onPress={() => router.push('/workout/new')}>
+                  <Pressable onPress={onCreateCustomWorkout}>
                     <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                      <Ionicons name="add-circle-outline" size={20} color={theme.colors.textSecondary} />
+                      <IconBadge name="add-circle-outline" tone="neutral" />
                       <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
                         Create your own workout
                       </Text>
@@ -277,7 +357,7 @@ export default function WorkoutScreen() {
 
                   <Pressable onPress={openLogModal}>
                     <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                      <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+                      <IconBadge name="calendar-outline" tone="neutral" />
                       <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
                         Log a past workout
                       </Text>
@@ -303,6 +383,23 @@ export default function WorkoutScreen() {
         onSave={onSaveLog}
         moduleColor={theme.colors.moduleTasks}
         moduleMutedColor={theme.colors.moduleTasksMuted}
+      />
+
+      <UpsellModal
+        visible={showCustomWorkoutUpsell}
+        resourceLabel={LIMIT_LABELS.customWorkouts}
+        limit={customWorkoutGate.limit}
+        onClose={() => setShowCustomWorkoutUpsell(false)}
+      />
+      <UpsellModal
+        visible={showDatabaseUpsell}
+        message="The exercise library is a Pro feature — free accounts can still log workouts manually. Go Pro to search hundreds of exercises with instructions and media."
+        onClose={() => setShowDatabaseUpsell(false)}
+      />
+      <UpsellModal
+        visible={showRecoveryUpsell}
+        message="Muscle Recovery tracking is a Pro feature — see which muscle groups are fatigued and which are ready to train."
+        onClose={() => setShowRecoveryUpsell(false)}
       />
     </ScreenContainer>
   );

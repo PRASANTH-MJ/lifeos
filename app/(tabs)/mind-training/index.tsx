@@ -3,7 +3,7 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Button, Card, FAB_BOTTOM_OFFSET, LogPastEntryModal, ReminderCard, ScreenContainer, TextField } from '@/components';
+import { Button, Card, FAB_BOTTOM_OFFSET, IconBadge, LogPastEntryModal, ReminderCard, ScreenContainer, TextField } from '@/components';
 import { todayKey } from '@/lib/date';
 import { MIND_EXERCISES, useBestScores, useMindTrainingLogs } from '@/modules/mind-training';
 import { useModuleReminders } from '@/modules/reminders';
@@ -51,17 +51,7 @@ export default function MindTrainingScreen() {
           <Link key={exercise.key} href={{ pathname: '/mind-training/[exerciseKey]', params: { exerciseKey: exercise.key } }} asChild>
             <Pressable>
               <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: theme.radius.md,
-                    backgroundColor: theme.colors.primaryMuted,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                  <Ionicons name="bulb" size={20} color={theme.colors.primary} />
-                </View>
+                <IconBadge name="bulb" color={theme.colors.primary} shape="square" />
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
                     {exercise.title}
@@ -87,7 +77,7 @@ export default function MindTrainingScreen() {
             setLogModalVisible(true);
           }}>
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-            <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+            <IconBadge name="calendar-outline" tone="neutral" shape="square" />
             <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
               Add calendar entry
             </Text>

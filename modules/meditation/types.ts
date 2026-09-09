@@ -4,6 +4,7 @@ export type MeditationSession = {
   description: string;
   durationSeconds: number;
   defaultTrackKey: string;
+  icon: 'leaf' | 'moon' | 'sunny';
 };
 
 export type MeditationLog = {
@@ -42,6 +43,7 @@ export const MEDITATION_SESSIONS: MeditationSession[] = [
     description: 'A soft ambient tone to settle a busy mind.',
     durationSeconds: 5 * 60,
     defaultTrackKey: 'moonstone',
+    icon: 'leaf',
   },
   {
     key: 'deep-rest',
@@ -49,6 +51,7 @@ export const MEDITATION_SESSIONS: MeditationSession[] = [
     description: 'A low, grounding tone for winding down before sleep.',
     durationSeconds: 10 * 60,
     defaultTrackKey: 'ocean-wave',
+    icon: 'moon',
   },
   {
     key: 'morning-clarity',
@@ -56,6 +59,7 @@ export const MEDITATION_SESSIONS: MeditationSession[] = [
     description: 'A brighter tone to start the day present and awake.',
     durationSeconds: 3 * 60,
     defaultTrackKey: 'bright-halo',
+    icon: 'sunny',
   },
 ];
 

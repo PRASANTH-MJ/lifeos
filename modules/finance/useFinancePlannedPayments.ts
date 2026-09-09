@@ -20,6 +20,8 @@ type PlannedPaymentRow = {
   note: string | null;
   is_active: number;
   created_at: string;
+  is_subscription: number;
+  remind_days_before: number;
 };
 
 function toPlannedPayment(row: PlannedPaymentRow): PlannedPayment {
@@ -36,6 +38,8 @@ function toPlannedPayment(row: PlannedPaymentRow): PlannedPayment {
     note: row.note,
     is_active: !!row.is_active,
     created_at: row.created_at,
+    is_subscription: !!row.is_subscription,
+    remind_days_before: row.remind_days_before,
   };
 }
 
@@ -88,11 +92,13 @@ export function useFinancePlannedPayments() {
       nextDate: string;
       notify: boolean;
       note?: string | null;
+      isSubscription?: boolean;
+      remindDaysBefore?: number;
     }) => {
       const now = new Date().toISOString();
       const result = await db.runAsync(
-        `INSERT INTO finance_planned_payments (account_id, category_id, type, amount, payee, frequency, next_date, notify, note, is_active, created_at, updated_at, sync_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        `INSERT INTO finance_planned_payments (account_id, category_id, type, amount, payee, frequency, next_date, notify, note, is_active, created_at, updated_at, sync_id, is_subscription, remind_days_before)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
         [
           Number(values.accountId),
           values.categoryId ? Number(values.categoryId) : null,
@@ -106,6 +112,8 @@ export function useFinancePlannedPayments() {
           now,
           now,
           Crypto.randomUUID(),
+          values.isSubscription ? 1 : 0,
+          values.remindDaysBefore ?? 0,
         ]
       );
       await pushLocalRow(db, 'finance_planned_payments', result.lastInsertRowId);
@@ -175,6 +183,8 @@ export function useFinancePlannedPayments() {
         nextDate: string;
         notify: boolean;
         note: string | null;
+        isSubscription: boolean;
+        remindDaysBefore: number;
       }>
     ) => {
       const updates: string[] = [];
@@ -214,6 +224,14 @@ export function useFinancePlannedPayments() {
       if (values.note !== undefined) {
         updates.push('note = ?');
         params.push(values.note);
+      }
+      if (values.isSubscription !== undefined) {
+        updates.push('is_subscription = ?');
+        params.push(values.isSubscription ? 1 : 0);
+      }
+      if (values.remindDaysBefore !== undefined) {
+        updates.push('remind_days_before = ?');
+        params.push(values.remindDaysBefore);
       }
       if (updates.length === 0) return;
       updates.push('updated_at = ?');

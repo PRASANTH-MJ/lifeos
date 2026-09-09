@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useColorScheme } from 'react-native';
+import { Text, TextInput, useColorScheme } from 'react-native';
 
 import {
   DEFAULT_THEME_FOR_SCHEME,
@@ -8,16 +8,33 @@ import {
   shadow,
   spacing,
   THEME_COLORS,
+  THEME_FONT_FAMILY,
   typography,
   type ColorTokens,
+  type FontFamilyTokens,
   type ThemeName,
 } from './tokens';
 
 const STORAGE_KEY = 'lifeos-theme-name';
 
-/** Cyberpunk/Midnight Glass/Solar Flare read as "dark" for anything that still needs a coarse
- * light/dark distinction (e.g. status bar style) without caring which of the 4 themes is active. */
-const DARK_THEMES = new Set<ThemeName>(['cyberpunk', 'midnightGlass', 'solarFlare']);
+/** Cyberpunk/Cyber Sanctuary/Aurora/Deep Ocean/Clarity read as "dark" for anything that still
+ * needs a coarse light/dark distinction (e.g. status bar style) without caring which specific
+ * theme is active. (Solar Flare and Midnight Glass were removed from the theme system.) */
+const DARK_THEMES = new Set<ThemeName>(['cyberpunk', 'cyberSanctuary', 'aurora', 'deepOcean', 'clarity']);
+
+/** No shared Typography/Heading component exists for every screen to route a font family
+ * through (see theme/tokens.ts's THEME_FONT_FAMILY doc comment), so a theme's font is applied
+ * globally the same way React Native apps conventionally do this: overriding Text/TextInput's
+ * defaultProps. Re-applied every time the active theme changes so switching themes in Settings
+ * takes effect immediately without a reload. Explicit `style.fontFamily` on any individual
+ * component still wins over this default, same as any other defaultProps-supplied style. */
+function applyGlobalFontFamily(fontFamily: FontFamilyTokens) {
+  const style = { fontFamily: fontFamily.regular };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (Text as any).defaultProps = { ...(Text as any).defaultProps, style: [(Text as any).defaultProps?.style, style] };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (TextInput as any).defaultProps = { ...(TextInput as any).defaultProps, style: [(TextInput as any).defaultProps?.style, style] };
+}
 
 export type AppTheme = {
   scheme: 'light' | 'dark';
@@ -27,6 +44,7 @@ export type AppTheme = {
   spacing: typeof spacing;
   radius: typeof radius;
   typography: typeof typography;
+  fontFamily: FontFamilyTokens;
   shadow: typeof shadow;
 };
 
@@ -50,6 +68,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, name).catch(() => {});
   };
 
+  // Re-applied on every theme change (including the very first render) so switching themes in
+  // Settings updates every already-mounted Text/TextInput's font immediately, no reload needed.
+  useEffect(() => {
+    applyGlobalFontFamily(THEME_FONT_FAMILY[themeName]);
+  }, [themeName]);
+
   const theme = useMemo<AppTheme>(
     () => ({
       scheme: DARK_THEMES.has(themeName) ? 'dark' : 'light',
@@ -59,6 +83,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       spacing,
       radius,
       typography,
+      fontFamily: THEME_FONT_FAMILY[themeName],
       shadow,
     }),
     [themeName]

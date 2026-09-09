@@ -7,6 +7,7 @@ import { Button } from '@/components';
 import { formatDisplayDate } from '@/lib/date';
 import { formatTimeDisplay, useSettings } from '@/modules/settings';
 import { useAppTheme } from '@/theme';
+import { useTaskDetail } from './useTaskDetail';
 import type { Task, TaskCompletion, TaskLogStatus } from './types';
 
 type Props = {
@@ -24,6 +25,14 @@ export function TaskLogSheet({ visible, task, date, existingLog, onClose, onSave
   const router = useRouter();
   const { settings } = useSettings();
   const [saving, setSaving] = useState(false);
+  // Subtasks double as this app's task checklist (see modules/tasks/useTaskDetail.ts) — shown
+  // here too, not just on the full detail page, so checking them off doesn't require leaving
+  // this quick popup first. isBlocked/blockingTask ride along on the same hook call, for the
+  // "Done" button below.
+  const { subtasks, toggleSubtask, isBlocked, blockingTask } = useTaskDetail(task.id);
+  // Mandatory: every checklist item (subtask) must be checked off before this task can be closed
+  // as done — previously the checklist was purely advisory and "Done" ignored it entirely.
+  const checklistIncomplete = subtasks.some((subtask) => !subtask.completed_at);
 
   const save = async (status: TaskLogStatus) => {
     setSaving(true);
@@ -56,21 +65,64 @@ export function TaskLogSheet({ visible, task, date, existingLog, onClose, onSave
             padding: theme.spacing.xl,
             gap: theme.spacing.lg,
           }}>
-          <View>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
-              {task.title}
-            </Text>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>{formatDisplayDate(date)}</Text>
-            {task.due_date ? (
-              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, marginTop: 2 }}>
-                Due {formatDisplayDate(task.due_date)}
-                {task.due_time ? ` · ${formatTimeDisplay(task.due_time, settings?.timeFormat ?? '24h')}` : ''}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
+                {task.title}
               </Text>
-            ) : null}
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>{formatDisplayDate(date)}</Text>
+              {task.due_date ? (
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, marginTop: 2 }}>
+                  Due {formatDisplayDate(task.due_date)}
+                  {task.due_time ? ` · ${formatTimeDisplay(task.due_time, settings?.timeFormat ?? '24h')}` : ''}
+                </Text>
+              ) : null}
+            </View>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Ionicons name="close" size={22} color={theme.colors.textTertiary} />
+            </Pressable>
           </View>
 
+          {subtasks.length > 0 ? (
+            <View style={{ gap: theme.spacing.sm }}>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                Checklist ({subtasks.filter((s) => s.completed_at).length} of {subtasks.length})
+              </Text>
+              {subtasks.map((subtask) => (
+                <Pressable
+                  key={subtask.id}
+                  onPress={() => toggleSubtask(subtask)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+                  <Ionicons
+                    name={subtask.completed_at ? 'checkbox' : 'square-outline'}
+                    size={20}
+                    color={subtask.completed_at ? theme.colors.success : theme.colors.textTertiary}
+                  />
+                  <Text
+                    style={{
+                      color: subtask.completed_at ? theme.colors.textTertiary : theme.colors.textPrimary,
+                      fontSize: theme.typography.size.base,
+                      textDecorationLine: subtask.completed_at ? 'line-through' : 'none',
+                    }}>
+                    {subtask.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
+          {isBlocked ? (
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              Blocked by "{blockingTask?.title}" — complete that task first to mark this one done.
+            </Text>
+          ) : checklistIncomplete ? (
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+              Check off every checklist item first to mark this task done.
+            </Text>
+          ) : null}
+
           <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
-            <Button label="Done" onPress={() => save('done')} loading={saving} />
+            <Button label="Done" onPress={() => save('done')} loading={saving} disabled={isBlocked || checklistIncomplete} />
             <Button label="Fail" variant="danger" onPress={() => save('fail')} loading={saving} />
           </View>
 

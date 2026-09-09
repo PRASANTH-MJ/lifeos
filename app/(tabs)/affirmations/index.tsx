@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Link, Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, ImageBackground, PanResponder, Pressable, Share, Text, View } from 'react-native';
+import { Animated, PanResponder, Pressable, Share, Text, View } from 'react-native';
 
-import { Button, Card, GlowSurface, LoadingState, ReminderCard, ScreenContainer } from '@/components';
-import { backgroundFor, useAffirmations } from '@/modules/affirmations';
+import { Button, Card, GlowSurface, IconBadge, LoadingState, ReminderCard, ScreenContainer } from '@/components';
+import { useAffirmations } from '@/modules/affirmations';
 import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
@@ -116,11 +117,14 @@ export default function AffirmationsScreen() {
       />
       <View style={{ gap: theme.spacing.xl }}>
         <View {...panResponder.panHandlers}>
-          <ImageBackground
-            source={backgroundFor(displayed.id, displayed.text)}
-            imageStyle={{ borderRadius: theme.radius.lg }}
+          {/* Themed gradient "moment" card — same primary→glow gradient Button's `gradient`
+              variant uses, in place of the external background photo the hero used to show. */}
+          <LinearGradient
+            colors={[theme.colors.primary, theme.colors.glow]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={{ borderRadius: theme.radius.lg, overflow: 'hidden' }}>
-            <View style={{ backgroundColor: 'rgba(0,0,0,0.28)', padding: theme.spacing.lg, gap: theme.spacing.lg }}>
+            <View style={{ padding: theme.spacing.lg, gap: theme.spacing.lg }}>
               <View style={{ position: 'relative' }}>
                 <Animated.View
                   pointerEvents="none"
@@ -169,7 +173,7 @@ export default function AffirmationsScreen() {
                 </View>
               </View>
             </View>
-          </ImageBackground>
+          </LinearGradient>
         </View>
 
         {reminders.map((reminder) => (
@@ -190,11 +194,7 @@ export default function AffirmationsScreen() {
             </Text>
             {favorites.slice(0, 5).map((affirmation) => (
               <Card key={affirmation.id} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, padding: theme.spacing.sm }}>
-                <ImageBackground
-                  source={backgroundFor(affirmation.id, affirmation.text)}
-                  imageStyle={{ borderRadius: theme.radius.sm }}
-                  style={{ width: 36, height: 36, borderRadius: theme.radius.sm, overflow: 'hidden' }}
-                />
+                <IconBadge name="sparkles" color={theme.colors.moduleJournal} size="sm" shape="square" />
                 <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.sm }}>{affirmation.text}</Text>
                 <Pressable onPress={() => toggleFavorite(affirmation)} hitSlop={8}>
                   <Ionicons name="heart" size={18} color={theme.colors.danger} />
@@ -206,7 +206,7 @@ export default function AffirmationsScreen() {
 
         <Pressable onPress={() => router.push('/affirmations/all')}>
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-            <Ionicons name="list" size={20} color={theme.colors.textSecondary} />
+            <IconBadge name="grid-outline" color={theme.colors.moduleJournal} shape="square" />
             <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
               Browse all ({affirmations.length})
             </Text>

@@ -6,3 +6,4 @@ export {
   type ReminderType,
   type ScheduleType,
 } from './useModuleReminder';
+export { useDefaultCheckinReminders } from './useDefaultCheckinReminders';

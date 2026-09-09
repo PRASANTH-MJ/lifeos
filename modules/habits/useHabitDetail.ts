@@ -91,8 +91,9 @@ export function useHabitDetail(habitId: number) {
       if (values.targetDays !== undefined) columnMap.target_days = JSON.stringify(values.targetDays);
       if (values.periodTargetCount !== undefined) columnMap.period_target_count = values.periodTargetCount;
       if (values.periodLengthDays !== undefined) columnMap.period_length_days = values.periodLengthDays;
-      if (values.reminderTime !== undefined) columnMap.reminder_time = values.reminderTime;
+      if (values.reminderTimes !== undefined) columnMap.reminder_time = values.reminderTimes.length > 0 ? JSON.stringify(values.reminderTimes) : null;
       if (values.alarmEnabled !== undefined) columnMap.alarm_enabled = values.alarmEnabled ? 1 : 0;
+      if (values.routineGroup !== undefined) columnMap.routine_group = values.routineGroup?.trim() || null;
 
       columnMap.updated_at = new Date().toISOString();
 
@@ -116,6 +117,13 @@ export function useHabitDetail(habitId: number) {
   }, [db, habitId]);
 
   const deleteHabit = useCallback(async () => {
+    // habit_logs.habit_id is ON DELETE CASCADE (db/schema.ts) — SQLite silently wipes those rows
+    // locally once the habit is deleted below, so each must be tombstoned first or another device
+    // never learns those logs were removed (and could even resurrect them on its next sync).
+    const logRows = await db.getAllAsync<{ id: number }>('SELECT id FROM habit_logs WHERE habit_id = ?', [habitId]);
+    for (const row of logRows) {
+      await recordDeleteBeforeRemoving(db, 'habit_logs', row.id);
+    }
     await recordDeleteBeforeRemoving(db, 'habits', habitId);
     await db.runAsync('DELETE FROM habits WHERE id = ?', [habitId]);
     cancelHabitNotifications(habitId).catch(() => {});

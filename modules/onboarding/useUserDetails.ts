@@ -3,16 +3,23 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 
 import { onSyncMerge, pushLocalRow } from '@/modules/sync';
-import type { FinancialGoal, HealthGoal, IncomeBracket, UserDetails, UserDetailsInput } from './types';
+import type { FoodStyle, HealthGoal, IncomeBracket, UserDetails, UserDetailsInput } from './types';
+import { parseFinancialGoals } from './types';
 
 type Row = {
   phone_number: string | null;
   date_of_birth: string | null;
+  country: string | null;
+  state: string | null;
   height_cm: number | null;
   weight_kg: number | null;
+  avg_sleep_time: string | null;
+  avg_wake_time: string | null;
+  avg_water_intake_ml: number | null;
+  food_style: FoodStyle | null;
   health_goal: HealthGoal | null;
   income_bracket: IncomeBracket | null;
-  financial_goal: FinancialGoal | null;
+  financial_goals: string | null;
   onboarding_done: number;
 };
 
@@ -20,11 +27,17 @@ function toUserDetails(row: Row | null): UserDetails {
   return {
     phoneNumber: row?.phone_number ?? null,
     dateOfBirth: row?.date_of_birth ?? null,
+    country: row?.country ?? null,
+    state: row?.state ?? null,
     heightCm: row?.height_cm ?? null,
     weightKg: row?.weight_kg ?? null,
+    avgSleepTime: row?.avg_sleep_time ?? null,
+    avgWakeTime: row?.avg_wake_time ?? null,
+    avgWaterIntakeMl: row?.avg_water_intake_ml ?? null,
+    foodStyle: row?.food_style ?? null,
     healthGoal: row?.health_goal ?? null,
     incomeBracket: row?.income_bracket ?? null,
-    financialGoal: row?.financial_goal ?? null,
+    financialGoals: parseFinancialGoals(row?.financial_goals),
     onboardingDone: Boolean(row?.onboarding_done),
   };
 }
@@ -37,7 +50,9 @@ export function useUserDetails() {
   const refresh = useCallback(async () => {
     setLoading(true);
     const row = await db.getFirstAsync<Row>(
-      'SELECT phone_number, date_of_birth, height_cm, weight_kg, health_goal, income_bracket, financial_goal, onboarding_done FROM user_details WHERE id = 1'
+      `SELECT phone_number, date_of_birth, country, state, height_cm, weight_kg, avg_sleep_time, avg_wake_time,
+              avg_water_intake_ml, food_style, health_goal, income_bracket, financial_goals, onboarding_done
+       FROM user_details WHERE id = 1`
     );
     setDetails(toUserDetails(row));
     setLoading(false);
@@ -65,22 +80,34 @@ export function useUserDetails() {
         `UPDATE user_details SET
            phone_number = COALESCE(?, phone_number),
            date_of_birth = COALESCE(?, date_of_birth),
+           country = COALESCE(?, country),
+           state = COALESCE(?, state),
            height_cm = COALESCE(?, height_cm),
            weight_kg = COALESCE(?, weight_kg),
+           avg_sleep_time = COALESCE(?, avg_sleep_time),
+           avg_wake_time = COALESCE(?, avg_wake_time),
+           avg_water_intake_ml = COALESCE(?, avg_water_intake_ml),
+           food_style = COALESCE(?, food_style),
            health_goal = COALESCE(?, health_goal),
            income_bracket = COALESCE(?, income_bracket),
-           financial_goal = COALESCE(?, financial_goal),
+           financial_goals = COALESCE(?, financial_goals),
            onboarding_done = ?,
            updated_at = ?
          WHERE id = 1`,
         [
           input.phoneNumber ?? null,
           input.dateOfBirth ?? null,
+          input.country ?? null,
+          input.state ?? null,
           input.heightCm ?? null,
           input.weightKg ?? null,
+          input.avgSleepTime ?? null,
+          input.avgWakeTime ?? null,
+          input.avgWaterIntakeMl ?? null,
+          input.foodStyle ?? null,
           input.healthGoal ?? null,
           input.incomeBracket ?? null,
-          input.financialGoal ?? null,
+          input.financialGoals ? JSON.stringify(input.financialGoals) : null,
           markOnboardingDone ? 1 : 0,
           new Date().toISOString(),
         ]

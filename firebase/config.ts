@@ -18,6 +18,8 @@ const firebaseConfig = {
   appId: '1:537711771675:web:638e0567e003a83d2078be',
 };
 
+export const storageBucketName = firebaseConfig.storageBucket;
+
 const app = initializeApp(firebaseConfig);
 
 function resolvePersistence() {

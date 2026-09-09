@@ -1,8 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { Button, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Card, IconBadge, LoadingState, ScreenContainer, TextField, showAlert } from '@/components';
 import { formatDisplayDate } from '@/lib/date';
 import { useEventDetail } from '@/modules/calendar';
 import { useAppTheme } from '@/theme';
@@ -33,7 +33,7 @@ export default function EventDetailScreen() {
   }
 
   const onDelete = () => {
-    Alert.alert('Delete event?', 'This cannot be undone.', [
+    showAlert('Delete event?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -49,10 +49,13 @@ export default function EventDetailScreen() {
   return (
     <ScreenContainer>
       <View style={{ gap: theme.spacing.xl }}>
-        <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>
-          {formatDisplayDate(event.date)}
-          {event.start_time ? ` · ${event.start_time}${event.end_time ? ` – ${event.end_time}` : ''}` : ''}
-        </Text>
+        <Card tier="panel" style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+          <IconBadge name="calendar-outline" size="md" />
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>
+            {formatDisplayDate(event.date)}
+            {event.start_time ? ` · ${event.start_time}${event.end_time ? ` – ${event.end_time}` : ''}` : ''}
+          </Text>
+        </Card>
         <TextField
           label="Title"
           value={title}

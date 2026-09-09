@@ -3,36 +3,60 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>LifeOS Privacy Policy</title>
+<title>Flowsy Privacy Policy</title>
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #14171F; }
   h1 { font-size: 1.6rem; }
   h2 { font-size: 1.2rem; margin-top: 2rem; }
-  code { background: #F1F2F4; padding: 2px 6px; border-radius: 4px; }
+  a { color: #4C6FFF; }
 </style>
 </head>
 <body>
-  <h1>LifeOS Privacy Policy</h1>
-  <p><em>Last updated: 2026-07-23</em></p>
+  <h1>Flowsy Privacy Policy</h1>
+  <p><em>Effective August 14, 2026</em></p>
 
-  <p>LifeOS ("the app") is a personal habit, task, and wellness tracker. This page explains what data the app collects and how it's used.</p>
+  <p>Flowsy ("the app") is a personal habit, task, and wellness tracker. This page explains what data the app collects, how it's used, and how you can control it.</p>
 
-  <h2>Account data</h2>
-  <p>To use the app you create an account with an email address, a username, and a password. Your password is hashed (never stored in plain text) before being saved. This account data is used solely to let you sign in — it is not sold, shared with third parties, or used for advertising.</p>
+  <h2>Information you provide</h2>
+  <p>When you create an account, we collect your email address via Firebase Authentication. We never see or store your password — Firebase handles that directly.</p>
+  <p>Everything else — habits, tasks, journal entries and check-ins (including any mood you record), workouts, food and water logs, finance and budget records (accounts, transactions, budgets, debts, goals), meditation and mind-training logs, your nickname, avatar, and personal details like height, weight, date of birth, and health or financial goals — is content you type or pick yourself while using the app. Some of this, particularly your journal entries, mood check-ins, and finance/budget records, is sensitive personal information, and we treat it with the same protections as the rest of your account data described below.</p>
 
-  <h2>Everything else stays on your device</h2>
-  <p>Habits, tasks, journal entries, mood logs, meditation/breathing sessions, finance entries, food logs, workout data, and every other piece of content you create in the app is stored locally on your device only. None of it is transmitted to, or stored on, any server. Uninstalling the app or clearing its data deletes it permanently — there is no cloud backup or sync.</p>
+  <h2>Where your data lives</h2>
+  <p>If you use the app without creating an account, everything above stays in a local database on your device only and is never sent to us or anyone else.</p>
+  <p>If you create an account, the content above (habits, tasks, journal entries and check-ins, food, water, workout, meditation, mind-training, and finance data) automatically and continuously syncs to our database (Firebase Firestore) under your account — this is what lets the same data appear if you sign in on another device. This sync happens for every signed-in account, not just Pro subscribers.</p>
+  <p>If you choose a profile avatar image while signed in, it is uploaded to Firebase Cloud Storage under your account and a link to it is stored in Firestore, so your avatar follows your account to other signed-in devices.</p>
+  <p>Separately, Cloud Backup (a Pro feature, and only when you tap "Back up now") uploads a full point-in-time snapshot of that same data to Firebase Cloud Storage, which you can restore from later or onto a new device. Cloud Backup is an additional copy on top of the sync described above, not the only way data can leave your device.</p>
 
-  <h2>Notifications</h2>
-  <p>If you enable reminders or alarms, the app schedules local notifications on your device using your device's operating system. No notification content is sent through a third-party push service.</p>
+  <h2>Purchases and subscriptions</h2>
+  <p>Pro plan purchases are processed entirely by Google Play. Flowsy never sees or stores your card, bank, or other payment details — Google Play handles all of that itself.</p>
+  <p>After a purchase, the app asks a Flowsy server function (a Firebase Cloud Function) to verify it directly with Google's Play Developer API. Once verified, that function stores only the resulting entitlement — whether you're Pro, which plan, and its subscription status — on your account record in Firestore. No payment information is included in that record.</p>
+  <p>Tapping "Restore Purchases" in the app re-runs this same server-side verification for your Google account's existing purchases, in case your Pro status didn't sync automatically.</p>
+
+  <h2>Location</h2>
+  <p>The Activity Tracker's "Record with GPS" feature (for running, walking, hiking, and sports) uses your device's location, including in the background while a recording is active, so tracking keeps working if you lock your phone or switch to another app mid-activity. Location access is only ever used while you've started a recording — the app does not track your location at any other time.</p>
+  <p>Raw GPS coordinates are processed on your device to calculate distance and pace and are never stored long-term or sent to our servers. Only the resulting summary — distance, duration, and date — is saved with your other activity data and, if you're signed in, synced the same way as described in "Where your data lives" above.</p>
+
+  <h2>Camera and photo library</h2>
+  <p>The app requests camera access for planned upcoming features (such as photo-based food logging); as of this version, the camera is not actively used to capture, store, or upload any images. We will update this section when a camera-based feature ships.</p>
+  <p>The photo library is used only if you choose a profile avatar image. See "Where your data lives" above for what happens to it once you're signed in.</p>
+
+  <h2>What we don't do</h2>
+  <p>Flowsy has no advertising SDK and no analytics or tracking SDK. We do not sell or share your data with third parties for advertising or marketing. Flowsy never receives or stores your payment/card details — those are handled entirely by Google Play, as described in "Purchases and subscriptions" above.</p>
+
+  <h2>Third-party services</h2>
+  <p>We use Firebase (a Google service) for account sign-in, for syncing your data across your signed-in devices, for storing your avatar and, if you opt into Cloud Backup, your backup snapshot, and for running the server-side function that verifies Play Store purchases. We use Google Play Billing to process purchases and subscriptions. Google's handling of that data is governed by Google's own privacy policy.</p>
 
   <h2>Data retention and deletion</h2>
-  <p>Account data (email, username, hashed password) is retained until you ask for it to be deleted. To request deletion of your account, contact the developer using the details below.</p>
+  <p>Content on your device stays until you delete it in the app or uninstall the app. If you have an account, the synced copy of that content stays in our database until you delete it in the app (which removes it from sync too) or ask us to delete your account. A Cloud Backup snapshot stays in storage until you overwrite it with a new backup or ask us to delete it.</p>
+  <p>There isn't yet a self-serve "delete my account" button in the app. To request deletion of your account and any backup data, email us at <a href="mailto:data24zone@gmail.com">data24zone@gmail.com</a> and we'll take care of it.</p>
 
-  <h2>Third parties</h2>
-  <p>The app does not integrate any third-party analytics, advertising, or tracking SDKs.</p>
+  <h2>Children's privacy</h2>
+  <p>Flowsy is not directed at children under 13, and we do not knowingly collect information from them.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If how we handle data changes, we'll update this page and change the effective date above.</p>
 
   <h2>Contact</h2>
-  <p>Questions about this policy can be sent to the developer via the contact information listed on the app's Play Store page.</p>
+  <p>Questions about your data can be sent to <a href="mailto:data24zone@gmail.com">data24zone@gmail.com</a>.</p>
 </body>
 </html>

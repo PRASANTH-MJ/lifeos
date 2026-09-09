@@ -20,14 +20,54 @@ export type Habit = {
   target_days: string;
   period_target_count: number | null;
   period_length_days: number | null;
-  /** "HH:MM", 24-hour — fires a daily reminder at this time regardless of
-   * which days the habit is actually due (a known simplification). */
+  /** JSON string array of "HH:MM" (24-hour) times — fires a daily reminder at each configured
+   * time regardless of which days the habit is actually due (a known simplification). Use
+   * `parseReminderTimes` to read this. Null/empty means no reminder. */
   reminder_time: string | null;
   alarm_enabled: number;
   sort_order: number;
   created_at: string;
   archived: number;
+  /** Free-text grouping label for the Habits list ("Morning routine", "Evening routine", ...) —
+   * user-typed, not a fixed enum, so any name they reuse across habits groups them together. Null
+   * means ungrouped (rendered outside any section, same as before this existed). */
+  routine_group: string | null;
+  /** Every synced table has had this since db/schema.ts's v23 migration — not previously part of
+   * this type since nothing here needed it directly; habit_chains' habit_sync_ids does. */
+  sync_id: string | null;
 };
+
+export type HabitChain = {
+  id: number;
+  name: string;
+  /** JSON string array of the member habits' `sync_id`s, in the order they're done — see
+   * db/schema.ts's v59 migration comment for why sync_id rather than local id. */
+  habit_sync_ids: string;
+  sync_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function parseChainHabitSyncIds(habitSyncIds: string): string[] {
+  try {
+    const parsed = JSON.parse(habitSyncIds);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export type ChainHabitEntry = { habit: Habit; missing: false } | { habit: null; missing: true; syncId: string };
+
+/** Resolves a chain's `habit_sync_ids` against the currently-loaded `habits` list — a member
+ * habit deleted since the chain was built simply can't be resolved (`missing: true`) rather than
+ * crashing the chain view; the chain itself is never auto-edited to drop it. */
+export function resolveChainHabits(chain: HabitChain, habitsBySyncId: Map<string, Habit>): ChainHabitEntry[] {
+  return parseChainHabitSyncIds(chain.habit_sync_ids).map((syncId) => {
+    const habit = habitsBySyncId.get(syncId);
+    return habit ? { habit, missing: false } : { habit: null, missing: true, syncId };
+  });
+}
 
 export type HabitLog = {
   id: number;
@@ -44,6 +84,20 @@ export function parseTargetDays(targetDays: string): number[] {
   try {
     const parsed = JSON.parse(targetDays);
     return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Parses `habits.reminder_time`'s JSON array-of-"HH:MM" format. Returns `[]` for null/empty/
+ * malformed values — including a pre-migration plain "HH:MM" string, which should never reach
+ * here (the v38 migration wraps every existing value into a one-element array), but falling back
+ * to "no reminder" rather than throwing is safer than crashing the habit list over stale data. */
+export function parseReminderTimes(reminderTime: string | null): string[] {
+  if (!reminderTime) return [];
+  try {
+    const parsed = JSON.parse(reminderTime);
+    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : [];
   } catch {
     return [];
   }

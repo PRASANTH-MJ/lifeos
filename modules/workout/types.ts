@@ -1,3 +1,5 @@
+import type { Ionicons } from '@expo/vector-icons';
+
 export type WorkoutGoal = 'general' | 'strength' | 'cardio' | 'flexibility';
 export type Equipment = 'none' | 'dumbbells' | 'full-gym';
 
@@ -8,7 +10,18 @@ export type Workout = {
   equipment: Equipment;
   minutes: number;
   exercises: string[];
+  /** Parallel to `exercises` by index — exercises sharing the same (non-null) group number are a
+   * superset/circuit, done back-to-back before resting. Undefined for the built-in WORKOUTS
+   * catalog (which has no notion of grouping); only ever populated for custom workouts. */
+  exerciseGroups?: (number | null)[];
 };
+
+/** One exercise as entered in the workout builder — `supersetGroup` is null for a standalone
+ * exercise, or a shared number for 2+ consecutive exercises meant to be done back-to-back as a
+ * superset/circuit before resting (see app/(tabs)/workout/new.tsx's "Group with next" toggle).
+ * This is the shape `custom_workouts.exercises` is serialized as; useCustomWorkouts(.web).ts also
+ * accept the legacy plain `string[]` shape when reading an older row. */
+export type CustomWorkoutExercise = { text: string; supersetGroup: number | null };
 
 export type WorkoutPreferences = {
   goal: WorkoutGoal;
@@ -23,6 +36,13 @@ export const TIME_OPTIONS = [15, 20, 30, 45, 60];
 export function goalLabel(goal: WorkoutGoal): string {
   return goal.charAt(0).toUpperCase() + goal.slice(1);
 }
+
+export const WORKOUT_GOAL_ICON: Record<WorkoutGoal, keyof typeof Ionicons.glyphMap> = {
+  general: 'fitness',
+  strength: 'barbell',
+  cardio: 'walk',
+  flexibility: 'body',
+};
 
 export function equipmentLabel(equipment: Equipment): string {
   return { none: 'No equipment', dumbbells: 'Dumbbells', 'full-gym': 'Full gym' }[equipment];

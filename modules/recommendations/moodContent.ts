@@ -1,3 +1,5 @@
+import type { Ionicons } from '@expo/vector-icons';
+
 import type { MoodKey } from './useMoodRecommendation';
 
 export type MoodBucket = 'rough' | 'steady' | 'good';
@@ -24,24 +26,28 @@ type MoodRecommendation = {
 
 export type HealthGoalKey = 'lose_weight' | 'maintain' | 'gain_weight' | 'build_muscle';
 
-type GoalTip = { foodTip: string; exerciseCategory: string | null };
+type GoalTip = { foodTip: string; exerciseCategory: string | null; foodIcon: keyof typeof Ionicons.glyphMap };
 
 export const GOAL_TIPS: Record<HealthGoalKey, GoalTip> = {
   lose_weight: {
     foodTip: 'Focus on high-volume, lower-calorie foods — vegetables and lean protein keep you fuller for less.',
     exerciseCategory: 'Cardio',
+    foodIcon: 'leaf-outline',
   },
   maintain: {
     foodTip: 'Keep meals balanced across protein, carbs, and fat.',
     exerciseCategory: null,
+    foodIcon: 'restaurant-outline',
   },
   gain_weight: {
     foodTip: 'Add extra calories with nutrient-dense foods — nuts, dairy, and whole grains work well.',
     exerciseCategory: 'Chest',
+    foodIcon: 'nutrition-outline',
   },
   build_muscle: {
     foodTip: 'Prioritize protein at each meal to support muscle repair and growth.',
     exerciseCategory: 'Back',
+    foodIcon: 'egg-outline',
   },
 };
 

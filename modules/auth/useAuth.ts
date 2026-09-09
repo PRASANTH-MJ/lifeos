@@ -40,8 +40,22 @@ export function useAuth() {
 
   useEffect(() => {
     return onAuthStateChanged(auth, (nextUser) => {
-      setUser(nextUser);
-      setLoading(false);
+      if (!nextUser) {
+        setUser(nextUser);
+        setLoading(false);
+        return;
+      }
+      // A restored session's ID token isn't guaranteed to be attached yet the instant this
+      // fires — forcing it here, before the authenticated app (and its first httpsCallable
+      // button) ever renders, means callables never race an in-flight token fetch on the
+      // very first interaction after a fresh load.
+      nextUser
+        .getIdToken()
+        .catch(() => {})
+        .finally(() => {
+          setUser(nextUser);
+          setLoading(false);
+        });
     });
   }, []);
 

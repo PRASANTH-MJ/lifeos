@@ -1,21 +1,54 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { Chip, EmptyState, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
+import { Chip, EmptyState, ScreenContainer, UpsellModal } from '@/components';
 import { todayKey } from '@/lib/date';
 import { useCategories } from '@/modules/categories';
-import { RecurringTaskListItem, TaskListItem, TaskLogSheet, useRecurringTasks, useTasks } from '@/modules/tasks';
+import {
+  PRIORITY_ORDER,
+  RecurringTaskListItem,
+  TaskListItem,
+  TaskLogSheet,
+  useAllTaskLabelLinks,
+  useRecurringTasks,
+  useTaskLabels,
+  useTasks,
+} from '@/modules/tasks';
 import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
 import { useAppTheme } from '@/theme';
 
 type FilterKey = 'all' | number;
+type LabelFilterKey = 'all' | string;
+type SortKey = 'priority' | 'dueDate';
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'priority', label: 'Priority' },
+  { key: 'dueDate', label: 'Due date' },
+];
+
+// useTasks' own SQL query already orders by priority first (see useTasks.ts's orderBy) — that's
+// this screen's default and needs no client-side re-sort. Picking "Due date" instead re-sorts
+// the same completed-last rows by due date first, priority only as the tiebreaker.
+function sortByDueDate<T extends { completed_at: string | null; due_date: string | null; priority: 'high' | 'medium' | 'low' }>(tasks: T[]): T[] {
+  return [...tasks].sort((a, b) => {
+    const aCompleted = a.completed_at ? 1 : 0;
+    const bCompleted = b.completed_at ? 1 : 0;
+    if (aCompleted !== bCompleted) return aCompleted - bCompleted;
+
+    const aNoDue = a.due_date ? 0 : 1;
+    const bNoDue = b.due_date ? 0 : 1;
+    if (aNoDue !== bNoDue) return aNoDue - bNoDue;
+    if (a.due_date && b.due_date && a.due_date !== b.due_date) return a.due_date < b.due_date ? -1 : 1;
+
+    return PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority);
+  });
+}
 
 export default function TasksScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const swipeHandlers = useTabSwipeNavigation('/tasks');
   const { tasks, loading, subtaskCounts, toggleComplete, archiveTask, removeTask, refresh } = useTasks();
   const {
     tasks: recurringTasks,
@@ -28,8 +61,12 @@ export default function TasksScreen() {
     refresh: refreshRecurring,
   } = useRecurringTasks();
   const { categories } = useCategories('task');
+  const { labels } = useTaskLabels();
+  const { labelIdsByTask } = useAllTaskLabelLinks();
   const [tab, setTab] = useState<'single' | 'recurring'>('single');
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [labelFilter, setLabelFilter] = useState<LabelFilterKey>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('priority');
   const [sheetTaskId, setSheetTaskId] = useState<number | null>(null);
   const recurringGate = useFreeTierGate('recurringTasks');
   const taskGate = useFreeTierGate('tasks');
@@ -39,6 +76,17 @@ export default function TasksScreen() {
   const refreshAll = async () => {
     await Promise.all([refresh(), refreshRecurring()]);
   };
+
+  // Modal renders as a top-level overlay regardless of which tab is focused, so a sheet left
+  // open here would otherwise keep floating over whichever tab you switch to next.
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setSheetTaskId(null);
+        setUpsellKind(null);
+      };
+    }, [])
+  );
 
   const onAddTask = (forceRecurring?: boolean) => {
     const wantsRecurring = forceRecurring ?? tab === 'recurring';
@@ -50,12 +98,13 @@ export default function TasksScreen() {
       setUpsellKind('tasks');
       return;
     }
-    router.push({ pathname: '/tasks/new', params: wantsRecurring ? { recurring: '1' } : {} });
+    router.push({ pathname: '/tasks-new', params: wantsRecurring ? { recurring: '1' } : {} });
   };
 
   const changeTab = (next: 'single' | 'recurring') => {
     setTab(next);
     setFilter('all');
+    setLabelFilter('all');
   };
 
   const usedCategoryIds = new Set(
@@ -63,11 +112,23 @@ export default function TasksScreen() {
   );
   const usedCategories = categories.filter((c) => usedCategoryIds.has(c.id));
 
-  const filteredTasks = filter === 'all' ? tasks : tasks.filter((t) => t.category_id === filter);
-  const filteredRecurring = filter === 'all' ? recurringTasks : recurringTasks.filter(({ task }) => task.category_id === filter);
+  const usedLabelIds = new Set(
+    (tab === 'single' ? tasks : recurringTasks.map((r) => r.task)).flatMap((t) => labelIdsByTask[t.id] ?? [])
+  );
+  const usedLabels = labels.filter((l) => usedLabelIds.has(l.id));
+  const hasLabel = (taskId: number) => labelFilter === 'all' || (labelIdsByTask[taskId] ?? []).includes(labelFilter);
+
+  const categoryFilteredTasks = filter === 'all' ? tasks : tasks.filter((t) => t.category_id === filter);
+  const categoryFilteredRecurring = filter === 'all' ? recurringTasks : recurringTasks.filter(({ task }) => task.category_id === filter);
+  const labelFilteredTasks = categoryFilteredTasks.filter((t) => hasLabel(t.id));
+  const filteredRecurring = categoryFilteredRecurring.filter(({ task }) => hasLabel(task.id));
+  const filteredTasks = sortKey === 'dueDate' ? sortByDueDate(labelFilteredTasks) : labelFilteredTasks;
+  // A blocking task is always one-time and not yet archived (see TaskForm's picker pool), so it
+  // always shows up in this same `tasks` array — no separate fetch needed to resolve the link.
+  const tasksById = new Map(tasks.map((t) => [t.id, t]));
 
   return (
-    <View style={{ flex: 1 }} {...swipeHandlers}>
+    <View style={{ flex: 1 }}>
     <ScreenContainer onRefresh={refreshAll}>
       <Stack.Screen
         options={{
@@ -98,6 +159,24 @@ export default function TasksScreen() {
           </ScrollView>
         ) : null}
 
+        {usedLabels.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
+            <Chip label="All labels" selected={labelFilter === 'all'} onPress={() => setLabelFilter('all')} />
+            {usedLabels.map((label) => (
+              <Chip key={label.id} label={label.name} selected={labelFilter === label.id} color={label.color} onPress={() => setLabelFilter(label.id)} />
+            ))}
+          </ScrollView>
+        ) : null}
+
+        {tab === 'single' && tasks.length > 0 ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>Sort by</Text>
+            {SORT_OPTIONS.map((option) => (
+              <Chip key={option.key} label={option.label} selected={sortKey === option.key} onPress={() => setSortKey(option.key)} />
+            ))}
+          </View>
+        ) : null}
+
         {tab === 'single' ? (
           !loading && filteredTasks.length === 0 ? (
             <EmptyState
@@ -115,6 +194,7 @@ export default function TasksScreen() {
                   task={task}
                   subtaskCount={subtaskCounts[task.id]}
                   category={categories.find((c) => c.id === task.category_id)}
+                  blockingTask={task.blocked_by_task_id ? tasksById.get(task.blocked_by_task_id) : null}
                   onToggle={() => toggleComplete(task)}
                   onArchive={() => archiveTask(task.id)}
                   onDelete={() => removeTask(task.id)}
@@ -149,6 +229,7 @@ export default function TasksScreen() {
                   onMoveDown={filter === 'all' ? () => moveRecurringTask(task.id, 'down') : undefined}
                   onArchive={() => archiveRecurringTask(task.id)}
                   onDelete={() => removeRecurringTask(task.id)}
+                  onSkipToday={due && !todayLog ? () => upsertCompletion(task.id, { status: 'skip' }) : undefined}
                 />
               );
             })}

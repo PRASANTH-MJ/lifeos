@@ -1,0 +1,8 @@
+{
+  "name": "flowsy-data-scripts",
+  "private": true,
+  "description": "Data pipeline scripts for seeding the exercise/program catalog into Firestore. Not part of the app bundle or the Cloud Functions deploy.",
+  "dependencies": {
+    "firebase-admin": "^12.6.0"
+  }
+}

@@ -17,9 +17,62 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
+    // The synced avatar URL (see modules/profile/avatarSync.ts) — same owner-direct-write shape
+    // as records above, just kept in its own doc rather than the generic sync engine's records.
+    match /users/{uid}/profile/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // The viewer's own block list — purely a local preference (which uids' posts to hide from
+    // their own feed, see useFeed.ts's client-side filter), not a cross-user counter or a trust
+    // boundary the blocked user needs enforced against them, so same owner-direct-write shape as
+    // `records` above rather than needing a callable.
+    match /users/{uid}/blocks/{blockedUid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // The viewer's own saved/bookmarked posts — purely a private "read later" list, not a
+    // cross-user counter or anything the post's author needs visibility into, so same
+    // owner-direct-write shape as `blocks` above.
+    match /users/{uid}/savedPosts/{postId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Paywall-hit analytics (see modules/premium/useFeatureGate.ts) — write-only from the client
+    // (fire-and-forget, never read back by the app itself); reporting on this happens via the
+    // Admin SDK/BigQuery export, not a client read path, so read/update/delete all stay closed.
+    match /users/{uid}/paywallEvents/{eventId} {
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow read, update, delete: if false;
+    }
+
     // Order → account mapping used to verify payments; clients never need to touch this directly.
     match /orders/{orderId} {
       allow read, write: if false;
+    }
+
+    // purchaseToken → uid/productId mapping used by the playRtdn Pub/Sub handler to resolve a
+    // bare Google Play purchase token (RTDN payloads never include our Firebase uid) back to the
+    // Firestore user it belongs to. Written only by verifyAndGrantPurchase (Admin SDK, which
+    // bypasses these rules) — same Admin-SDK-only pattern as /users/{uid} above.
+    match /purchaseTokens/{token} {
+      allow read, write: if false;
+    }
+
+    // Shared exercise/program catalog — read-only reference data, same for every user. Only ever
+    // written by the seeding script (Admin SDK, which bypasses these rules) so no client can
+    // corrupt the shared catalog everyone reads from.
+    match /exercises/{exerciseKey} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /programs/{programKey} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /mealPlans/{planKey} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
 
     // In-app feedback — write-only from the client (submitted once, never edited); read happens
@@ -29,5 +82,387 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
       allow read, update, delete: if false;
     }
+
+    // Social: open follow graph + posts + fan-out feed.
+
+    // The discovery surface — readable by any signed-in user (that's the point). Written only by
+    // claimUsername (the username-uniqueness transaction) and by followUser/unfollowUser/
+    // onPostCreated/onPostDeleted (the three denormalized counters) — all Admin SDK, which
+    // bypasses these rules, EXCEPT habitStreak/habitStreaks/cardioLogCount/cardioStreak below.
+    match /userPublicProfiles/{uid} {
+      allow read: if request.auth != null;
+      allow write: if false;
+      // habitStreak/habitStreaks/cardioLogCount/cardioStreak/cardioDistanceKm, plus the five
+      // per-domain counters added for club challenge categories (workoutLogCount/mealLogCount/
+      // waterGoalHitDays/meditationLogCount/breathingLogCount — see modules/clubs/types.ts's
+      // ChallengeCategory and modules/social/usePublicProfileStatsSync.ts), are a denormalized
+      // copy of local, per-device data so other users can see them on this profile, the same
+      // reason the PRO badge needed its own copy of the private `premium` flag.
+      // Unlike followerCount et al., there's no cross-user effect here (it's purely self-reported),
+      // so a direct owner-only client write — restricted to just these fields — is safe without
+      // needing a callable. usePublicProfileStatsSync writes every one of these fields in a single
+      // setDoc call, so ALL of them must be listed here — a write touching even one key outside
+      // this list gets the WHOLE write denied (affectedKeys().hasOnly() is all-or-nothing), which
+      // is exactly what silently broke cardioLogCount/cardioDistanceKm syncing (and therefore any
+      // 'activity'-category club challenge's progress) once the five newer fields started being
+      // written alongside them without being added here.
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'habitStreak', 'habitStreaks', 'cardioLogCount', 'cardioStreak', 'cardioDistanceKm',
+          'workoutLogCount', 'mealLogCount', 'waterGoalHitDays', 'meditationLogCount', 'breathingLogCount'
+        ]);
+    }
+
+    // Username uniqueness reservation — claimed/released only by claimUsername (Admin SDK), since
+    // a client-side "check then write" can't safely prevent two users racing onto the same handle.
+    match /usernames/{usernameLower} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Family plan (see modules/premium/purchase.ts's FAMILY_PLANS/FAMILY_MAX_MEMBERS and
+    // functions/index.js's applyGrant): one flat-priced subscription shares premium across up to
+    // FAMILY_MAX_MEMBERS accounts. Every write (grant/revoke cascade, invite/accept/remove/leave)
+    // goes through Admin SDK callables/triggers so membership and each member's own
+    // users/{uid}.premium stay consistent — a client write here could otherwise grant itself
+    // premium by joining a family document directly.
+    match /families/{ownerUid} {
+      allow read: if request.auth != null
+        && (request.auth.uid == ownerUid || request.auth.uid in resource.data.get('memberUids', []));
+      allow write: if false;
+    }
+
+    // Pending family invites, keyed by the invited user's own uid so `allow read` can check it
+    // directly — only inviteFamilyMember (Admin SDK) creates one, only
+    // respondToFamilyInvite/removeFamilyMember (Admin SDK) resolve/delete it.
+    match /familyInvites/{inviteId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.invitedUid || request.auth.uid == resource.data.ownerUid);
+      allow write: if false;
+    }
+
+    // The follow edge. Both sides can read a specific edge (to check "do I follow them" or list
+    // their own followers/following via a query), but only followUser/unfollowUser (Admin SDK)
+    // create or delete one — a direct client write couldn't also safely update the OTHER user's
+    // counter in the same operation, which is exactly why the counters live in Admin-SDK-only
+    // fields on userPublicProfiles rather than being derived by counting these documents live.
+    match /follows/{edgeId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.followerUid || request.auth.uid == resource.data.followedUid);
+      allow write: if false;
+    }
+
+    // Clubs — discover-and-join, same reasoning as userPublicProfiles: any signed-in user can
+    // browse/read a 'public' or 'inviteOnly' club, but every write (create/join/leave, each
+    // pairing a membership doc with a memberCount change) goes through
+    // createClub/joinClub/leaveClub (Admin SDK) so the two-sided writes stay atomic. A 'private'
+    // club is the one case read itself is restricted — see below — which is what actually keeps
+    // it out of discovery/search, not just the client-side query in useClubs.
+    match /clubs/{clubId} {
+      // .get(key, default) rather than a bare field access — clubs created before this feature
+      // shipped have no `privacy` field at all, and a bare `resource.data.privacy` on a missing
+      // field throws (denying the read entirely) instead of just falling back to 'public'.
+      allow read: if request.auth != null && (
+        resource.data.get('privacy', 'public') != 'private'
+        || request.auth.uid in resource.data.admins
+        || exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid))
+        || exists(/databases/$(database)/documents/clubs/$(clubId)/invites/$(request.auth.uid))
+      );
+      allow create: if false;
+      // name/categories/photoUrl/privacy are the only fields a FULL admin can change directly —
+      // everything else (memberCount, admins, subAdmins) only ever moves via a callable's
+      // transaction above, same reasoning as userPublicProfiles' restricted self-update. Note
+      // this deliberately excludes sub-admins (see Club.subAdmins in modules/clubs/types.ts) —
+      // they can't touch club settings, only moderate content (below).
+      allow update: if request.auth != null && request.auth.uid in resource.data.admins
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'categories', 'photoUrl', 'privacy']);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if request.auth != null;
+        allow create, delete: if false;
+        // The only client write this subcollection allows: any club member may roll a (possibly
+        // someone ELSE's) stale monthly activity snapshot forward, but only by replacing it with
+        // that uid's own already-public cardioLogCount, and only strictly forward in time — see
+        // useClubActivityLeaderboard's "whoever views it first each month" lazy-recompute. This
+        // can't be forged into an inflated/backdated snapshot since the count must match the
+        // public profile exactly and the month key can only increase.
+        allow update: if request.auth != null
+          && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activitySnapshotMonth', 'activitySnapshotCount'])
+          && request.resource.data.activitySnapshotMonth is int
+          && request.resource.data.activitySnapshotMonth > resource.data.get('activitySnapshotMonth', 0)
+          && request.resource.data.activitySnapshotCount == get(/databases/$(database)/documents/userPublicProfiles/$(uid)).data.cardioLogCount;
+      }
+
+      // A pending invitation to join this club — created directly by an existing member (no
+      // shared counter touched, so no callable needed, same reasoning as the `updates`
+      // subcollection below), accepted via joinClub + a client delete, or declined via a plain
+      // delete. Doc id is the invitee's uid, mirroring members/{uid} above.
+      match /invites/{uid} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && request.resource.data.uid == uid
+          && request.resource.data.invitedBy == request.auth.uid
+          && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid));
+        allow update: if false;
+        allow delete: if request.auth != null && (request.auth.uid == uid || request.auth.uid == resource.data.invitedBy);
+      }
+
+      // Challenges/events are club-scoped engagement features — same read-only-for-signed-in,
+      // Admin-SDK-only-write shape as the club/membership docs above (see
+      // createChallenge/joinChallenge/leaveChallenge and createEvent/joinEvent/leaveEvent in
+      // functions/index.js for why: joining atomically updates a shared counter, which a client
+      // can't safely do to a document it doesn't own).
+      match /challenges/{challengeId} {
+        allow read: if request.auth != null;
+        allow write: if false;
+
+        match /participants/{uid} {
+          allow read: if request.auth != null;
+          allow write: if false;
+        }
+
+        // Progress updates (a photo/text post into this specific challenge) are owned by their
+        // author and created directly by the client — same shape as the top-level `posts`
+        // collection below (no shared counter to touch, so no callable needed). Immutable once
+        // created, deletable by the author OR a club admin/sub-admin moderating content (see
+        // Club.subAdmins in modules/clubs/types.ts).
+        match /updates/{updateId} {
+          allow read: if request.auth != null;
+          allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid;
+          allow update: if false;
+          allow delete: if request.auth != null && (
+            request.auth.uid == resource.data.authorUid
+            || request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.admins
+            || request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.get('subAdmins', [])
+          );
+        }
+      }
+
+      match /events/{eventId} {
+        allow read: if request.auth != null;
+        allow write: if false;
+
+        match /attendees/{uid} {
+          allow read: if request.auth != null;
+          allow write: if false;
+        }
+
+        // Mirrors attendees' shape exactly — a pending RSVP once the event is at capacity, only
+        // ever written by joinEvent/leaveEvent's transaction (see functions/index.js), never
+        // directly by a client.
+        match /waitlist/{uid} {
+          allow read: if request.auth != null;
+          allow write: if false;
+        }
+
+        // Post-event photo album — any attendee can add (checked by the requester's own attendee
+        // doc existing, same uid-keyed doc id as `attendees` above), direct client write since
+        // there's no shared counter to touch, same shape as `updates` below. Immutable once
+        // created, deletable by the uploader OR a club admin/sub-admin moderating content.
+        match /photos/{photoId} {
+          allow read: if request.auth != null;
+          allow create: if request.auth != null && request.auth.uid == request.resource.data.uploaderUid
+            && exists(/databases/$(database)/documents/clubs/$(clubId)/events/$(eventId)/attendees/$(request.auth.uid));
+          allow update: if false;
+          allow delete: if request.auth != null && (
+            request.auth.uid == resource.data.uploaderUid
+            || request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.admins
+            || request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.get('subAdmins', [])
+          );
+        }
+
+        match /updates/{updateId} {
+          allow read: if request.auth != null;
+          allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid;
+          allow update: if false;
+          allow delete: if request.auth != null && (
+            request.auth.uid == resource.data.authorUid
+            || request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.admins
+            || request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.get('subAdmins', [])
+          );
+        }
+      }
+
+      // Club chat — same owned-by-author, direct-client-write shape as the `updates`
+      // subcollections above, but scoped to club members only (not every signed-in user) since a
+      // chat is meant to stay inside the club, unlike challenge/event progress updates. Deletable
+      // by the author OR a club admin/sub-admin moderating content.
+      match /messages/{messageId} {
+        allow read: if request.auth != null && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid));
+        allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid
+          && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid));
+        allow update: if false;
+        allow delete: if request.auth != null && (
+          request.auth.uid == resource.data.authorUid
+          || request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.admins
+          || request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.get('subAdmins', [])
+        );
+      }
+
+      // Club Habits & Tasks (v1) — a shared, club-scoped version of the personal habits/tasks
+      // modules. Member-only read (unlike challenges/events above, which any signed-in user can
+      // read) since these are working data for the club's own members, not discovery content.
+      // Write: if false everywhere — every mutation (create/checkin/complete/delete) needs a
+      // membership or role check plus, for checkins/completion, a counter-free but still
+      // transactional read-then-write, so it all goes through createClubHabit/toggleClubHabitCheckin/
+      // deleteClubHabit and createClubTask/toggleClubTaskComplete/deleteClubTask in
+      // functions/index.js (Admin SDK only), same shape as challenges/events.
+      match /habits/{habitId} {
+        allow read: if request.auth != null && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid));
+        allow write: if false;
+
+        match /checkins/{checkinId} {
+          allow read: if request.auth != null && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid));
+          allow write: if false;
+        }
+      }
+
+      match /tasks/{taskId} {
+        allow read: if request.auth != null && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid));
+        allow write: if false;
+
+        match /checkins/{checkinId} {
+          allow read: if request.auth != null && exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid));
+          allow write: if false;
+        }
+      }
+    }
+
+    // Posts are owned by their author, created directly by the client (no cross-user check needed
+    // for the write itself — only the fan-out afterward, which is what onPostCreated/onPostDeleted
+    // handle). Immutable once created (no update) so the fan-out copy in every follower's feed
+    // never drifts from the source doc. `visibility` is a per-post snapshot of the author's
+    // isPrivate at post time — see modules/social's docs for why private-account enforcement
+    // beyond this snapshot is a known v1 gap, not an oversight.
+    // A public post additionally needs to be readable with NO auth at all — the web share-link
+    // landing page (app/post/[postId].tsx's unauthenticated branch, see modules/social's
+    // PublicPostPreview) fetches it before anyone has signed in, the same way the post is already
+    // visible to every signed-in user via the feed. A private post still requires being its
+    // author, same as before.
+    match /posts/{postId} {
+      allow read: if resource.data.visibility == 'public'
+        || (request.auth != null && request.auth.uid == resource.data.authorUid);
+      // likeCount/commentCount must start at 0 on create — they're only ever incremented after
+      // that by onLikeCreated/onLikeDeleted/onCommentCreated/onCommentDeleted (Admin SDK), so a
+      // client can't fabricate a pre-inflated engagement count for a brand-new post. photoUrl, if
+      // present, must point at that same author's own Storage upload path (storage.rules'
+      // posts/{uid}/{fileName} — uploadPostPhoto always writes to posts/{authorUid}/{postId}.jpg)
+      // — without this, any string would be accepted and rendered as an <Image> for every viewer
+      // of the post, unconditionally fetching whatever host an attacker put there.
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid
+        && request.resource.data.likeCount == 0 && request.resource.data.commentCount == 0
+        && (request.resource.data.photoUrl == null
+            || request.resource.data.photoUrl.matches('^https://firebasestorage\\.googleapis\\.com/v0/b/lifeos-8f0bf\\.firebasestorage\\.app/o/posts%2F' + request.resource.data.authorUid + '%2F.*'))
+        // photoUrls is the multi-card carousel variant (see modules/social/types.ts's Post.photoUrls
+        // doc) — same per-entry origin check as photoUrl above, just applied across the whole list,
+        // plus a cap so a client can't wedge an unbounded array into a post doc.
+        && (request.resource.data.photoUrls == null
+            || (request.resource.data.photoUrls.size() <= 6
+                && request.resource.data.photoUrls.all(u,
+                     u is string && u.matches('^https://firebasestorage\\.googleapis\\.com/v0/b/lifeos-8f0bf\\.firebasestorage\\.app/o/posts%2F' + request.resource.data.authorUid + '%2F.*'))));
+      allow update: if false;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
+    }
+
+    // A like is just "does this uid's doc exist under this post" — the doc id is the liker's own
+    // uid, so a client can only ever create/delete its OWN like (never toggle someone else's),
+    // and the resulting likeCount lives on the post doc itself, maintained only by
+    // onLikeCreated/onLikeDeleted (Admin SDK) for the same "can't touch a doc you don't own"
+    // reason follow's counters are Admin-SDK-only. The exists() check on create matters: without
+    // it, a client could create a like under ANY postId — including one that never existed, or
+    // one whose post was already deleted — and onLikeCreated would then materialize a "zombie"
+    // posts/{postId} doc (via set(...,{merge:true}) on a nonexistent doc) holding nothing but a
+    // likeCount, completely sidestepping the posts collection's own create rule above.
+    // `type` is which of the fixed reaction set (like/fire/flex/clap — see modules/social/useLike.ts)
+    // this doc records; the reactor may change their mind and swap it in place via update (still
+    // only ever their OWN doc, and only that one field) instead of a delete+create, so switching
+    // reactions doesn't fire a spurious extra like/unlike notification pair.
+    match /posts/{postId}/likes/{likerUid} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == likerUid && request.resource.data.likerUid == likerUid
+        && request.resource.data.type in ['like', 'fire', 'flex', 'clap']
+        && exists(/databases/$(database)/documents/posts/$(postId));
+      allow update: if request.auth != null && request.auth.uid == likerUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['type'])
+        && request.resource.data.type in ['like', 'fire', 'flex', 'clap'];
+      allow delete: if request.auth != null && request.auth.uid == likerUid;
+    }
+
+    // Comments are owned by their author (checked against the post's own visibility being
+    // public, same as the post itself); commentCount is maintained the same Admin-SDK-only way.
+    // Same exists() reasoning as likes above.
+    // `replyToCommentId`, when present, points at another top-level comment on the SAME post —
+    // making a reply-to-a-reply pointless to forbid server-side (PostCard.tsx only ever renders
+    // one level of nesting and never offers a "reply" action on a reply row), so the rule just
+    // checks the field's shape, not which comment it targets.
+    match /posts/{postId}/comments/{commentId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.authorUid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 500
+        && (request.resource.data.replyToCommentId == null || request.resource.data.replyToCommentId is string)
+        && exists(/databases/$(database)/documents/posts/$(postId));
+      allow update: if false;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.authorUid;
+    }
+
+    // The fan-out feed. This is what actually enforces "you only see posts from people you
+    // follow" — since only onPostCreated/onPostDeleted (Admin SDK) ever write into it, a user
+    // physically cannot inject an arbitrary post into their own feed by writing here directly.
+    match /users/{uid}/feed/{postId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Reverse-index of "posts this uid has liked" (postId -> createdAt), maintained only by
+    // onLikeCreated/onLikeDeleted (Admin SDK) — lets useLikedPosts read a plain, owner-scoped
+    // collection instead of a collectionGroup('likes') scan across every post's likes subcollection.
+    match /users/{uid}/likedPosts/{postId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // In-app notifications ("X started following you", "X liked your post") — created only by
+    // followUser/onLikeCreated/onCommentCreated (Admin SDK), same owner-read-only shape as feed
+    // above. The one thing the client itself needs to do is mark a notification read, which is
+    // safe to allow directly since it's a no-cross-user-effect, single-field, owner-only toggle.
+    match /users/{uid}/notifications/{notificationId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create, delete: if false;
+    }
+
+    // Reports on a post or user — write-only from the client (submitted once, never edited or
+    // read back by the app itself), same "an admin reviews these from the Firebase console, not
+    // this client" shape as `feedback/{feedbackId}` above. `reporterUid` must match the submitter
+    // for the same reason feedback's `uid` must.
+    match /reports/{reportId} {
+      allow create: if request.auth != null && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.targetType in ['post', 'user']
+        && request.resource.data.reason in ['spam', 'harassment', 'inappropriate', 'other'];
+      allow read, update, delete: if false;
+    }
+
+    // Shared-expense ledger against a mutual follower (modules/finance/useSplitExpenses.ts) — a
+    // simple "who owes who" reminder, not a payments feature, so there's no money movement to
+    // protect here, just a two-party-visibility doc. `toUid` (the payer,
+    // who's owed) must be the creator, since they're the one who actually knows the split
+    // happened; `fromUid` (the debtor) is just a reference uid picked from the creator's mutuals
+    // in the UI — rules can't verify mutuality without a lookup, so that's left to the client. The
+    // only write either party may make afterward is toggling `settled`.
+    match /splitExpenses/{splitId} {
+      allow read: if request.auth != null && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.toUid
+        && request.resource.data.fromUid is string && request.resource.data.fromUid != request.auth.uid
+        && request.resource.data.amount is number && request.resource.data.amount > 0
+        && request.resource.data.settled == false;
+      allow update: if request.auth != null
+        && (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settled']);
+      allow delete: if false;
+    }
   }
 }
+

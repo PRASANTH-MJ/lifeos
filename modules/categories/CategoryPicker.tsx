@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, View } from 'react-native';
 
 import { Button, TextField } from '@/components';
 import { useAppTheme } from '@/theme';
@@ -94,7 +94,7 @@ function NewCategoryForm({
   const [saving, setSaving] = useState(false);
 
   return (
-    <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+    <KeyboardAvoidingView style={{ flex: 1, justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay }} onPress={onCancel} />
       <View
         style={{
@@ -170,6 +170,6 @@ function NewCategoryForm({
           </View>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

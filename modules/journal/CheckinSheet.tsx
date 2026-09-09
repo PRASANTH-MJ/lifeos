@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
-import { Button, Chip } from '@/components';
+import { Button, Chip, IconBadge } from '@/components';
 import { useAppTheme } from '@/theme';
 import { MoodPicker } from './MoodPicker';
 import { Scale5Picker } from './Scale5Picker';
@@ -28,6 +28,17 @@ export function CheckinSheet({ visible, type, existing, onClose, onSaveMorning, 
   const [productivity, setProductivity] = useState<number | null>(existing?.productivity ?? null);
   const [mood, setMood] = useState<string | null>(existing?.mood ?? null);
 
+  useEffect(() => {
+    if (visible) {
+      setEnergy(existing?.energy ?? null);
+      setSleepBucket(existing?.sleep_bucket ?? null);
+      setStress(existing?.stress ?? null);
+      setFirstReachedFor(existing?.first_reached_for ?? null);
+      setProductivity(existing?.productivity ?? null);
+      setMood(existing?.mood ?? null);
+    }
+  }, [visible, existing, type]);
+
   const onSave = () => {
     if (type === 'morning') {
       onSaveMorning({ energy, sleepBucket, stress, firstReachedFor, mood });
@@ -44,9 +55,17 @@ export function CheckinSheet({ visible, type, existing, onClose, onSaveMorning, 
         <ScrollView
           style={{ maxHeight: '85%', backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.xl, borderTopRightRadius: theme.radius.xl }}
           contentContainerStyle={{ padding: theme.spacing.xl, gap: theme.spacing.lg }}>
-          <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
-            {type === 'morning' ? 'Morning check-in' : 'Night check-in'}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+            <IconBadge
+              name={type === 'morning' ? 'sunny' : 'moon'}
+              color={theme.colors.moduleJournal}
+              size="md"
+              shape="circle"
+            />
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
+              {type === 'morning' ? 'Morning check-in' : 'Night check-in'}
+            </Text>
+          </View>
 
           {type === 'morning' ? (
             <>
@@ -81,6 +100,9 @@ export function CheckinSheet({ visible, type, existing, onClose, onSaveMorning, 
                       <Pressable
                         key={option.key}
                         onPress={() => setFirstReachedFor(option.key)}
+                        accessibilityRole="button"
+                        accessibilityLabel={option.label}
+                        accessibilityState={{ selected }}
                         style={{
                           flex: 1,
                           alignItems: 'center',
@@ -91,10 +113,11 @@ export function CheckinSheet({ visible, type, existing, onClose, onSaveMorning, 
                           borderColor: selected ? theme.colors.moduleJournal : theme.colors.border,
                           backgroundColor: selected ? theme.colors.moduleJournalMuted : 'transparent',
                         }}>
-                        <Ionicons
+                        <IconBadge
                           name={option.icon as keyof typeof Ionicons.glyphMap}
-                          size={18}
-                          color={selected ? theme.colors.moduleJournal : theme.colors.textSecondary}
+                          color={theme.colors.moduleJournal}
+                          tone={selected ? 'tinted' : 'neutral'}
+                          size="sm"
                         />
                         <Text style={{ fontSize: theme.typography.size.xs, color: selected ? theme.colors.moduleJournal : theme.colors.textTertiary }}>
                           {option.label}
@@ -121,7 +144,7 @@ export function CheckinSheet({ visible, type, existing, onClose, onSaveMorning, 
             </>
           )}
 
-          <Button label="Save" onPress={onSave} />
+          <Button label="Save" onPress={onSave} glow />
         </ScrollView>
       </View>
     </Modal>

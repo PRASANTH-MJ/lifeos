@@ -40,10 +40,16 @@ export function useWorkoutPreferences() {
         ...preferences,
         ...next,
       };
+      // sync_id defaults to the fixed 'singleton' literal (matching the migration that backfilled
+      // it for pre-existing rows — db/schema.ts) rather than a random UUID, since this is a
+      // singleton row keyed by id=1, not a many-row table. Without this, a row created via this
+      // INSERT (fresh install, or first-ever save) would have a NULL sync_id and pushLocalRow
+      // would silently no-op forever — this table would never sync cross-device.
       await db.runAsync(
-        `INSERT INTO workout_preferences (id, goal, equipment, time_minutes, updated_at) VALUES (1, ?, ?, ?, ?)
+        `INSERT INTO workout_preferences (id, goal, equipment, time_minutes, updated_at, sync_id) VALUES (1, ?, ?, ?, ?, 'singleton')
          ON CONFLICT(id) DO UPDATE SET goal = excluded.goal, equipment = excluded.equipment,
-           time_minutes = excluded.time_minutes, updated_at = excluded.updated_at`,
+           time_minutes = excluded.time_minutes, updated_at = excluded.updated_at,
+           sync_id = COALESCE(workout_preferences.sync_id, 'singleton')`,
         [merged.goal, JSON.stringify(merged.equipment), merged.timeMinutes, new Date().toISOString()]
       );
       await pushLocalRow(db, 'workout_preferences', 1);

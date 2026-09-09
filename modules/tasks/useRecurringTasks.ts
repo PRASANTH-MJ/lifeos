@@ -150,10 +150,32 @@ export function useRecurringTasks() {
   );
 
   const archiveRecurringTask = useCallback((id: number) => table.update(id, { archived: 1 } as Partial<Task>), [table]);
-  const removeRecurringTask = useCallback((id: number) => table.remove(id), [table]);
+  const removeRecurringTask = useCallback(
+    async (id: number) => {
+      // task_completions.task_id and tasks.parent_task_id are both ON DELETE CASCADE — tombstone
+      // completions and any subtasks before table.remove() deletes the task, or other devices
+      // never learn the cascaded rows were removed too.
+      const subtasks = await db.getAllAsync<{ id: number }>('SELECT id FROM tasks WHERE parent_task_id = ?', [id]);
+      for (const taskId of [id, ...subtasks.map((t) => t.id)]) {
+        const completions = await db.getAllAsync<{ id: number }>('SELECT id FROM task_completions WHERE task_id = ?', [taskId]);
+        for (const row of completions) {
+          await recordDeleteBeforeRemoving(db, 'task_completions', row.id);
+        }
+      }
+      for (const subtask of subtasks) {
+        await recordDeleteBeforeRemoving(db, 'tasks', subtask.id);
+      }
+      await table.remove(id);
+    },
+    [db, table]
+  );
 
   return {
     tasks: tasksWithToday,
+    // Raw per-task completion history, keyed by task id — exposed alongside `tasks`'s per-task
+    // summary (today's log, due-ness, period progress) for callers that need the full history to
+    // compute their own streak-like aggregates.
+    completionsByTask,
     loading: table.loading,
     createRecurringTask,
     upsertCompletion,

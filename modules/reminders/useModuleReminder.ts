@@ -16,7 +16,7 @@ import {
 import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
 
 export type ReminderType = 'none' | 'notification' | 'alarm';
-export type ScheduleType = 'daily' | 'specific_days';
+export type ScheduleType = 'daily' | 'specific_days' | 'hourly';
 
 export type ModuleReminderState = {
   reminderType: ReminderType;
@@ -24,12 +24,52 @@ export type ModuleReminderState = {
   scheduleType: ScheduleType;
   /** 1–7, 1 = Sunday, matching expo-notifications' own weekday convention. */
   scheduleDays: number[];
+  /** Only used when scheduleType === 'hourly' — a window of "HH:MM" strings. Every hour mark
+   * from hourlyStart's hour to hourlyEnd's hour (inclusive) fires, each at hourlyStart's minute
+   * (so a 08:15–21:00 window rings at 08:15, 09:15, … 21:15 — a consistent minutes-past-the-hour
+   * offset rather than forcing :00). */
+  hourlyStart: string | null;
+  hourlyEnd: string | null;
 };
 
 export type ModuleReminder = ModuleReminderState & { id: number };
 
-export const DEFAULT_MODULE_REMINDER_STATE: ModuleReminderState = { reminderType: 'none', time: null, scheduleType: 'daily', scheduleDays: [] };
+export const DEFAULT_MODULE_REMINDER_STATE: ModuleReminderState = {
+  reminderType: 'none',
+  time: null,
+  scheduleType: 'daily',
+  scheduleDays: [],
+  hourlyStart: null,
+  hourlyEnd: null,
+};
 const DEFAULT_STATE = DEFAULT_MODULE_REMINDER_STATE;
+
+/** Every hour mark an 'hourly' schedule fires at, as {hour, minute} — from hourlyStart's hour
+ * through hourlyEnd's hour inclusive, each at hourlyStart's minute. Empty if either bound is
+ * missing or the window is inverted. */
+function hourlyMarks(hourlyStart: string | null, hourlyEnd: string | null): { hour: number; minute: number }[] {
+  if (!hourlyStart || !hourlyEnd) return [];
+  const [startHour, startMinute] = hourlyStart.split(':').map(Number);
+  const [endHour] = hourlyEnd.split(':').map(Number);
+  if (endHour < startHour) return [];
+  const marks: { hour: number; minute: number }[] = [];
+  for (let hour = startHour; hour <= endHour; hour += 1) {
+    marks.push({ hour, minute: startMinute });
+  }
+  return marks;
+}
+
+/** Every identifier a reminder could ever have scheduled under, across all three schedule types
+ * (base id for 'daily', 7 weekday-suffixed ids for 'specific_days', 24 hour-suffixed ids for
+ * 'hourly') — cancelled unconditionally on every save/removal so switching type/schedule or
+ * deleting a reminder never leaves a stale notification or alarm behind. */
+function allReminderIds(baseId: string): string[] {
+  return [
+    baseId,
+    ...Array.from({ length: 7 }, (_, i) => `${baseId}-${i + 1}`),
+    ...Array.from({ length: 24 }, (_, hour) => `${baseId}-hourly-${hour}`),
+  ];
+}
 
 /**
  * Every reminder for one module (Journal, Meditation, Breathing, Mind Training, Workout, Food,
@@ -55,7 +95,12 @@ export function useModuleReminders(moduleKey: string, title: string, body: strin
         reminder_time: string | null;
         schedule_type: ScheduleType;
         schedule_days: string;
-      }>('SELECT id, reminder_type, reminder_time, schedule_type, schedule_days FROM module_reminders WHERE module_key = ? ORDER BY id', [moduleKey]);
+        hourly_start: string | null;
+        hourly_end: string | null;
+      }>(
+        'SELECT id, reminder_type, reminder_time, schedule_type, schedule_days, hourly_start, hourly_end FROM module_reminders WHERE module_key = ? ORDER BY id',
+        [moduleKey]
+      );
       setReminders(
         rows.map((row) => ({
           id: row.id,
@@ -63,6 +108,8 @@ export function useModuleReminders(moduleKey: string, title: string, body: strin
           time: row.reminder_time,
           scheduleType: row.schedule_type,
           scheduleDays: row.schedule_days ? JSON.parse(row.schedule_days) : [],
+          hourlyStart: row.hourly_start,
+          hourlyEnd: row.hourly_end,
         }))
       );
     } finally {
@@ -79,16 +126,29 @@ export function useModuleReminders(moduleKey: string, title: string, body: strin
   const applySchedule = useCallback(
     async (id: number, next: ModuleReminderState) => {
       const baseId = moduleReminderId(moduleKey, id);
-      const allIds = [baseId, ...Array.from({ length: 7 }, (_, i) => `${baseId}-${i + 1}`)];
       // Both notification systems share this identifier space — clear both regardless of which
       // one a previous save used, so switching type/schedule never leaves a stale alarm behind.
-      await Promise.all(allIds.flatMap((idStr) => [cancelReminder(idStr), cancelAlarm(idStr)]));
+      await Promise.all(allReminderIds(baseId).flatMap((idStr) => [cancelReminder(idStr), cancelAlarm(idStr)]));
 
-      if (next.reminderType === 'none' || !next.time) return;
+      if (next.reminderType === 'none') return;
+      if (next.scheduleType === 'hourly' ? hourlyMarks(next.hourlyStart, next.hourlyEnd).length === 0 : !next.time) return;
       const granted = await requestNotificationPermissions();
       if (!granted) return;
 
-      const [hour, minute] = next.time.split(':').map(Number);
+      if (next.scheduleType === 'hourly') {
+        for (const { hour, minute } of hourlyMarks(next.hourlyStart, next.hourlyEnd)) {
+          const hourlyId = `${baseId}-hourly-${hour}`;
+          if (next.reminderType === 'alarm') {
+            const alarmTitle = `⏰ ${title}`;
+            await scheduleDailyAlarm({ identifier: hourlyId, title: alarmTitle, body, hour, minute, data: { kind: 'alarm', identifier: hourlyId, title: alarmTitle, body } });
+          } else {
+            await scheduleDailyReminder({ identifier: hourlyId, title, body, hour, minute });
+          }
+        }
+        return;
+      }
+
+      const [hour, minute] = next.time!.split(':').map(Number);
 
       if (next.reminderType === 'alarm') {
         const alarmTitle = `⏰ ${title}`;
@@ -116,8 +176,8 @@ export function useModuleReminders(moduleKey: string, title: string, body: strin
       let reminderId = id;
       if (reminderId == null) {
         const result = await db.runAsync(
-          `INSERT INTO module_reminders (module_key, enabled, reminder_time, reminder_type, schedule_type, schedule_days, updated_at, sync_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO module_reminders (module_key, enabled, reminder_time, reminder_type, schedule_type, schedule_days, hourly_start, hourly_end, updated_at, sync_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             moduleKey,
             next.reminderType !== 'none' ? 1 : 0,
@@ -125,6 +185,8 @@ export function useModuleReminders(moduleKey: string, title: string, body: strin
             next.reminderType,
             next.scheduleType,
             JSON.stringify(next.scheduleDays),
+            next.hourlyStart,
+            next.hourlyEnd,
             new Date().toISOString(),
             Crypto.randomUUID(),
           ]
@@ -133,8 +195,18 @@ export function useModuleReminders(moduleKey: string, title: string, body: strin
         await pushLocalRow(db, 'module_reminders', reminderId);
       } else {
         await db.runAsync(
-          `UPDATE module_reminders SET enabled = ?, reminder_time = ?, reminder_type = ?, schedule_type = ?, schedule_days = ?, updated_at = ? WHERE id = ?`,
-          [next.reminderType !== 'none' ? 1 : 0, next.time, next.reminderType, next.scheduleType, JSON.stringify(next.scheduleDays), new Date().toISOString(), reminderId]
+          `UPDATE module_reminders SET enabled = ?, reminder_time = ?, reminder_type = ?, schedule_type = ?, schedule_days = ?, hourly_start = ?, hourly_end = ?, updated_at = ? WHERE id = ?`,
+          [
+            next.reminderType !== 'none' ? 1 : 0,
+            next.time,
+            next.reminderType,
+            next.scheduleType,
+            JSON.stringify(next.scheduleDays),
+            next.hourlyStart,
+            next.hourlyEnd,
+            new Date().toISOString(),
+            reminderId,
+          ]
         );
         await pushLocalRow(db, 'module_reminders', reminderId);
       }
@@ -149,8 +221,7 @@ export function useModuleReminders(moduleKey: string, title: string, body: strin
   const removeReminder = useCallback(
     async (id: number) => {
       const baseId = moduleReminderId(moduleKey, id);
-      const allIds = [baseId, ...Array.from({ length: 7 }, (_, i) => `${baseId}-${i + 1}`)];
-      await Promise.all(allIds.flatMap((idStr) => [cancelReminder(idStr), cancelAlarm(idStr)]));
+      await Promise.all(allReminderIds(baseId).flatMap((idStr) => [cancelReminder(idStr), cancelAlarm(idStr)]));
       await recordDeleteBeforeRemoving(db, 'module_reminders', id);
       await db.runAsync('DELETE FROM module_reminders WHERE id = ?', [id]);
       await refresh();

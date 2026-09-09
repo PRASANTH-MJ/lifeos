@@ -3,14 +3,15 @@ import { Link, Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Card, EmptyState, LoadingState, RangeChip, ScreenContainer } from '@/components';
-import { formatCurrency, useFinanceDebts } from '@/modules/finance';
+import { Card, EmptyState, IconBadge, LoadingState, RangeChip, ScreenContainer } from '@/components';
+import { formatCurrency, useAccounts, useFinanceDebts } from '@/modules/finance';
 import { useAppTheme } from '@/theme';
 
 export default function DebtsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { debts, remainingById, loading } = useFinanceDebts();
+  const { displayCurrency } = useAccounts();
   const [tab, setTab] = useState<'active' | 'closed'>('active');
 
   if (loading) {
@@ -62,31 +63,36 @@ export default function DebtsScreen() {
             {filtered.map((debt) => {
               const remaining = remainingById[debt.id] ?? debt.amount;
               const isLent = debt.direction === 'lent';
+              const semanticColor = isLent ? theme.colors.success : theme.colors.danger;
               return (
                 <Link key={debt.id} href={{ pathname: '/finance/debts/[id]', params: { id: debt.id } }} asChild>
                   <Pressable>
-                    <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                      <Ionicons
-                        name={isLent ? 'arrow-up-circle' : 'arrow-down-circle'}
-                        size={24}
-                        color={isLent ? theme.colors.success : theme.colors.danger}
-                      />
+                    <Card tier="elevated" style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                      <IconBadge name={isLent ? 'arrow-up-circle' : 'arrow-down-circle'} color={semanticColor} />
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
                           {debt.person_name}
                         </Text>
                         <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
-                          {isLent ? 'You lent' : 'You borrowed'} {formatCurrency(debt.amount)}
+                          {isLent ? 'You lent' : 'You borrowed'} {formatCurrency(debt.amount, displayCurrency)}
                         </Text>
                       </View>
-                      <Text
+                      <View
                         style={{
-                          color: isLent ? theme.colors.success : theme.colors.danger,
-                          fontSize: theme.typography.size.base,
-                          fontWeight: theme.typography.weight.semibold,
+                          paddingHorizontal: theme.spacing.sm,
+                          paddingVertical: 4,
+                          borderRadius: theme.radius.full,
+                          backgroundColor: `${semanticColor}22`,
                         }}>
-                        {formatCurrency(remaining)}
-                      </Text>
+                        <Text
+                          style={{
+                            color: semanticColor,
+                            fontSize: theme.typography.size.sm,
+                            fontWeight: theme.typography.weight.semibold,
+                          }}>
+                          {formatCurrency(remaining, displayCurrency)}
+                        </Text>
+                      </View>
                     </Card>
                   </Pressable>
                 </Link>

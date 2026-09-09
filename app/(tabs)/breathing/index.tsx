@@ -3,9 +3,10 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Button, Card, FAB_BOTTOM_OFFSET, LogPastEntryModal, ReminderCard, ScreenContainer } from '@/components';
+import { Button, Card, FAB_BOTTOM_OFFSET, IconBadge, LogPastEntryModal, ReminderCard, ScreenContainer, ShareCardModal, StreakBadge, type ShareCardData } from '@/components';
 import { todayKey } from '@/lib/date';
 import { BREATHING_PATTERNS, findPattern, useBreathingLogs } from '@/modules/breathing';
+import { useMindfulnessStreak } from '@/modules/mindfulness';
 import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
@@ -14,6 +15,18 @@ const DEFAULT_CYCLES = 8;
 export default function BreathingScreen() {
   const theme = useAppTheme();
   const { sessionsThisWeek, refresh, logSession } = useBreathingLogs();
+  const streak = useMindfulnessStreak();
+  const [shareCard, setShareCard] = useState<ShareCardData | null>(null);
+  const onShareStreak = () => {
+    setShareCard({
+      eyebrow: 'Mindfulness streak',
+      value: String(streak),
+      valueLabel: `day streak${streak === 1 ? '' : 's'}`,
+      detail: 'Meditating & breathing on Flowsy',
+      icon: 'pulse',
+      accentColor: theme.colors.moduleTasks,
+    });
+  };
   const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders(
     'breathing',
     'Time to breathe',
@@ -36,10 +49,11 @@ export default function BreathingScreen() {
     <ScreenContainer onRefresh={refresh}>
       <View style={{ gap: theme.spacing.xl }}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-          <Ionicons name="pulse" size={22} color={theme.colors.moduleTasks} />
+          <IconBadge name="pulse" color={theme.colors.moduleTasks} />
           <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>
             {sessionsThisWeek} sessions this week
           </Text>
+          <StreakBadge streak={streak} onPress={onShareStreak} />
         </Card>
 
         {reminders.map((reminder) => (
@@ -58,17 +72,7 @@ export default function BreathingScreen() {
             <Link key={pattern.key} href={{ pathname: '/breathing/[patternKey]', params: { patternKey: pattern.key } }} asChild>
               <Pressable>
                 <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                  <View
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: theme.radius.md,
-                      backgroundColor: theme.colors.moduleTasksMuted,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                    <Ionicons name="pulse" size={20} color={theme.colors.moduleTasks} />
-                  </View>
+                  <IconBadge name="pulse" color={theme.colors.moduleTasks} shape="square" />
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
                       {pattern.title}
@@ -89,7 +93,7 @@ export default function BreathingScreen() {
             setLogModalVisible(true);
           }}>
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-            <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+            <IconBadge name="calendar-outline" tone="neutral" shape="square" />
             <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
               Add calendar entry
             </Text>
@@ -138,6 +142,7 @@ export default function BreathingScreen() {
       }}>
       <Ionicons name="add" size={28} color="#fff" />
     </Pressable>
+    <ShareCardModal visible={!!shareCard} onClose={() => setShareCard(null)} data={shareCard} />
     </View>
   );
 }

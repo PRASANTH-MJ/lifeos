@@ -1,22 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link, Stack, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Link, Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { Card, EmptyState, LoadingState, ScreenContainer, StatCard, UpsellModal } from '@/components';
+import { Button, Card, EmptyState, IconBadge, LoadingState, ProgressBar, ReminderCard, ScreenContainer, UpsellModal, useTabSwipeNavigation } from '@/components';
 import { formatDisplayDate, todayKey } from '@/lib/date';
 import {
   ACCOUNT_TYPE_LABELS,
   formatCurrency,
   formatCurrencyCompact,
   useAccounts,
+  useFinanceBudgetPlans,
   useFinanceBudgets,
+  useFinanceCategories,
   useFinanceSummary,
   useFinanceWeekSpend,
+  useSpendingAnomalies,
+  useSplitExpenses,
   useTransactions,
   type AccountType,
+  type BudgetPlanProgress,
 } from '@/modules/finance';
 import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
+import { useModuleReminders } from '@/modules/reminders';
 import { useAppTheme } from '@/theme';
 
 const TYPE_ORDER: AccountType[] = ['cash', 'general', 'investment', 'credit'];
@@ -30,12 +36,28 @@ const TYPE_ICON: Record<AccountType, keyof typeof Ionicons.glyphMap> = {
 export default function FinanceScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { accounts, accountsByType, netWorth, loading, refresh } = useAccounts();
+  const swipeHandlers = useTabSwipeNavigation('/finance');
+  const { accounts, accountsByType, netWorth, displayCurrency, loading, refresh } = useAccounts();
   const { transactions, loading: loadingTransactions, refresh: refreshTransactions } = useTransactions();
   const { budgets, setBudgets, refresh: refreshBudgets } = useFinanceBudgets();
   const { weekSpend, refresh: refreshWeekSpend } = useFinanceWeekSpend();
+  const { anomalies } = useSpendingAnomalies();
+  const { plans: budgetPlans, refresh: refreshBudgetPlans } = useFinanceBudgetPlans();
+  const { categories } = useFinanceCategories();
+  const { iOwe, owedToMe } = useSplitExpenses();
   const accountGate = useFreeTierGate('financeAccounts');
   const [showUpsell, setShowUpsell] = useState(false);
+  const transactionGate = useFreeTierGate('financeTransactions');
+  const [showTransactionUpsell, setShowTransactionUpsell] = useState(false);
+  const { reminders, save: saveReminder, addReminder, removeReminder } = useModuleReminders('finance', 'Log your spending', "Don't forget to log today's transactions.");
+
+  // Modal renders as a top-level overlay regardless of which tab is focused, so a sheet left
+  // open here would otherwise keep floating over whichever tab you switch to next.
+  useFocusEffect(
+    useCallback(() => {
+      return () => setShowUpsell(false);
+    }, [])
+  );
   const today = todayKey();
   const monthPrefix = today.slice(0, 7);
   const daysInMonth = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0).getDate();
@@ -45,7 +67,7 @@ export default function FinanceScreen() {
   );
 
   const refreshAll = async () => {
-    await Promise.all([refresh(), refreshTransactions(), refreshBudgets(), refreshWeekSpend(), refreshSummary()]);
+    await Promise.all([refresh(), refreshTransactions(), refreshBudgets(), refreshWeekSpend(), refreshSummary(), refreshBudgetPlans()]);
   };
 
   const onAddAccount = () => {
@@ -53,15 +75,23 @@ export default function FinanceScreen() {
     else setShowUpsell(true);
   };
 
+  const onAddTransaction = () => {
+    if (transactionGate.allowed) router.push('/finance-new');
+    else setShowTransactionUpsell(true);
+  };
+
   if (loading) {
     return (
-      <ScreenContainer>
-        <LoadingState />
-      </ScreenContainer>
+      <View style={{ flex: 1 }} {...swipeHandlers}>
+        <ScreenContainer>
+          <LoadingState />
+        </ScreenContainer>
+      </View>
     );
   }
 
   return (
+    <View style={{ flex: 1 }} {...swipeHandlers}>
     <ScreenContainer onRefresh={refreshAll}>
       <Stack.Screen
         options={{
@@ -77,21 +107,97 @@ export default function FinanceScreen() {
           Finance
         </Text>
 
-        <StatCard label="Net worth" value={formatCurrencyCompact(netWorth)} color={netWorth >= 0 ? theme.colors.success : theme.colors.danger} />
+        <Card tier="panel" glow style={{ alignItems: 'center', gap: theme.spacing.sm }}>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+            Net worth
+          </Text>
+          <Text
+            style={{
+              color: netWorth >= 0 ? theme.colors.textPrimary : theme.colors.danger,
+              fontSize: theme.typography.size['3xl'] * 1.5,
+              fontWeight: theme.typography.weight.bold,
+            }}>
+            {formatCurrencyCompact(netWorth, displayCurrency)}
+          </Text>
+        </Card>
+
+        {anomalies.length > 0 ? (
+          <Card tier="panel" style={{ gap: theme.spacing.sm, borderColor: theme.colors.warning, borderWidth: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+              <IconBadge name="warning-outline" color={theme.colors.warning} size="sm" />
+              <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
+                Unusual spending
+              </Text>
+            </View>
+            {anomalies.slice(0, 3).map((anomaly) => (
+              <Text key={anomaly.categoryId ?? 'uncategorized'} style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>
+                You&apos;ve spent {anomaly.ratio.toFixed(1)}x your usual on {anomaly.categoryName} this week.
+              </Text>
+            ))}
+          </Card>
+        ) : null}
 
         {budgets ? (
-          <Card style={{ gap: theme.spacing.lg }}>
+          <Card tier="panel" style={{ gap: theme.spacing.md }}>
             <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
               Budgets
             </Text>
-            <BudgetRow label="This week" spend={weekSpend} budget={budgets.weeklyBudget} onSetBudget={(v) => setBudgets({ weeklyBudget: v })} />
+            <BudgetRow
+              label="This week"
+              icon="calendar-outline"
+              spend={weekSpend}
+              budget={budgets.weeklyBudget}
+              currency={displayCurrency}
+              onSetBudget={(v) => setBudgets({ weeklyBudget: v })}
+            />
             <BudgetRow
               label="This month"
+              icon="cash-outline"
               spend={monthSummary?.expense ?? 0}
               budget={budgets.monthlyBudget}
+              currency={displayCurrency}
               onSetBudget={(v) => setBudgets({ monthlyBudget: v })}
             />
           </Card>
+        ) : null}
+
+        {budgetPlans.length > 0 ? (
+          <Card tier="panel" style={{ gap: theme.spacing.md }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold }}>
+              Category budgets
+            </Text>
+            {budgetPlans.map((plan) => (
+              <CategoryBudgetRow
+                key={plan.id}
+                plan={plan}
+                categoryName={categories.find((c) => c.id === plan.category_id)?.name ?? null}
+                currency={displayCurrency}
+              />
+            ))}
+          </Card>
+        ) : null}
+
+        {iOwe.length > 0 || owedToMe.length > 0 ? (
+          <Link href="/finance/splits" asChild>
+            <Pressable>
+              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xl }}>
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs }}>You owe</Text>
+                  <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
+                    {formatCurrency(iOwe.filter((s) => !s.settled).reduce((sum, s) => sum + s.amount, 0), displayCurrency)}
+                  </Text>
+                </View>
+                <View style={{ width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: theme.colors.border }} />
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs }}>You&apos;re owed</Text>
+                  <Text style={{ color: theme.colors.success, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>
+                    {formatCurrency(owedToMe.filter((s) => !s.settled).reduce((sum, s) => sum + s.amount, 0), displayCurrency)}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+              </Card>
+            </Pressable>
+          </Link>
         ) : null}
 
         {accounts.length === 0 ? (
@@ -113,24 +219,14 @@ export default function FinanceScreen() {
                   <Link key={account.id} href={{ pathname: '/finance/accounts/[id]', params: { id: account.id } }} asChild>
                     <Pressable>
                       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                        <View
-                          style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: theme.radius.md,
-                            backgroundColor: theme.colors.primaryMuted,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}>
-                          <Ionicons name={TYPE_ICON[type]} size={19} color={theme.colors.primary} />
-                        </View>
+                        <IconBadge name={TYPE_ICON[type]} color={theme.colors.primary} />
                         <Text
                           style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.medium }}>
                           {account.name}
                         </Text>
                         <Text
                           style={{
-                            color: account.current_balance >= 0 ? theme.colors.textPrimary : theme.colors.danger,
+                            color: account.current_balance >= 0 ? theme.colors.success : theme.colors.danger,
                             fontSize: theme.typography.size.base,
                             fontWeight: theme.typography.weight.semibold,
                           }}>
@@ -146,21 +242,19 @@ export default function FinanceScreen() {
           </View>
         )}
 
-        <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-          <Link href="/finance/new" asChild>
-            <Pressable style={{ flex: 1 }}>
-              <Card style={{ alignItems: 'center', gap: 4 }}>
-                <Ionicons name="add-circle-outline" size={22} color={theme.colors.primary} />
-                <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
-                  Add transaction
-                </Text>
-              </Card>
-            </Pressable>
-          </Link>
+        <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
+          <Pressable style={{ flex: 1 }} onPress={onAddTransaction}>
+            <Card style={{ alignItems: 'center', gap: theme.spacing.sm }}>
+              <IconBadge name="add-circle-outline" color={theme.colors.primary} size="lg" />
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+                Add transaction
+              </Text>
+            </Card>
+          </Pressable>
           <Link href="/finance/analytics" asChild>
             <Pressable style={{ flex: 1 }}>
-              <Card style={{ alignItems: 'center', gap: 4 }}>
-                <Ionicons name="pie-chart-outline" size={22} color={theme.colors.primary} />
+              <Card style={{ alignItems: 'center', gap: theme.spacing.sm }}>
+                <IconBadge name="pie-chart-outline" color={theme.colors.primary} size="lg" />
                 <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
                   Analytics
                 </Text>
@@ -177,6 +271,7 @@ export default function FinanceScreen() {
             { href: '/finance/debts' as const, icon: 'hand-left-outline' as const, label: 'Debts' },
             { href: '/finance/planned' as const, icon: 'time-outline' as const, label: 'Planned payments' },
             { href: '/finance/labels' as const, icon: 'pricetag-outline' as const, label: 'Labels' },
+            { href: '/finance/splits' as const, icon: 'people-outline' as const, label: 'Splits' },
             { href: '/shopping' as const, icon: 'cart-outline' as const, label: 'Shopping list' },
           ].map((item) => (
             <Link key={item.href} href={item.href} asChild>
@@ -216,9 +311,8 @@ export default function FinanceScreen() {
                   <Link key={transaction.id} href={{ pathname: '/finance/[id]', params: { id: transaction.id } }} asChild>
                     <Pressable>
                       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-                        <Ionicons
+                        <IconBadge
                           name={isTransfer ? 'swap-horizontal' : transaction.type === 'income' ? 'arrow-down-circle' : 'arrow-up-circle'}
-                          size={22}
                           color={isTransfer ? theme.colors.primary : transaction.type === 'income' ? theme.colors.success : theme.colors.danger}
                         />
                         <View style={{ flex: 1 }}>
@@ -247,6 +341,17 @@ export default function FinanceScreen() {
             </View>
           )}
         </View>
+
+        {reminders.map((reminder) => (
+          <ReminderCard
+            key={reminder.id}
+            state={reminder}
+            onSave={(next) => saveReminder(reminder.id, next)}
+            onRemove={reminders.length > 1 ? () => removeReminder(reminder.id) : undefined}
+            color={theme.colors.primary}
+          />
+        ))}
+        <Button label={reminders.length > 0 ? 'Add another reminder' : 'Add a reminder'} variant="secondary" onPress={addReminder} />
       </View>
 
       <UpsellModal
@@ -255,19 +360,30 @@ export default function FinanceScreen() {
         limit={accountGate.limit}
         onClose={() => setShowUpsell(false)}
       />
+      <UpsellModal
+        visible={showTransactionUpsell}
+        resourceLabel={LIMIT_LABELS.financeTransactions}
+        limit={transactionGate.limit}
+        onClose={() => setShowTransactionUpsell(false)}
+      />
     </ScreenContainer>
+    </View>
   );
 }
 
 function BudgetRow({
   label,
+  icon,
   spend,
   budget,
+  currency,
   onSetBudget,
 }: {
   label: string;
+  icon: keyof typeof Ionicons.glyphMap;
   spend: number;
   budget: number | null;
+  currency: string;
   onSetBudget: (value: number | null) => void;
 }) {
   const theme = useAppTheme();
@@ -281,12 +397,15 @@ function BudgetRow({
   };
 
   return (
-    <View style={{ gap: theme.spacing.xs }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.sm }}>{label}</Text>
+    <Card style={{ gap: theme.spacing.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+        <IconBadge name={icon} color={over ? theme.colors.danger : theme.colors.primary} size="sm" />
+        <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+          {label}
+        </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Text style={{ color: over ? theme.colors.danger : theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.semibold }}>
-            {formatCurrency(spend)}
+            {formatCurrency(spend, currency)}
           </Text>
           <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm }}>/</Text>
           <TextInput
@@ -305,6 +424,29 @@ function BudgetRow({
           <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: over ? theme.colors.danger : theme.colors.success }} />
         </View>
       ) : null}
+    </Card>
+  );
+}
+
+/** Compact per-category progress bar for the hub — the full pacing/forecast breakdown stays on
+ * the dedicated Budgets screen (finance/budgets), this is just enough to catch "I'm close to
+ * blowing this one" at a glance without navigating away. */
+function CategoryBudgetRow({ plan, categoryName, currency }: { plan: BudgetPlanProgress; categoryName: string | null; currency: string }) {
+  const theme = useAppTheme();
+  const ratio = plan.amount > 0 ? plan.spent / plan.amount : 0;
+  const color = ratio >= 1 ? theme.colors.danger : ratio >= 0.8 ? theme.colors.warning : theme.colors.primary;
+
+  return (
+    <View style={{ gap: theme.spacing.xs }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+        <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
+          {categoryName ?? plan.name}
+        </Text>
+        <Text style={{ color, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.semibold }}>
+          {formatCurrency(plan.spent, currency)} / {formatCurrency(plan.amount, currency)}
+        </Text>
+      </View>
+      <ProgressBar progress={ratio} color={color} height={6} />
     </View>
   );
 }

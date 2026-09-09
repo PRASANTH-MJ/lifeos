@@ -85,6 +85,11 @@ export default function NewGoalScreen() {
         </View>
 
         <Button label="Save goal" onPress={onSave} disabled={!canSave} loading={saving} />
+        {!canSave ? (
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, textAlign: 'center' }}>
+            {!name.trim() ? 'Enter a goal name to continue' : 'Enter a target amount to continue'}
+          </Text>
+        ) : null}
       </View>
 
       <Modal visible={datePickerVisible} animationType="slide" transparent onRequestClose={() => setDatePickerVisible(false)}>

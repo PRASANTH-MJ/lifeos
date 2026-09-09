@@ -1,8 +1,8 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 
-import { Button, Card, Chip, LoadingState, ScreenContainer, TextField } from '@/components';
+import { Button, Card, Chip, LoadingState, ScreenContainer, TextField, showAlert } from '@/components';
 import { monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { BUDGET_PERIOD_LABELS, useFinanceBudgetPlans, useFinanceCategories, type BudgetPeriod } from '@/modules/finance';
@@ -59,7 +59,7 @@ export default function BudgetDetailScreen() {
   };
 
   const onDelete = () => {
-    Alert.alert('Delete budget?', 'This removes the budget plan.', [
+    showAlert('Delete budget?', 'This removes the budget plan.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -114,13 +114,22 @@ export default function BudgetDetailScreen() {
         </View>
 
         <Button label="Save changes" onPress={onSave} disabled={!canSave} loading={saving} />
+        {!canSave ? (
+          <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, textAlign: 'center' }}>
+            {!name.trim()
+              ? 'Enter a name to continue'
+              : numericAmount <= 0
+                ? 'Enter an amount to continue'
+                : 'Start date must be on or before the end date'}
+          </Text>
+        ) : null}
         <Button label="Delete budget" variant="danger" onPress={onDelete} />
       </View>
 
       <Modal visible={pickerTarget !== null} animationType="slide" transparent onRequestClose={() => setPickerTarget(null)}>
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay }} onPress={() => setPickerTarget(null)} />
-          <Card style={{ borderTopLeftRadius: theme.radius.xl, borderTopRightRadius: theme.radius.xl, gap: theme.spacing.lg }}>
+          <Card tier="panel" style={{ borderTopLeftRadius: theme.radius.xl, borderTopRightRadius: theme.radius.xl, gap: theme.spacing.lg }}>
             <CalendarMonthGrid
               year={dateCursor.year}
               month={dateCursor.month}

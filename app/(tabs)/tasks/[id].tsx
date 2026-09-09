@@ -1,16 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 
-import { Button, Card, DonutChart, Legend, LoadingState, RangeChip, ScreenContainer, TextField, TrendChart } from '@/components';
-import { FLOATING_TAB_BAR_CLEARANCE } from '@/components/tabBarMetrics';
+import { Button, Card, DonutChart, IconBadge, Legend, LoadingState, RangeChip, ScreenContainer, SegmentedControl, TextField, TrendChart, showAlert } from '@/components';
 import { addDays, buildMonthGrid, formatDisplayDate, monthCursorOf, shiftMonth, todayKey } from '@/lib/date';
 import { CalendarMonthGrid } from '@/modules/calendar';
 import { useCategories } from '@/modules/categories';
 import { STREAK_CHALLENGE_TIERS, monthlyDoneCounts, rangeBounds, tallyStatus, type RangeKey } from '@/modules/habits';
 import { formatTimeDisplay, useSettings } from '@/modules/settings';
+import { formatDurationShort, useTimeSpent } from '@/modules/timer';
 import {
   PriorityChip,
   TaskForm,
@@ -19,6 +19,7 @@ import {
   logOneTimeTaskStatus,
   reminderOffsetLabel,
   useTaskDetail,
+  useTaskLabelLinks,
   type TaskCompletion,
   type TaskLogStatus,
 } from '@/modules/tasks';
@@ -42,6 +43,8 @@ export default function TaskDetailScreen() {
     periodProgress,
     streak,
     longestStreak,
+    blockingTask,
+    isBlocked,
     loading,
     updateTask,
     toggleComplete,
@@ -55,6 +58,8 @@ export default function TaskDetailScreen() {
   } = useTaskDetail(taskId);
   const { categories } = useCategories('task');
   const { settings } = useSettings();
+  const { setLabelsFor } = useTaskLabelLinks(taskId);
+  const { totalSeconds: timeSpentTotalSeconds, todaySeconds: timeSpentTodaySeconds } = useTimeSpent({ taskId });
 
   const [tab, setTab] = useState<DetailTab>(initialTab ?? 'calendar');
   const [newSubtask, setNewSubtask] = useState('');
@@ -80,6 +85,10 @@ export default function TaskDetailScreen() {
   const category = categories.find((c) => c.id === task.category_id);
   const completed = Boolean(task.completed_at);
   const displayTime = formatTimeDisplay(task.due_time, settings?.timeFormat ?? '24h');
+  // Mandatory: every checklist item (subtask) must be checked off before this task can be marked
+  // complete — mirrors the same gate in TaskLogSheet's "Done" button.
+  const checklistIncomplete = subtasks.some((subtask) => !subtask.completed_at);
+  const checklistCheckedCount = subtasks.filter((subtask) => subtask.completed_at).length;
 
   const onAddSubtask = async () => {
     if (!newSubtask.trim()) return;
@@ -87,44 +96,69 @@ export default function TaskDetailScreen() {
     setNewSubtask('');
   };
 
+  const onToggleComplete = () => {
+    if (!completed && isBlocked) {
+      showAlert('Blocked', `This task is blocked by "${blockingTask?.title}". Complete that task first.`, [{ text: 'OK' }]);
+      return;
+    }
+    if (!completed && checklistIncomplete) {
+      showAlert(
+        'Checklist incomplete',
+        `Check off every checklist item before marking this task complete (${checklistCheckedCount} of ${subtasks.length} so far).`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    toggleComplete();
+  };
+
   const onArchive = () => {
-    Alert.alert('Archive task?', 'It will be removed from your task list.', [
+    showAlert('Archive task?', 'It will be removed from your task list.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Archive', style: 'destructive', onPress: async () => { await archiveTask(); router.back(); } },
     ]);
   };
 
   const onClearHistory = () => {
-    Alert.alert('Clear completion history?', 'This clears all logged done/fail/skip entries for this task. This can’t be undone.', [
+    showAlert('Clear completion history?', 'This clears all logged done/fail/skip entries for this task. This can’t be undone.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Clear', style: 'destructive', onPress: () => clearCompletionHistory() },
     ]);
   };
 
   const onDelete = () => {
-    Alert.alert('Delete task?', 'This permanently deletes the task and its history.', [
+    showAlert('Delete task?', 'This permanently deletes the task and its history.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => { await deleteTask(); router.back(); } },
     ]);
   };
 
   return (
-    <ScreenContainer scroll={false} padded={false}>
-      <View style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.xl }} showsVerticalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.md }}>
+    <ScreenContainer>
+      <View style={{ gap: theme.spacing.xl }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.md }}>
             {!task.is_recurring ? (
               <Pressable
-                onPress={toggleComplete}
+                onPress={onToggleComplete}
                 hitSlop={8}
+                accessibilityLabel={
+                  !completed && isBlocked
+                    ? `${task.title} is blocked`
+                    : !completed && checklistIncomplete
+                      ? `${task.title} checklist is incomplete`
+                      : completed
+                        ? `Mark ${task.title} incomplete`
+                        : `Mark ${task.title} complete`
+                }
                 style={{
                   width: 28,
                   height: 28,
                   marginTop: 2,
                   borderRadius: theme.radius.full,
                   borderWidth: 2,
-                  borderColor: completed ? theme.colors.success : theme.colors.border,
+                  borderColor: completed ? theme.colors.success : isBlocked || checklistIncomplete ? theme.colors.textTertiary : theme.colors.border,
                   backgroundColor: completed ? theme.colors.success : 'transparent',
+                  opacity: !completed && (isBlocked || checklistIncomplete) ? 0.5 : 1,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
@@ -165,12 +199,31 @@ export default function TaskDetailScreen() {
               </View>
             </View>
             {task.is_recurring ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Ionicons name="flame" size={16} color={theme.colors.warning} />
-                <Text style={{ color: theme.colors.warning, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>{streak}</Text>
+              <View style={{ alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="flame" size={16} color={theme.colors.warning} />
+                  <Text style={{ color: theme.colors.warning, fontSize: theme.typography.size.lg, fontWeight: theme.typography.weight.bold }}>{streak}</Text>
+                </View>
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>streak</Text>
               </View>
             ) : null}
           </View>
+
+          {isBlocked ? (
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, backgroundColor: theme.colors.warningMuted, borderColor: theme.colors.warningMuted }}>
+              <IconBadge name="lock-closed" color={theme.colors.warning} size="sm" />
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, flex: 1 }}>
+                Blocked by: {blockingTask?.title}
+              </Text>
+            </Card>
+          ) : !completed && checklistIncomplete && subtasks.length > 0 ? (
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, backgroundColor: theme.colors.warningMuted, borderColor: theme.colors.warningMuted }}>
+              <IconBadge name="checkbox-outline" color={theme.colors.warning} size="sm" />
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm, flex: 1 }}>
+                Check off every checklist item before marking this task complete ({checklistCheckedCount} of {subtasks.length}).
+              </Text>
+            </Card>
+          ) : null}
 
           {task.notes ? (
             <Card>
@@ -179,10 +232,10 @@ export default function TaskDetailScreen() {
           ) : null}
 
           {!task.is_recurring && (task.reminder_offset_minutes != null || task.alarm_enabled) ? (
-            <Card style={{ gap: theme.spacing.xs }}>
+            <Card style={{ gap: theme.spacing.sm }}>
               {task.reminder_offset_minutes != null ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
-                  <Ionicons name="notifications" size={16} color={theme.colors.textSecondary} />
+                  <IconBadge name="notifications" tone="neutral" size="sm" />
                   <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm }}>
                     Reminder — {reminderOffsetLabel(task.reminder_offset_minutes)}
                   </Text>
@@ -190,7 +243,7 @@ export default function TaskDetailScreen() {
               ) : null}
               {task.alarm_enabled ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
-                  <Ionicons name="alarm" size={16} color={theme.colors.textSecondary} />
+                  <IconBadge name="alarm" tone="neutral" size="sm" />
                   <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.sm }}>Alarm at due time</Text>
                 </View>
               ) : null}
@@ -205,6 +258,38 @@ export default function TaskDetailScreen() {
               <Text style={{ color: theme.colors.textSecondary, fontSize: theme.typography.size.xs }}>This {task.period_length_days}-day period</Text>
             </Card>
           ) : null}
+
+          {!completed ? (
+            <Pressable
+              onPress={() => router.push({ pathname: '/timer', params: { taskId: String(task.id), taskTitle: task.title } })}>
+              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                <IconBadge name="timer-outline" color={theme.colors.moduleTasks} size="md" />
+                <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base, fontWeight: theme.typography.weight.semibold, flex: 1 }}>
+                  Focus on this
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+              </Card>
+            </Pressable>
+          ) : null}
+
+          {timeSpentTotalSeconds > 0 ? (
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="time-outline" color={theme.colors.moduleTasks} size="md" />
+              <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>
+                Today: {formatDurationShort(timeSpentTodaySeconds)} · All time: {formatDurationShort(timeSpentTotalSeconds)}
+              </Text>
+            </Card>
+          ) : null}
+
+          <SegmentedControl
+            options={[
+              { value: 'calendar', label: 'Calendar' },
+              { value: 'statistics', label: 'Statistics' },
+              { value: 'edit', label: 'Edit' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
 
           {tab === 'calendar' ? (
             <View style={{ gap: theme.spacing.lg }}>
@@ -237,7 +322,7 @@ export default function TaskDetailScreen() {
               <TaskForm
                 task={task}
                 submitLabel="Save changes"
-                onSave={async (values) => {
+                onSave={async (values, _checklistItems, labelIds) => {
                   await updateTask({
                     title: values.title,
                     notes: values.notes,
@@ -252,7 +337,9 @@ export default function TaskDetailScreen() {
                     recurrence_days: JSON.stringify(values.recurrenceDays),
                     period_target_count: values.periodTargetCount,
                     period_length_days: values.periodLengthDays,
+                    blocked_by_task_id: values.blockedByTaskId,
                   });
+                  await setLabelsFor(taskId, labelIds);
                 }}
                 extraActions={
                   <View style={{ gap: theme.spacing.sm, marginTop: theme.spacing.sm }}>
@@ -297,34 +384,6 @@ export default function TaskDetailScreen() {
               ) : null}
             </View>
           ) : null}
-        </ScrollView>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
-            backgroundColor: theme.colors.surface,
-            marginBottom: FLOATING_TAB_BAR_CLEARANCE,
-          }}>
-          {(
-            [
-              { key: 'calendar', label: 'Calendar', icon: 'calendar-outline' },
-              { key: 'statistics', label: 'Statistics', icon: 'stats-chart-outline' },
-              { key: 'edit', label: 'Edit', icon: 'create-outline' },
-            ] as const
-          ).map((entry) => {
-            const active = tab === entry.key;
-            return (
-              <Pressable key={entry.key} onPress={() => setTab(entry.key)} style={{ flex: 1, alignItems: 'center', gap: 2, paddingVertical: theme.spacing.sm }}>
-                <Ionicons name={entry.icon} size={20} color={active ? theme.colors.moduleTasks : theme.colors.textTertiary} />
-                <Text style={{ color: active ? theme.colors.moduleTasks : theme.colors.textTertiary, fontSize: theme.typography.size.xs, fontWeight: theme.typography.weight.medium }}>
-                  {entry.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
       </View>
 
       {sheetDate ? (
@@ -464,7 +523,12 @@ function StatisticsTab({
                     borderWidth: 1,
                     borderColor: unlocked ? theme.colors.warning : theme.colors.border,
                   }}>
-                  <Ionicons name={unlocked ? 'trophy' : 'lock-closed'} size={20} color={unlocked ? theme.colors.warning : theme.colors.textTertiary} />
+                  <IconBadge
+                    name={unlocked ? 'trophy' : 'lock-closed'}
+                    color={theme.colors.warning}
+                    tone={unlocked ? 'tinted' : 'neutral'}
+                    size="sm"
+                  />
                   <Text
                     style={{
                       color: unlocked ? theme.colors.textPrimary : theme.colors.textTertiary,
