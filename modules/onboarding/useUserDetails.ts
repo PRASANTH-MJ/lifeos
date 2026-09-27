@@ -11,6 +11,7 @@ type Row = {
   date_of_birth: string | null;
   country: string | null;
   state: string | null;
+  timezone: string | null;
   height_cm: number | null;
   weight_kg: number | null;
   avg_sleep_time: string | null;
@@ -29,6 +30,7 @@ function toUserDetails(row: Row | null): UserDetails {
     dateOfBirth: row?.date_of_birth ?? null,
     country: row?.country ?? null,
     state: row?.state ?? null,
+    timezone: row?.timezone ?? null,
     heightCm: row?.height_cm ?? null,
     weightKg: row?.weight_kg ?? null,
     avgSleepTime: row?.avg_sleep_time ?? null,
@@ -50,7 +52,7 @@ export function useUserDetails() {
   const refresh = useCallback(async () => {
     setLoading(true);
     const row = await db.getFirstAsync<Row>(
-      `SELECT phone_number, date_of_birth, country, state, height_cm, weight_kg, avg_sleep_time, avg_wake_time,
+      `SELECT phone_number, date_of_birth, country, state, timezone, height_cm, weight_kg, avg_sleep_time, avg_wake_time,
               avg_water_intake_ml, food_style, health_goal, income_bracket, financial_goals, onboarding_done
        FROM user_details WHERE id = 1`
     );
@@ -82,6 +84,7 @@ export function useUserDetails() {
            date_of_birth = COALESCE(?, date_of_birth),
            country = COALESCE(?, country),
            state = COALESCE(?, state),
+           timezone = COALESCE(?, timezone),
            height_cm = COALESCE(?, height_cm),
            weight_kg = COALESCE(?, weight_kg),
            avg_sleep_time = COALESCE(?, avg_sleep_time),
@@ -99,6 +102,7 @@ export function useUserDetails() {
           input.dateOfBirth ?? null,
           input.country ?? null,
           input.state ?? null,
+          input.timezone ?? null,
           input.heightCm ?? null,
           input.weightKg ?? null,
           input.avgSleepTime ?? null,

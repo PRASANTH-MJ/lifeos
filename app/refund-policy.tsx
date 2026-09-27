@@ -3,7 +3,7 @@ import { Linking, ScrollView, Text, View } from 'react-native';
 import { Card } from '@/components';
 import { useAppTheme } from '@/theme';
 
-const EFFECTIVE_DATE = 'August 18, 2026';
+const EFFECTIVE_DATE = 'September 16, 2026';
 const SUPPORT_EMAIL = 'data24zone@gmail.com';
 
 type Section = { title: string; body: string[] };
@@ -18,16 +18,17 @@ const SECTIONS: Section[] = [
   {
     title: 'Cancelling a subscription',
     body: [
-      'Monthly and Yearly Pro plans can be cancelled anytime. If you subscribed on the Flowsy website (Razorpay), email us at ' +
+      'Any Pro plan — Monthly, 3-Month, 6-Month, Yearly, or Family — can be cancelled anytime. If you subscribed on the Flowsy website (Razorpay), email us at ' +
         SUPPORT_EMAIL +
         ' to cancel. If you subscribed through the Android app (Google Play), cancel via Google Play\'s subscription settings on your device.',
+      'On a Family plan, the plan owner cancelling ends Pro access for every member at the end of the paid period; a member being removed by the owner reverts just that member to the free plan immediately.',
       'After cancelling, you keep Pro access until the end of the period you already paid for; it then reverts to the free plan and its usage limits. We do not pro-rate or refund the unused portion of a cancelled period.',
     ],
   },
   {
     title: 'Refunds',
     body: [
-      'Because Pro unlocks digital features immediately on purchase, payments are generally non-refundable once made — for Monthly, Yearly, and Lifetime plans alike.',
+      'Because Pro unlocks digital features immediately on purchase, payments are generally non-refundable once made — across every plan and duration we offer.',
       'Exceptions: if you were charged due to a verified technical error (e.g. duplicate charge, or a charge that did not unlock Pro on your account), email ' +
         SUPPORT_EMAIL +
         ' with your payment reference within 7 days of the charge and we will investigate and refund if the error is confirmed.',

@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { EmptyState, LoadingState, ScreenContainer } from '@/components';
+import { EmptyState, LoadingState, ScreenContainer, SegmentedControl } from '@/components';
 import { auth } from '@/firebase/config';
-import { ClubHabitRow, useClub, useClubHabits, useDeleteClubHabit } from '@/modules/clubs';
+import { ClubHabitRow, useClub, useClubHabits, useDeleteClubHabit, useSetClubHabitArchived } from '@/modules/clubs';
 import { useAppTheme } from '@/theme';
 
 /** Club habits list — a shared, member-tracked-together version of the personal Habits tab (see
@@ -16,12 +17,16 @@ export default function ClubHabitsScreen() {
   const router = useRouter();
   const myUid = auth.currentUser?.uid;
   const { clubId } = useLocalSearchParams<{ clubId: string }>();
-  const { habits, loading } = useClubHabits(clubId);
+  const { habits: allHabits, loading } = useClubHabits(clubId);
   const { club } = useClub(clubId);
   const { deleteClubHabit } = useDeleteClubHabit();
+  const { setClubHabitArchived } = useSetClubHabitArchived();
+  const [view, setView] = useState<'active' | 'archived'>('active');
   // A legacy club doc's `admins` array can predate the creator ever being added to it — see
   // useClub.ts's isAdmin, which this mirrors.
   const canModerate = !!myUid && !!club && (club.admins.includes(myUid) || club.subAdmins.includes(myUid) || club.createdBy === myUid);
+  const habits = allHabits.filter((h) => (view === 'archived' ? h.archived : !h.archived));
+  const archivedCount = allHabits.filter((h) => h.archived).length;
 
   return (
     <ScreenContainer>
@@ -47,10 +52,25 @@ export default function ClubHabitsScreen() {
           ) : null}
         </View>
 
+        {archivedCount > 0 ? (
+          <SegmentedControl
+            options={[
+              { value: 'active', label: 'Active' },
+              { value: 'archived', label: `Archived (${archivedCount})` },
+            ]}
+            value={view}
+            onChange={setView}
+          />
+        ) : null}
+
         {loading ? (
           <LoadingState />
         ) : habits.length === 0 ? (
-          <EmptyState icon="checkmark-circle-outline" title="No shared habits yet" subtitle="Start one for the club to track together." />
+          view === 'archived' ? (
+            <EmptyState icon="archive-outline" title="No archived habits" subtitle="Retired habits will show up here." />
+          ) : (
+            <EmptyState icon="checkmark-circle-outline" title="No shared habits yet" subtitle="Start one for the club to track together." />
+          )
         ) : (
           habits.map((habit) => (
             <ClubHabitRow
@@ -59,6 +79,10 @@ export default function ClubHabitsScreen() {
               habit={habit}
               canDelete={habit.createdBy === myUid || canModerate}
               onDelete={() => deleteClubHabit(clubId, habit.id)}
+              onArchive={
+                habit.createdBy === myUid || canModerate ? () => setClubHabitArchived(clubId, habit.id, !habit.archived) : undefined
+              }
+              archiveLabel={habit.archived ? 'Unarchive' : 'Archive'}
               showMemberStatus
             />
           ))

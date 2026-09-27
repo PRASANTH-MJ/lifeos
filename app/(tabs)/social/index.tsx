@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -22,6 +22,7 @@ import {
   showAlert,
 } from '@/components';
 import { auth } from '@/firebase/config';
+import { useProfile } from '@/modules/profile';
 import { uploadAvatar } from '@/modules/profile/avatarSync';
 import { useFeed, useNotifications, usePublicProfile, useSuggestedUsers, useUsernameSetup, type FeedItem, type PublicProfile } from '@/modules/social';
 import { useAppTheme } from '@/theme';
@@ -29,9 +30,14 @@ import { withAlpha } from '@/theme/withAlpha';
 
 /** Feed hub — doubles as the one-time username-claim gate (a fresh account has no
  * userPublicProfiles doc yet), since every other social screen assumes one already exists.
- * There's no separate "display name" concept anywhere in the social layer — the username IS the
- * name, shown as-is on the profile header and as "@username" in the feed, so this form only ever
- * asks for a username and a photo, never a name a second time. */
+ * Asks for a Name (shown on the profile header, in follower lists, family-plan member rows, split
+ * expenses — anywhere `displayName` renders) and a Username (the unique "@handle" used for
+ * search/mentions) — two different things that used to collapse into one: this form previously
+ * set `displayName` to a copy of the username itself, so a shared/split expense or a profile page
+ * showed someone's raw handle instead of their actual name. The Name field is prefilled from the
+ * name already entered during onboarding (`useProfile()`'s local `profile.name`) so a user is
+ * never asked to type their own name twice — a one-time seed, not a live sync, so editing it here
+ * doesn't retroactively change the onboarding-stored name or vice versa. */
 export default function SocialFeedScreen() {
   const theme = useAppTheme();
   const router = useRouter();
@@ -58,10 +64,20 @@ export default function SocialFeedScreen() {
   if (!feedLoading && !suggestionsLoading) hasLoadedOnce.current = true;
   const showInitialSpinner = !hasLoadedOnce.current && ((feedLoading && items.length === 0) || suggestionsLoading);
   const { claimUsername, submitting } = useUsernameSetup();
+  const { profile: localProfile } = useProfile();
   const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [displayNameTouched, setDisplayNameTouched] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Seeds once from the onboarding-entered name as soon as it loads — guarded by
+  // displayNameTouched (not just "is it empty") so a user who deliberately clears the field to
+  // leave it blank doesn't have it silently repopulated the moment localProfile finishes loading.
+  useEffect(() => {
+    if (!displayNameTouched && localProfile?.name) setDisplayName(localProfile.name);
+  }, [localProfile?.name, displayNameTouched]);
 
   const confirmDelete = useCallback(
     (postId: string) => {
@@ -112,8 +128,7 @@ export default function SocialFeedScreen() {
   };
 
   const onPickAvatar = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
+    // No permission request needed — see settings/index.tsx's onPickAvatar for why.
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true, aspect: [1, 1] });
     if (!result.canceled && result.assets[0]) setAvatarUri(result.assets[0].uri);
   };
@@ -132,7 +147,7 @@ export default function SocialFeedScreen() {
       }
       setUploadingAvatar(false);
     }
-    const result = await claimUsername({ username: username.trim(), displayName: username.trim(), avatarUrl });
+    const result = await claimUsername({ username: username.trim(), displayName: displayName.trim() || username.trim(), avatarUrl });
     if (!result.ok) setError(result.message);
   };
 
@@ -165,6 +180,15 @@ export default function SocialFeedScreen() {
                 </Text>
               </Pressable>
             </View>
+            <TextField
+              label="Name"
+              placeholder="Your name"
+              value={displayName}
+              onChangeText={(value) => {
+                setDisplayNameTouched(true);
+                setDisplayName(value);
+              }}
+            />
             <TextField label="Username" placeholder="e.g. alex_92" value={username} onChangeText={setUsername} autoCapitalize="none" />
             {error ? <Text style={{ color: theme.colors.danger, fontSize: theme.typography.size.sm }}>{error}</Text> : null}
             <Button label="Get started" onPress={onSetup} disabled={username.trim().length < 3} loading={submitting || uploadingAvatar} />

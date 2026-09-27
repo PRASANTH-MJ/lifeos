@@ -25,7 +25,7 @@
         "android.permission.VIBRATE",
         "android.permission.WAKE_LOCK"
       ],
-      "versionCode": 61
+      "versionCode": 70
     },
     "web": {
       "bundler": "metro",
@@ -92,7 +92,8 @@
         {
           "photosPermission": "Allow Flowsy to save your activity and post images to your photos.",
           "savePhotosPermission": "Allow Flowsy to save your activity and post images to your photos.",
-          "isAccessMediaLocationEnabled": false
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": []
         }
       ],
       [
@@ -106,11 +107,14 @@
         "expo-build-properties",
         {
           "android": {
-            "allowBackup": false
+            "allowBackup": false,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
           }
         }
       ],
-      "expo-image"
+      "expo-image",
+      "./plugins/withGradleJvmHeap"
     ],
     "experiments": {
       "typedRoutes": true

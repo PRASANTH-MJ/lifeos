@@ -82,8 +82,7 @@ function EventPhotoAlbum({ clubId, eventId, canAdd }: { clubId: string; eventId:
   const { photos, uploading, addPhoto } = useEventPhotos(clubId, eventId);
 
   const onAddPhoto = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
+    // No permission request needed — see app/(tabs)/settings/index.tsx's onPickAvatar for why.
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true });
     if (!result.canceled && result.assets[0]) await addPhoto(result.assets[0].uri);
   };

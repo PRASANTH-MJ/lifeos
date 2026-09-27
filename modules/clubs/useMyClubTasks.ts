@@ -19,6 +19,7 @@ function toClubTask(clubId: string, id: string, data: Record<string, unknown>): 
     completed: (data.completed as boolean) ?? false,
     completedBy: (data.completedBy as string) ?? null,
     completedAtMs: completedAt ? completedAt.toMillis() : null,
+    archived: (data.archived as boolean) ?? false,
   };
 }
 
@@ -46,7 +47,8 @@ export function useMyClubTasks(myClubs: Club[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clubIds]);
 
-  const tasks = myClubs.flatMap((club) => (tasksByClub[club.id] ?? []).map((task) => ({ task, club })));
+  // Archived tasks excluded — same reasoning as useMyClubHabits' identical filter above.
+  const tasks = myClubs.flatMap((club) => (tasksByClub[club.id] ?? []).filter((t) => !t.archived).map((task) => ({ task, club })));
   const loading = myClubs.length > 0 && Object.keys(tasksByClub).length < myClubs.length;
   return { tasks, loading };
 }

@@ -2380,6 +2380,35 @@ exports.deleteClubHabit = onCall({ region: 'us-central1' }, async (request) => {
   return { deleted: true };
 });
 
+/** Archives/unarchives a club habit in place — same permission tier as deleteClubHabit (creator or
+ * club admin/sub-admin), but a soft toggle rather than a hard delete, so checkins/streak history
+ * survives and it can be brought back later. */
+exports.setClubHabitArchived = onCall({ region: 'us-central1' }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+  const clubId = String(request.data?.clubId || '');
+  const habitId = String(request.data?.habitId || '');
+  if (!clubId || !habitId) throw new HttpsError('invalid-argument', 'clubId and habitId are required.');
+  const archived = !!request.data?.archived;
+
+  const clubRef = db.collection('clubs').doc(clubId);
+  const habitRef = clubRef.collection('habits').doc(habitId);
+
+  await db.runTransaction(async (tx) => {
+    const [clubDoc, habitDoc] = await Promise.all([tx.get(clubRef), tx.get(habitRef)]);
+    if (!clubDoc.exists) throw new HttpsError('not-found', 'That club does not exist.');
+    if (!habitDoc.exists) throw new HttpsError('not-found', 'That club habit does not exist.');
+    const club = clubDoc.data();
+    if (habitDoc.data().createdBy !== uid && !canModerate(club, uid)) {
+      throw new HttpsError('permission-denied', 'Only the creator or a club admin can archive this habit.');
+    }
+    tx.set(habitRef, { archived }, { merge: true });
+  });
+
+  return { archived };
+});
+
 exports.createClubTask = onCall({ region: 'us-central1' }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -2517,6 +2546,35 @@ exports.deleteClubTask = onCall({ region: 'us-central1' }, async (request) => {
   });
 
   return { deleted: true };
+});
+
+/** Archives/unarchives a club task in place — same permission tier and soft-toggle reasoning as
+ * setClubHabitArchived above. Most useful right after completing a one-off task: archiving clears
+ * it out of the active list without losing the completedBy/completedAt record. */
+exports.setClubTaskArchived = onCall({ region: 'us-central1' }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+  const clubId = String(request.data?.clubId || '');
+  const taskId = String(request.data?.taskId || '');
+  if (!clubId || !taskId) throw new HttpsError('invalid-argument', 'clubId and taskId are required.');
+  const archived = !!request.data?.archived;
+
+  const clubRef = db.collection('clubs').doc(clubId);
+  const taskRef = clubRef.collection('tasks').doc(taskId);
+
+  await db.runTransaction(async (tx) => {
+    const [clubDoc, taskDoc] = await Promise.all([tx.get(clubRef), tx.get(taskRef)]);
+    if (!clubDoc.exists) throw new HttpsError('not-found', 'That club does not exist.');
+    if (!taskDoc.exists) throw new HttpsError('not-found', 'That club task does not exist.');
+    const club = clubDoc.data();
+    if (taskDoc.data().createdBy !== uid && !canModerate(club, uid)) {
+      throw new HttpsError('permission-denied', 'Only the creator or a club admin can archive this task.');
+    }
+    tx.set(taskRef, { archived }, { merge: true });
+  });
+
+  return { archived };
 });
 
 /** Hard delete of an entire club and everything in it — the single most destructive club action

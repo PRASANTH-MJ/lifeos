@@ -13,6 +13,7 @@ function toClubHabit(clubId: string, id: string, data: Record<string, unknown>):
     recurrence: (data.recurrence as ClubRecurrence) ?? 'daily',
     targetDays: Array.isArray(data.targetDays) ? (data.targetDays as number[]) : [],
     createdBy: (data.createdBy as string) ?? '',
+    archived: (data.archived as boolean) ?? false,
   };
 }
 
@@ -84,4 +85,23 @@ export function useDeleteClubHabit() {
   };
 
   return { deleteClubHabit, submitting };
+}
+
+/** Archives/unarchives a club habit — creator or club admin/sub-admin only (enforced server-side,
+ * see functions/index.js's setClubHabitArchived). A soft toggle: the habit and its checkins/streak
+ * history stick around, just excluded from the active list (see useClubHabits' own filtering). */
+export function useSetClubHabitArchived() {
+  const [submitting, setSubmitting] = useState(false);
+
+  const setClubHabitArchived = async (clubId: string, habitId: string, archived: boolean): Promise<void> => {
+    setSubmitting(true);
+    try {
+      const fn = httpsCallable<{ clubId: string; habitId: string; archived: boolean }, { archived: boolean }>(functions, 'setClubHabitArchived');
+      await fn({ clubId, habitId, archived });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return { setClubHabitArchived, submitting };
 }

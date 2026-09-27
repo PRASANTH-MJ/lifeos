@@ -19,6 +19,8 @@ type RowProps = {
   clubLabel?: string;
   canDelete?: boolean;
   onDelete?: () => void;
+  onArchive?: () => void;
+  archiveLabel?: string;
   /** Adds a "who's done this today" (recurring) or "completed by" (one-off) breakdown — opt-in,
    * off by default, same reasoning as ClubHabitRow's own `showMemberStatus`: only the dedicated
    * app/(tabs)/social/clubs/tasks.tsx screen passes it, keeping the cross-club rollup cheap. */
@@ -29,7 +31,7 @@ type RowProps = {
  * streak), since a recurring club task IS a shared habit in every sense but name (see
  * clubProductivityTypes.ts). Shared between the in-club tasks list and the cross-club
  * Productivity-tab rollup, same as ClubHabitRow. */
-export function RecurringClubTaskRow({ clubId, task, clubLabel, canDelete, onDelete, showMemberStatus }: RowProps) {
+export function RecurringClubTaskRow({ clubId, task, clubLabel, canDelete, onDelete, onArchive, archiveLabel, showMemberStatus }: RowProps) {
   const theme = useAppTheme();
   const { doneToday, streak, submitting, toggleToday } = useClubCheckins('tasks', clubId, task.id, task.recurrence, task.recurrenceDays);
   const [expanded, setExpanded] = useState(false);
@@ -66,7 +68,9 @@ export function RecurringClubTaskRow({ clubId, task, clubLabel, canDelete, onDel
           {doneToday ? <Ionicons name="checkmark" size={18} color="#fff" /> : null}
         </Pressable>
       </CompletionPulse>
-      {canDelete && onDelete ? <RowActionsMenu itemLabel={task.title} onDelete={onDelete} /> : null}
+      {canDelete && onDelete ? (
+        <RowActionsMenu itemLabel={task.title} onDelete={onDelete} onArchive={onArchive} archiveLabel={archiveLabel} />
+      ) : null}
     </View>
   );
 
@@ -95,7 +99,7 @@ export function RecurringClubTaskRow({ clubId, task, clubLabel, canDelete, onDel
  * per-day checkin (see clubProductivityTypes.ts's ClubTask doc comment). Gated the same way
  * functions/index.js's toggleClubTaskComplete is: an assigned task can only be completed by its
  * assignee (checked here just to disable the checkbox — the callable re-checks server-side). */
-export function OneOffClubTaskRow({ clubId, task, clubLabel, canDelete, onDelete, showMemberStatus }: RowProps) {
+export function OneOffClubTaskRow({ clubId, task, clubLabel, canDelete, onDelete, onArchive, archiveLabel, showMemberStatus }: RowProps) {
   const theme = useAppTheme();
   const myUid = auth.currentUser?.uid;
   const { toggleClubTask, submitting } = useToggleClubTask();
@@ -148,7 +152,9 @@ export function OneOffClubTaskRow({ clubId, task, clubLabel, canDelete, onDelete
           </View>
         ) : null}
       </View>
-      {canDelete && onDelete ? <RowActionsMenu itemLabel={task.title} onDelete={onDelete} /> : null}
+      {canDelete && onDelete ? (
+        <RowActionsMenu itemLabel={task.title} onDelete={onDelete} onArchive={onArchive} archiveLabel={archiveLabel} />
+      ) : null}
     </Card>
   );
 }

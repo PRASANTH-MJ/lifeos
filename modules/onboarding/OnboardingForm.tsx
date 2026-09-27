@@ -84,6 +84,18 @@ function composeDob(day: string, month: string, year: string): string | null {
   return iso;
 }
 
+/** "Asia/Kolkata" -> "GMT+5:30" — Intl already resolves the correct current offset (DST-aware),
+ * so this only needs to reformat its own "GMT+5:30"/"GMT-5" output into a consistent shape. */
+function formatTimezoneOffset(timezone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, timeZoneName: 'shortOffset' }).formatToParts(new Date());
+    const offset = parts.find((part) => part.type === 'timeZoneName')?.value;
+    return offset ?? timezone;
+  } catch {
+    return timezone;
+  }
+}
+
 type Props = {
   initial: UserDetails | null;
   name: string;
@@ -170,6 +182,10 @@ export function OnboardingForm({
   const [phoneText, setPhoneText] = useState(initial?.phoneNumber ?? '');
   const [countryText, setCountryText] = useState(initial?.country ?? '');
   const [stateText, setStateText] = useState(initial?.state ?? '');
+  // Auto-detected once, not user-editable — a manual GMT-offset picker would need to also track
+  // DST across the whole tz database to stay correct, which Intl already does for free here.
+  const [timezone] = useState(initial?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const timezoneLabel = formatTimezoneOffset(timezone);
   const initialDob = parseDob(initial?.dateOfBirth ?? null);
   const [dobDay, setDobDay] = useState(initialDob.day);
   const [dobMonth, setDobMonth] = useState(initialDob.month);
@@ -195,8 +211,7 @@ export function OnboardingForm({
   };
 
   const onPickPhoto = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
+    // No permission request needed — see app/(tabs)/settings/index.tsx's onPickAvatar for why.
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true, aspect: [1, 1] });
     if (!result.canceled && result.assets[0]) setAvatarDraft(result.assets[0].uri);
   };
@@ -241,6 +256,7 @@ export function OnboardingForm({
         phoneNumber: phoneText.trim() ? phoneText.trim() : undefined,
         country: countryText.trim() ? countryText.trim() : undefined,
         state: stateText.trim() ? stateText.trim() : undefined,
+        timezone: timezone ?? undefined,
         dateOfBirth: dateOfBirth ?? undefined,
         heightCm: heightText.trim() ? Number(heightText) : undefined,
         weightKg: weightText.trim() ? Number(weightText) : undefined,
@@ -396,6 +412,13 @@ export function OnboardingForm({
             <View style={{ flex: 1 }}>
               <TextField label="State" placeholder="e.g. Karnataka" value={stateText} onChangeText={setStateText} />
             </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+            <Ionicons name="globe-outline" size={16} color={theme.colors.textTertiary} />
+            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs, flex: 1 }}>
+              Timezone: {timezoneLabel} (detected automatically, used for reminders and streaks)
+            </Text>
           </View>
         </Card>
       ) : null}

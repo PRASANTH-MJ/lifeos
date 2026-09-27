@@ -11,6 +11,7 @@ type Row = {
   date_of_birth: string | null;
   country: string | null;
   state: string | null;
+  timezone: string | null;
   height_cm: number | null;
   weight_kg: number | null;
   avg_sleep_time: string | null;
@@ -29,6 +30,7 @@ function toUserDetails(row: Row | null | undefined): UserDetails {
     dateOfBirth: row?.date_of_birth ?? null,
     country: row?.country ?? null,
     state: row?.state ?? null,
+    timezone: row?.timezone ?? null,
     heightCm: row?.height_cm ?? null,
     weightKg: row?.weight_kg ?? null,
     avgSleepTime: row?.avg_sleep_time ?? null,
@@ -60,6 +62,7 @@ export function useUserDetails() {
       date_of_birth: input.dateOfBirth ?? current?.date_of_birth ?? null,
       country: input.country ?? current?.country ?? null,
       state: input.state ?? current?.state ?? null,
+      timezone: input.timezone ?? current?.timezone ?? null,
       height_cm: input.heightCm ?? current?.height_cm ?? null,
       weight_kg: input.weightKg ?? current?.weight_kg ?? null,
       avg_sleep_time: input.avgSleepTime ?? current?.avg_sleep_time ?? null,

@@ -13,13 +13,28 @@ type Props = {
   canMoveDown?: boolean;
   onEdit?: () => void;
   onArchive?: () => void;
+  /** Overrides the label/icon shown for `onArchive` — e.g. "Unarchive"/"refresh-outline" for a row
+   * already in an Archived view. Defaults to "Archive"/"archive-outline". */
+  archiveLabel?: string;
+  archiveIcon?: keyof typeof Ionicons.glyphMap;
   onDelete: () => void;
 };
 
 /** Small per-row overflow menu — optional reorder chevrons plus an Archive/Delete action sheet —
  * shared by any list that lets a user manually order or quick-manage items (Habits, Recurring
  * tasks) without opening the item's detail screen first. */
-export function RowActionsMenu({ itemLabel, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onEdit, onArchive, onDelete }: Props) {
+export function RowActionsMenu({
+  itemLabel,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
+  onEdit,
+  onArchive,
+  archiveLabel = 'Archive',
+  archiveIcon = 'archive-outline',
+  onDelete,
+}: Props) {
   const theme = useAppTheme();
   const [menuVisible, setMenuVisible] = useState(false);
 
@@ -69,8 +84,8 @@ export function RowActionsMenu({ itemLabel, onMoveUp, onMoveDown, canMoveUp, can
             ) : null}
             {onArchive ? (
               <MenuRow
-                icon="archive-outline"
-                label="Archive"
+                icon={archiveIcon}
+                label={archiveLabel}
                 onPress={() => {
                   setMenuVisible(false);
                   onArchive();

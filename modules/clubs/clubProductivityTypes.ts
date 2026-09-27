@@ -14,6 +14,10 @@ export type ClubHabit = {
    * modules/habits/types.ts's target_days. */
   targetDays: number[];
   createdBy: string;
+  /** Retired from the active list without losing its checkins/streak history — same
+   * archive-don't-delete pattern as the personal habits module's own `archived` column (see
+   * modules/habits/types.ts). Defaults to false for any habit created before this field existed. */
+  archived: boolean;
 };
 
 export type ClubTask = {
@@ -35,6 +39,10 @@ export type ClubTask = {
   completed: boolean;
   completedBy: string | null;
   completedAtMs: number | null;
+  /** Same archive-don't-delete pattern as ClubHabit.archived above — most useful for a completed
+   * one-off task, which otherwise sits in the shared list (struck through) forever with no way to
+   * clear it out short of deleting it outright. */
+  archived: boolean;
 };
 
 /** One member's check-in for one day, on either a club habit or a recurring club task — the

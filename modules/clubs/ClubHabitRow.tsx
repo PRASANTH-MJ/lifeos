@@ -26,6 +26,8 @@ export function ClubHabitRow({
   clubLabel,
   canDelete,
   onDelete,
+  onArchive,
+  archiveLabel,
   onPress,
   showMemberStatus,
 }: {
@@ -34,6 +36,8 @@ export function ClubHabitRow({
   clubLabel?: string;
   canDelete?: boolean;
   onDelete?: () => void;
+  onArchive?: () => void;
+  archiveLabel?: string;
   onPress?: () => void;
   showMemberStatus?: boolean;
 }) {
@@ -73,7 +77,9 @@ export function ClubHabitRow({
           {doneToday ? <Ionicons name="checkmark" size={18} color="#fff" /> : null}
         </Pressable>
       </CompletionPulse>
-      {canDelete && onDelete ? <RowActionsMenu itemLabel={habit.title} onDelete={onDelete} /> : null}
+      {canDelete && onDelete ? (
+        <RowActionsMenu itemLabel={habit.title} onDelete={onDelete} onArchive={onArchive} archiveLabel={archiveLabel} />
+      ) : null}
     </>
   );
 

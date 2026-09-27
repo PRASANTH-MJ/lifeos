@@ -17,14 +17,16 @@ export function useSettings() {
       scoreboard_weekly_reminder: number;
       last_weekly_recap_shown_at: string | null;
       last_seen_changelog_version: string | null;
+      default_currency: string | null;
     }>(
-      'SELECT time_format, scoreboard_weekly_reminder, last_weekly_recap_shown_at, last_seen_changelog_version FROM app_settings WHERE id = 1'
+      'SELECT time_format, scoreboard_weekly_reminder, last_weekly_recap_shown_at, last_seen_changelog_version, default_currency FROM app_settings WHERE id = 1'
     );
     setSettings({
       timeFormat: row?.time_format ?? '24h',
       scoreboardWeeklyReminder: row?.scoreboard_weekly_reminder === 1,
       lastWeeklyRecapShownAt: row?.last_weekly_recap_shown_at ?? null,
       lastSeenChangelogVersion: row?.last_seen_changelog_version ?? null,
+      defaultCurrency: row?.default_currency ?? null,
     });
     setLoading(false);
   }, [db]);
@@ -71,6 +73,18 @@ export function useSettings() {
     [db, refresh]
   );
 
+  const setDefaultCurrency = useCallback(
+    async (currency: string) => {
+      await db.runAsync('UPDATE app_settings SET default_currency = ?, updated_at = ? WHERE id = 1', [
+        currency,
+        new Date().toISOString(),
+      ]);
+      await pushLocalRow(db, 'app_settings', 1);
+      await refresh();
+    },
+    [db, refresh]
+  );
+
   const setLastSeenChangelogVersion = useCallback(
     async (version: string) => {
       await db.runAsync('UPDATE app_settings SET last_seen_changelog_version = ?, updated_at = ? WHERE id = 1', [
@@ -90,5 +104,6 @@ export function useSettings() {
     setScoreboardWeeklyReminder,
     setLastWeeklyRecapShownAt,
     setLastSeenChangelogVersion,
+    setDefaultCurrency,
   };
 }

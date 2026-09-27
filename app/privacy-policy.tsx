@@ -3,7 +3,7 @@ import { Linking, ScrollView, Text, View } from 'react-native';
 import { Card } from '@/components';
 import { useAppTheme } from '@/theme';
 
-const EFFECTIVE_DATE = 'August 14, 2026';
+const EFFECTIVE_DATE = 'September 16, 2026';
 const SUPPORT_EMAIL = 'data24zone@gmail.com';
 
 type Section = { title: string; body: string[] };
@@ -13,7 +13,8 @@ const SECTIONS: Section[] = [
     title: 'Information you provide',
     body: [
       'When you create an account, we collect your email address via Firebase Authentication. We never see or store your password — Firebase handles that directly.',
-      'Everything else — habits, tasks, journal entries and check-ins (including any mood you record), workouts, food and water logs, finance and budget records (accounts, transactions, budgets, debts, goals), meditation and mind-training logs, your nickname, avatar, and personal details like height, weight, date of birth, and health or financial goals — is content you type or pick yourself while using the app. Some of this, particularly your journal entries, mood check-ins, and finance/budget records, is sensitive personal information, and we treat it with the same protections as the rest of your account data described below.',
+      'Everything else — habits, tasks, journal entries and check-ins (including any mood you record), workouts, cardio/GPS routes, food and water logs, finance and budget records (accounts, transactions, budgets, debts, goals), meditation and mind-training logs, your nickname, avatar, personal details like height, weight, date of birth, timezone, and health or financial goals — is content you type or pick yourself while using the app. Some of this, particularly your journal entries, mood check-ins, GPS routes, and finance/budget records, is sensitive personal information, and we treat it with the same protections as the rest of your account data described below.',
+      'If you use the Social feed, Clubs, or claim a username, that also creates a public or semi-public profile (username, display name, avatar, posts, comments, likes, follows, and club membership) visible to other signed-in users — see "Social features" below for how that differs from the rest of your data.',
     ],
   },
   {
@@ -26,10 +27,23 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    title: 'Social features',
+    body: [
+      'Claiming a username creates a public profile (username, display name, avatar) that any signed-in user can find via search and view. Posts, comments, and likes you make on the Social feed are visible to other users according to the privacy setting on each post; follows are visible to both sides of the follow.',
+      'Clubs (including their habits, tasks, challenges, events, and chat messages) are visible to their members, or to any signed-in user if the club is public. You can block another user, delete your own posts/comments, leave a club, or report content at any time from within the app.',
+    ],
+  },
+  {
+    title: 'Family plan',
+    body: [
+      'A Family plan is a single Pro subscription shared by up to 5 accounts. The plan owner can see who has been invited to and is a member of their family group, and can remove a member; a member can see who else is in the family and can leave at any time. No member\'s habits, journal, finance, or other personal data is shared with other family members by this feature — only membership and plan status.',
+    ],
+  },
+  {
     title: 'Purchases and subscriptions',
     body: [
-      'Pro plan purchases are processed entirely by Google Play. Flowsy never sees or stores your card, bank, or other payment details — Google Play handles all of that itself.',
-      'After a purchase, the app asks a Flowsy server function (a Firebase Cloud Function) to verify it directly with Google\'s Play Developer API. Once verified, that function stores only the resulting entitlement — whether you\'re Pro, which plan, and its subscription status — on your account record in Firestore. No payment information is included in that record.',
+      'Pro plan purchases made through the Android app are processed entirely by Google Play; purchases made on the Flowsy website are processed by Razorpay. Flowsy never sees or stores your card, bank, or other payment details in either case — Google Play or Razorpay handles all of that itself.',
+      'After a purchase, the app (or website) asks a Flowsy server function (a Firebase Cloud Function) to verify it directly with Google\'s Play Developer API or with Razorpay. Once verified, that function stores only the resulting entitlement — whether you\'re Pro, which plan, and its subscription status — on your account record in Firestore. No payment information is included in that record.',
       'Tapping "Restore Purchases" in the app re-runs this same server-side verification for your Google account\'s existing purchases, in case your Pro status didn\'t sync automatically.',
     ],
   },
@@ -49,14 +63,14 @@ const SECTIONS: Section[] = [
   {
     title: 'Third-party services',
     body: [
-      'We use Firebase (a Google service) for account sign-in, for syncing your data across your signed-in devices, for storing your avatar and, if you opt into Cloud Backup, your backup snapshot, and for running the server-side function that verifies Play Store purchases. We use Google Play Billing to process purchases and subscriptions. Google\'s handling of that data is governed by Google\'s own privacy policy.',
+      'We use Firebase (a Google service) for account sign-in, for syncing your data across your signed-in devices, for storing your avatar and, if you opt into Cloud Backup, your backup snapshot, and for running the server-side functions that verify purchases and power social/club features. We use Google Play Billing and Razorpay to process purchases and subscriptions — see "Purchases and subscriptions" above for which one applies to your purchase. Cardio/GPS route maps are rendered using MapLibre with OpenFreeMap map tiles, a free service that does not require an API key or receive your account identity. Each of these providers\' handling of data is governed by their own privacy policy.',
     ],
   },
   {
     title: 'Data retention and deletion',
     body: [
-      'Content on your device stays until you delete it in the app or uninstall the app. If you have an account, the synced copy of that content stays in our database until you delete it in the app (which removes it from sync too) or ask us to delete your account. A Cloud Backup snapshot stays in storage until you overwrite it with a new backup or ask us to delete it.',
-      `There isn't yet a self-serve "delete my account" button in the app. To request deletion of your account and any backup data, email us at ${SUPPORT_EMAIL} and we’ll take care of it.`,
+      'Content on your device stays until you delete it in the app or uninstall the app. If you have an account, the synced copy of that content stays in our database until you delete it in the app (which removes it from sync too) or delete your account. A Cloud Backup snapshot stays in storage until you overwrite it with a new backup or delete your account.',
+      `You can delete your account at any time from Settings → Delete Account, which permanently removes your synced data, backups, and public profile (username, posts, follows, club memberships). This cannot be undone. If you'd rather have us do it for you, or run into any trouble, email ${SUPPORT_EMAIL}.`,
     ],
   },
   {

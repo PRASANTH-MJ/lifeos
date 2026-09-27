@@ -13,6 +13,7 @@ function toClubHabit(clubId: string, id: string, data: Record<string, unknown>):
     recurrence: (data.recurrence as ClubRecurrence) ?? 'daily',
     targetDays: Array.isArray(data.targetDays) ? (data.targetDays as number[]) : [],
     createdBy: (data.createdBy as string) ?? '',
+    archived: (data.archived as boolean) ?? false,
   };
 }
 
@@ -42,7 +43,9 @@ export function useMyClubHabits(myClubs: Club[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clubIds]);
 
-  const habits = myClubs.flatMap((club) => (habitsByClub[club.id] ?? []).map((habit) => ({ habit, club })));
+  // Archived habits are excluded here — a retired club habit has no business surfacing on the
+  // Productivity tab's cross-club rollup, only in the dedicated in-club list's Archived view.
+  const habits = myClubs.flatMap((club) => (habitsByClub[club.id] ?? []).filter((h) => !h.archived).map((habit) => ({ habit, club })));
   const loading = myClubs.length > 0 && Object.keys(habitsByClub).length < myClubs.length;
   return { habits, loading };
 }

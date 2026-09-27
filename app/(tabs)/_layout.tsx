@@ -35,6 +35,13 @@ export default function TabsLayout() {
   // hidden here rather than removed, keeping every tab's own stack/history behavior intact.
   const isDesktopWeb = Platform.OS === 'web' && width >= DESKTOP_BREAKPOINT;
   const hideTabBar = isFloatingTabBarHidden(pathname);
+  // The AI Assistant FAB used to float on every single screen, which meant it permanently
+  // overlapped whatever the last row of any long list happened to be (confirmed via on-device
+  // testing — it covered real content on Fitness, Finance, Feed, and More). Scoping it to just
+  // the hubs it's actually most useful on — Productivity (daily planning), Mindfulness (mood/
+  // reflection prompts), and More (where its own settings live) — keeps the assistant reachable
+  // without it permanently sitting on top of Fitness/Finance/Feed content.
+  const showAiFab = pathname === '/' || pathname === '/mindfulness-wellness' || pathname === '/more';
   usePublicProfileStatsSync();
   useDefaultCheckinReminders();
 
@@ -130,7 +137,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="scoreboard" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="mindfulness-checkin" options={{ headerShown: false, href: null }} />
     </Tabs>
-    <AiAssistantFab />
+    {showAiFab ? <AiAssistantFab /> : null}
     <AppTourModal />
     </View>
     </View>

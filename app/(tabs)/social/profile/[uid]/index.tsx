@@ -313,8 +313,7 @@ function EditProfileModal({
   const [error, setError] = useState<string | null>(null);
 
   const onPickAvatar = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
+    // No permission request needed — see app/(tabs)/settings/index.tsx's onPickAvatar for why.
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true, aspect: [1, 1] });
     if (!result.canceled && result.assets[0]) {
       setAvatarPreviewUri(result.assets[0].uri);

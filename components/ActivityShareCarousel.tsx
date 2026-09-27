@@ -120,11 +120,7 @@ export function ActivityShareCarousel({
   };
 
   const onPickFromLibrary = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      showAlert('Photo access needed', 'Allow photo library access in your device Settings to add a photo.');
-      return;
-    }
+    // No permission request needed — see app/(tabs)/settings/index.tsx's onPickAvatar for why.
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true });
     if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri);
   };

@@ -67,6 +67,8 @@ export type UserDetails = {
   dateOfBirth: string | null;
   country: string | null;
   state: string | null;
+  /** IANA name, e.g. "Asia/Kolkata" — auto-detected, not user-typed. */
+  timezone: string | null;
   heightCm: number | null;
   weightKg: number | null;
   avgSleepTime: string | null;
@@ -86,6 +88,7 @@ export type UserDetailsInput = Partial<
     | 'dateOfBirth'
     | 'country'
     | 'state'
+    | 'timezone'
     | 'heightCm'
     | 'weightKg'
     | 'avgSleepTime'

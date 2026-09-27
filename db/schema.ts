@@ -8,7 +8,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 67;
+const DATABASE_VERSION = 69;
 
 /** A deterministic, non-random id derived from a fixed string — used only for seed rows (built-in
  * categories, starter affirmations) so every fresh install gets the exact same sync_id for "the
@@ -3303,7 +3303,31 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     await db.execAsync(`PRAGMA user_version = 67`);
   }
 
-  // Future modules land here as `if (currentDbVersion === 67) { ... currentDbVersion = 68; }`
+  if (currentDbVersion === 67) {
+    // A single app-wide default currency (ISO code, e.g. "INR"/"USD") used to prefill new Finance
+    // accounts' currency picker — previously that picker always defaulted to a hardcoded 'USD'
+    // regardless of the user's actual currency, confirmed via UX audit as a real bug for
+    // non-US/non-USD users. NULL means "no preference set yet"; new-account screens fall back to
+    // 'INR' in that case (see accounts/new.tsx), matching this app's India-first user base.
+    await db.execAsync('ALTER TABLE app_settings ADD COLUMN default_currency TEXT');
+
+    currentDbVersion = 68;
+    await db.execAsync(`PRAGMA user_version = 68`);
+  }
+
+  if (currentDbVersion === 68) {
+    // IANA timezone name (e.g. "Asia/Kolkata"), auto-detected on the onboarding form via
+    // Intl.DateTimeFormat().resolvedOptions().timeZone and stored so any feature that schedules
+    // something at a wall-clock time (reminders, weekly recaps, streak day-boundaries) has a
+    // stable reference instead of assuming the device's current zone is always correct — e.g. a
+    // user who travels shouldn't have yesterday's streak silently recomputed against a new zone.
+    await db.execAsync('ALTER TABLE user_details ADD COLUMN timezone TEXT');
+
+    currentDbVersion = 69;
+    await db.execAsync(`PRAGMA user_version = 69`);
+  }
+
+  // Future modules land here as `if (currentDbVersion === 69) { ... currentDbVersion = 70; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

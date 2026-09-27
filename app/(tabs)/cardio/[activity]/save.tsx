@@ -33,11 +33,15 @@ import { framesToGif } from '@/modules/social/gifExport';
 import { useAppTheme } from '@/theme';
 
 // Number of evenly-spaced snapshots taken across RouteRevealMap's reveal animation for the
-// animated-GIF share option — enough to read as a smooth "line drawing in" replay without
-// pushing frame-capture time or the encoded file size too far (each frame is a full
-// screenshot + PNG-decode + quantize/palette-apply pass, so more frames costs real
-// on-device time — see gifExport.ts's on-device-verification caveat).
-const GIF_FRAME_COUNT = 12;
+// animated-GIF share option. The live reveal itself steps through REVEAL_STEPS (40) increments
+// over REVEAL_DURATION_MS — sampling only 12 of those (the original value here) produced a
+// visibly choppier GIF than what the reveal actually looks like live, which is exactly what
+// on-device testing flagged: "that [live reveal] was smooth, [the posted GIF wasn't]". 28 gets
+// close to the live reveal's smoothness without tripling encode time/file size the way matching
+// all 40 steps would (each frame is a full screenshot + PNG-decode + quantize/palette-apply
+// pass, so more frames costs real on-device time — see gifExport.ts's on-device-verification
+// caveat).
+const GIF_FRAME_COUNT = 28;
 
 /** One stat in the post-run reveal — springs in with a staggered delay so Distance, Time, and
  * Pace land one after another rather than all appearing at once, giving the results a bit of a

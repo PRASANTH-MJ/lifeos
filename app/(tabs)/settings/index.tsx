@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { AppState, Image, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
-import { Button, Card, GlowSurface, IconBadge, LoadingState, ScreenContainer, SegmentedControl, TextField, UpsellModal, showAlert } from '@/components';
+import { Button, Card, Chip, GlowSurface, IconBadge, LoadingState, ScreenContainer, SegmentedControl, TextField, UpsellModal, showAlert } from '@/components';
 import { formatDisplayDateTime } from '@/lib/date';
 import {
   cancelReminder,
@@ -30,6 +30,9 @@ import { useAppTheme } from '@/theme';
 import { THEME_COLORS, THEME_LABELS, type ThemeName } from '@/theme/tokens';
 
 const THEME_NAMES = Object.keys(THEME_COLORS) as ThemeName[];
+// Kept in sync with the same list in finance/accounts/new.tsx's CURRENCIES — that screen's
+// picker seeds its own default from this setting, so both lists should offer the same options.
+const CURRENCY_OPTIONS = ['INR', 'USD', 'EUR', 'GBP'];
 
 function SectionHeader({ label }: { label: string }) {
   const theme = useAppTheme();
@@ -97,7 +100,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
   const { premium, plan, trialActive, trialDaysLeft } = usePremium();
-  const { settings, setTimeFormat, setScoreboardWeeklyReminder } = useSettings();
+  const { settings, setTimeFormat, setScoreboardWeeklyReminder, setDefaultCurrency } = useSettings();
   const { profile, setName, setAvatarUri, setPin, disablePin, setBiometricEnabled } = useProfile();
   const [nameDraft, setNameDraft] = useState(profile?.name ?? '');
   useEffect(() => {
@@ -159,8 +162,10 @@ export default function SettingsScreen() {
   }
 
   const onPickAvatar = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
+    // No permission request needed — launchImageLibraryAsync opens Android's system Photo Picker
+    // directly, which needs no READ_MEDIA_IMAGES/VIDEO grant at all; requesting one first (as this
+    // used to) was exactly what forced the broad-permission flow Google Play's Photo and Video
+    // Permissions policy flags apps for using unnecessarily.
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true, aspect: [1, 1] });
     if (!result.canceled && result.assets[0]) {
       await setAvatarUri(result.assets[0].uri);
@@ -434,6 +439,29 @@ export default function SettingsScreen() {
                 value={settings.timeFormat}
                 onChange={setTimeFormat}
               />
+            </View>
+          </Card>
+        </View>
+
+        <View style={{ gap: theme.spacing.sm }}>
+          <SectionHeader label="Currency" />
+          <Card tier="panel" style={{ gap: theme.spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <IconBadge name="cash-outline" size="md" />
+              <Text style={{ flex: 1, color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                Used as the default when adding a new Finance account. Flowsy doesn't convert between
+                currencies — each account keeps its own.
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm, marginTop: theme.spacing.xs }}>
+              {CURRENCY_OPTIONS.map((option) => (
+                <Chip
+                  key={option}
+                  label={option}
+                  selected={(settings.defaultCurrency ?? 'INR') === option}
+                  onPress={() => setDefaultCurrency(option)}
+                />
+              ))}
             </View>
           </Card>
         </View>

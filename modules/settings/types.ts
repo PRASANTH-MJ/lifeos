@@ -5,6 +5,8 @@ export type AppSettings = {
   scoreboardWeeklyReminder: boolean;
   lastWeeklyRecapShownAt: string | null;
   lastSeenChangelogVersion: string | null;
+  /** ISO currency code (e.g. "INR"/"USD"), or null if the user hasn't set one yet. */
+  defaultCurrency: string | null;
 };
 
 /** `time24` is a "HH:MM" 24-hour string, as stored everywhere in the DB. */

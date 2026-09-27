@@ -19,6 +19,7 @@ function toClubTask(clubId: string, id: string, data: Record<string, unknown>): 
     completed: (data.completed as boolean) ?? false,
     completedBy: (data.completedBy as string) ?? null,
     completedAtMs: completedAt ? completedAt.toMillis() : null,
+    archived: (data.archived as boolean) ?? false,
   };
 }
 
@@ -114,4 +115,23 @@ export function useDeleteClubTask() {
   };
 
   return { deleteClubTask, submitting };
+}
+
+/** Archives/unarchives a club task — creator or club admin/sub-admin only (enforced server-side,
+ * see functions/index.js's setClubTaskArchived). Same soft-toggle reasoning as
+ * useSetClubHabitArchived — most useful right after completing a one-off task. */
+export function useSetClubTaskArchived() {
+  const [submitting, setSubmitting] = useState(false);
+
+  const setClubTaskArchived = async (clubId: string, taskId: string, archived: boolean): Promise<void> => {
+    setSubmitting(true);
+    try {
+      const fn = httpsCallable<{ clubId: string; taskId: string; archived: boolean }, { archived: boolean }>(functions, 'setClubTaskArchived');
+      await fn({ clubId, taskId, archived });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return { setClubTaskArchived, submitting };
 }

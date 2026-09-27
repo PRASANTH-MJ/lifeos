@@ -10,6 +10,7 @@ type Row = {
   scoreboard_weekly_reminder?: number;
   last_weekly_recap_shown_at?: string | null;
   last_seen_changelog_version?: string | null;
+  default_currency?: string | null;
 };
 
 /**
@@ -25,6 +26,7 @@ export function useSettings() {
     scoreboardWeeklyReminder: row?.scoreboard_weekly_reminder === 1,
     lastWeeklyRecapShownAt: row?.last_weekly_recap_shown_at ?? null,
     lastSeenChangelogVersion: row?.last_seen_changelog_version ?? null,
+    defaultCurrency: row?.default_currency ?? null,
   };
 
   const setTimeFormat = useCallback(async (timeFormat: TimeFormat) => {
@@ -47,6 +49,11 @@ export function useSettings() {
     await pushLocalRow('app_settings', 1);
   }, []);
 
+  const setDefaultCurrency = useCallback(async (currency: string) => {
+    await webDb.app_settings.update(1, { default_currency: currency, updated_at: new Date().toISOString() });
+    await pushLocalRow('app_settings', 1);
+  }, []);
+
   return {
     settings,
     loading,
@@ -54,5 +61,6 @@ export function useSettings() {
     setScoreboardWeeklyReminder,
     setLastWeeklyRecapShownAt,
     setLastSeenChangelogVersion,
+    setDefaultCurrency,
   };
 }

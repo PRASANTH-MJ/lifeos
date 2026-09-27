@@ -56,8 +56,7 @@ export default function SocialComposeScreen() {
     mode === 'text' ? caption.trim().length > 0 || localPhotoUri != null : mode === 'activity' ? selectedLog != null : selectedHabit != null;
 
   const onPickPhoto = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
+    // No permission request needed — see app/(tabs)/settings/index.tsx's onPickAvatar for why.
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true });
     if (!result.canceled && result.assets[0]) setLocalPhotoUri(result.assets[0].uri);
   };

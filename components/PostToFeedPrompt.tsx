@@ -113,11 +113,7 @@ export function PostToFeedPrompt({ type, card, photoUri, stats, onDone, animated
   };
 
   const onPickFromLibrary = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      showAlert('Photo access needed', 'Allow photo library access in your device Settings to add a photo.');
-      return;
-    }
+    // No permission request needed — see app/(tabs)/settings/index.tsx's onPickAvatar for why.
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true });
     if (!result.canceled && result.assets[0]) setSelectedPhotoUri(result.assets[0].uri);
   };
@@ -164,7 +160,12 @@ export function PostToFeedPrompt({ type, card, photoUri, stats, onDone, animated
     // outside a native runtime (e.g. this app's web export). A dynamic import defers evaluation
     // to here, which is only ever reached from the Platform.OS !== 'web'-guarded button below.
     const MediaLibrary = await import('expo-media-library');
-    const permission = await MediaLibrary.requestPermissionsAsync();
+    // write-only (true) — this only ever calls saveToLibraryAsync below, never reads/queries the
+    // library, so it doesn't need (and shouldn't request) READ_MEDIA_IMAGES/VIDEO at all; see
+    // app.json's expo-media-library plugin config (`granularPermissions: []`) for the matching
+    // manifest-level fix — Google Play's Photo/Video Permissions policy flags apps that declare
+    // those broad permissions without a feature that genuinely needs them.
+    const permission = await MediaLibrary.requestPermissionsAsync(true);
     if (!permission.granted) {
       showAlert('Photo access needed', 'Allow photo library access in your device Settings to save this image.');
       return;

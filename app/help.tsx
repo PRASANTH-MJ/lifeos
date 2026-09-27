@@ -49,6 +49,32 @@ const SECTIONS: FaqSection[] = [
     items: [
       { question: 'Why does a category get auto-selected sometimes?', answer: 'Typing a note like "Swiggy" or "Uber" auto-suggests a matching category. You can always override it by tapping a different one.' },
       { question: 'What\'s the difference between Budgets and Budget Plans?', answer: 'The quick weekly/monthly budget on the Finance home screen is one overall number. Budget Plans (its own screen) let you set separate budgets per category or period.' },
+      { question: 'How do I change the default currency for new accounts?', answer: 'Go to Settings → Currency and pick a default. Existing accounts keep whatever currency they were created with — Flowsy does not convert between currencies.' },
+    ],
+  },
+  {
+    title: 'Cardio & GPS Tracking',
+    icon: 'walk',
+    items: [
+      { question: 'How do I record a run, walk, or ride with a live map?', answer: 'Open Fitness → Cardio, pick an activity, and tap Record. Your route is tracked live and shown on a map even while the app is in the background.' },
+      { question: 'Can I share my route after finishing?', answer: 'Yes — after saving, choose a photo/route template (Minimal, Bold, Gradient, or Map) or post it as an animated GIF that replays your route.' },
+    ],
+  },
+  {
+    title: 'Social Feed & Clubs',
+    icon: 'people',
+    items: [
+      { question: 'Do I need a username to use Flowsy?', answer: 'No — a username is only needed to use the Social feed (posting, following, clubs). Every other module works fully without one.' },
+      { question: 'What are Clubs?', answer: 'A Club is a small group you create or join to share habits, tasks, challenges, and events with — think of it as accountability with friends or family, separate from your personal Habits/Tasks.' },
+      { question: 'How do I remove old completed items from a Club?', answer: 'Open the club\'s Habits or Tasks screen and use the "⋮" menu on any item to Archive it — it moves to the Archived tab instead of cluttering the active list.' },
+    ],
+  },
+  {
+    title: 'Family Plan',
+    icon: 'people-circle',
+    items: [
+      { question: 'How does the Family plan work?', answer: 'One subscription covers up to 5 accounts. The owner invites members from Settings → Family Plan; each member keeps their own private data and gets full Pro access.' },
+      { question: 'What happens if I leave or get removed from a family?', answer: 'You revert to the free plan and its usage limits. Nothing you\'ve entered in the app is deleted.' },
     ],
   },
   {
@@ -66,17 +92,17 @@ const SECTIONS: FaqSection[] = [
       {
         question: 'What does Premium unlock?',
         answer:
-          'Cloud backup & restore, custom themes, higher usage limits on habits/tasks/journal entries/custom workouts, the full meal plan library, and the full workout program library.',
+          'Unlimited habits, tasks, journal entries, finance accounts/transactions, and custom workouts (the free plan caps these), plus cloud backup & restore, custom themes, workout analytics & muscle recovery, and the full meal plan and workout program libraries.',
       },
       {
         question: "I paid but Premium isn't unlocked — what do I do?",
         answer:
-          'Purchases go through Google Play, and Flowsy verifies them on our server right after checkout — this can take a few seconds. If it still hasn\'t unlocked, open Premium and tap "Restore Purchases" to re-check your Google account for an active purchase.',
+          'Flowsy verifies your purchase on our server right after checkout — this can take a few seconds. If it still hasn\'t unlocked, open Premium and tap "Restore Purchases" to re-check for an active purchase.',
       },
       {
         question: 'How do I cancel or manage my subscription?',
         answer:
-          "Flowsy doesn't process payments itself — subscriptions are billed and managed by Google Play. To cancel, change plans, or update payment details, open the Play Store app on your device, go to Payments & subscriptions, and manage Flowsy from there.",
+          "If you subscribed through the Android app, it's billed and managed by Google Play — open the Play Store app, go to Payments & subscriptions, and manage Flowsy from there. If you subscribed on the Flowsy website, it's billed through Razorpay — email us and we'll cancel it for you (see our Refund & Cancellation Policy).",
       },
     ],
   },

@@ -314,7 +314,21 @@ export const PhotoStoryTemplate = forwardRef<
           </View>
         ) : (
           rows.map((row) => (
-            <View key={row.label} style={{ marginBottom: 10 }}>
+            <View
+              key={row.label}
+              style={[
+                { marginBottom: 10 },
+                // A photo behind the numbers is exactly as busy a backdrop as the map case above —
+                // give it the same frosted pill treatment for legibility and visual consistency,
+                // instead of letting the text float directly on the scrim like the plain-gradient
+                // (no photo) case still does, where there's nothing underneath competing with it.
+                hasBusyBackground
+                  ? [
+                      styles.minimalPill,
+                      { backgroundColor: withAlpha(theme.colors.surfaceElevated, 0.55), borderColor: withAlpha(theme.colors.textPrimary, 0.1) },
+                    ]
+                  : null,
+              ]}>
               <Text style={[styles.minimalValue, { color: theme.colors.textPrimary }]}>{row.value}</Text>
               <Text style={[styles.minimalLabel, { color: theme.colors.textSecondary }]}>{row.label.toUpperCase()}</Text>
             </View>
@@ -409,6 +423,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 1,
+  },
+  minimalPill: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
 
   // Map — small frosted stat pills, deliberately more restrained than Minimal's stacked big

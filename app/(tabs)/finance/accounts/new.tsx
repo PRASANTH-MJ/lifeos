@@ -4,19 +4,26 @@ import { Text, View } from 'react-native';
 
 import { Button, Chip, ScreenContainer, TextField } from '@/components';
 import { ACCOUNT_TYPE_LABELS, useAccounts, type AccountType } from '@/modules/finance';
+import { useSettings } from '@/modules/settings';
 import { useAppTheme } from '@/theme';
 
 const ACCOUNT_TYPES: AccountType[] = ['cash', 'general', 'investment', 'credit'];
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR'];
+// Falls back to INR (not USD) when the user hasn't set a default currency in Settings — this
+// app's user base skews India-first (Razorpay/UPI, ₹ pricing), and defaulting new accounts to a
+// currency most users don't use was a real UX-audit finding.
+const FALLBACK_CURRENCY = 'INR';
 
 export default function NewAccountScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const { addAccount } = useAccounts();
+  const { settings } = useSettings();
+  const defaultCurrency = settings?.defaultCurrency ?? FALLBACK_CURRENCY;
 
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('cash');
-  const [currency, setCurrency] = useState('USD');
+  const [currency, setCurrency] = useState(defaultCurrency);
   const [startingBalance, setStartingBalance] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -26,9 +33,9 @@ export default function NewAccountScreen() {
     useCallback(() => {
       setName('');
       setType('cash');
-      setCurrency('USD');
+      setCurrency(defaultCurrency);
       setStartingBalance('');
-    }, [])
+    }, [defaultCurrency])
   );
 
   const canSave = name.trim().length > 0;
