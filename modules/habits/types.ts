@@ -43,18 +43,30 @@ export type HabitChain = {
   /** JSON string array of the member habits' `sync_id`s, in the order they're done — see
    * db/schema.ts's v59 migration comment for why sync_id rather than local id. */
   habit_sync_ids: string;
+  /** Same idea as habit_sync_ids, for recurring tasks included in this "Routine" — a separate
+   * list (not merged into habit_sync_ids) since resolving/checking off a task goes through
+   * useRecurringTasks, not useHabits — see resolveChainTasks below. */
+  task_sync_ids: string;
   sync_id: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export function parseChainHabitSyncIds(habitSyncIds: string): string[] {
+function parseChainSyncIds(syncIds: string): string[] {
   try {
-    const parsed = JSON.parse(habitSyncIds);
+    const parsed = JSON.parse(syncIds);
     return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
   } catch {
     return [];
   }
+}
+
+export function parseChainHabitSyncIds(habitSyncIds: string): string[] {
+  return parseChainSyncIds(habitSyncIds);
+}
+
+export function parseChainTaskSyncIds(taskSyncIds: string): string[] {
+  return parseChainSyncIds(taskSyncIds);
 }
 
 export type ChainHabitEntry = { habit: Habit; missing: false } | { habit: null; missing: true; syncId: string };

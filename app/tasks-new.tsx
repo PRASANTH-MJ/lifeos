@@ -81,6 +81,9 @@ export default function TaskFormScreen() {
                   recurrenceDays: values.recurrenceDays,
                   periodTargetCount: values.periodTargetCount,
                   periodLengthDays: values.periodLengthDays,
+                  dueTime: values.dueTime,
+                  reminderOffsetMinutes: values.reminderOffsetMinutes,
+                  alarmEnabled: values.alarmEnabled,
                 })
               : await createTask({
                   title: values.title,

@@ -184,9 +184,13 @@ export function TaskForm({
       important,
       isRecurring,
       dueDate: isRecurring ? null : dueDate,
-      dueTime: isRecurring ? null : dueTime,
-      reminderOffsetMinutes: isRecurring ? null : reminderOffsetMinutes,
-      alarmEnabled: isRecurring ? false : alarmEnabled,
+      // For a recurring task, dueTime is repurposed as "what time of day to remind at" (see
+      // scheduleTaskNotifications.ts's syncRecurringTaskNotifications) rather than cleared —
+      // there's no per-occurrence due date to attach a real due time to, but a recurring
+      // reminder/alarm still needs a time of day to fire at.
+      dueTime,
+      reminderOffsetMinutes,
+      alarmEnabled,
       recurrenceFrequency,
       recurrenceDays: isRecurring ? recurrenceDays : [],
       periodTargetCount: isRecurring && recurrenceFrequency === 'periodic' ? Number(periodTargetCount) || null : null,
@@ -334,6 +338,37 @@ export function TaskForm({
             </View>
             <Switch value={important} onValueChange={setImportant} />
           </View>
+
+          {isRecurring ? (
+            <View style={{ gap: theme.spacing.sm }}>
+              <Text style={sectionLabelStyle(theme)}>Reminder</Text>
+              <TimeField label="Reminder time (optional)" value={dueTime} onChange={setDueTime} />
+
+              {dueTime ? (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+                      <Ionicons name="notifications" size={18} color={theme.colors.textSecondary} />
+                      <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>Notify me</Text>
+                    </View>
+                    <Switch value={reminderOffsetMinutes != null} onValueChange={(v) => setReminderOffsetMinutes(v ? 0 : null)} />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+                      <Ionicons name="alarm" size={18} color={theme.colors.textSecondary} />
+                      <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size.base }}>Alarm</Text>
+                    </View>
+                    <Switch value={alarmEnabled} onValueChange={setAlarmEnabled} />
+                  </View>
+                </>
+              ) : (
+                <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.xs }}>
+                  Set a reminder time to get notified every time this task recurs — e.g. every day at 8pm.
+                </Text>
+              )}
+            </View>
+          ) : null}
 
           {!isRecurring ? (
             <View style={{ gap: theme.spacing.sm }}>

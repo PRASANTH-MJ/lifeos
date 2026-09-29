@@ -8,7 +8,7 @@ export const DATABASE_NAME = 'lifeos.db';
 // Bump this and add a new `if (currentDbVersion === N)` block below whenever
 // the schema changes. Never edit an already-shipped block — SQLite tables
 // on real devices have already run it.
-const DATABASE_VERSION = 69;
+const DATABASE_VERSION = 70;
 
 /** A deterministic, non-random id derived from a fixed string — used only for seed rows (built-in
  * categories, starter affirmations) so every fresh install gets the exact same sync_id for "the
@@ -3327,7 +3327,19 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase) {
     await db.execAsync(`PRAGMA user_version = 69`);
   }
 
-  // Future modules land here as `if (currentDbVersion === 69) { ... currentDbVersion = 70; }`
+  if (currentDbVersion === 69) {
+    // Lets a "Routine" (habit_chains) include recurring tasks alongside habits, not just habits —
+    // a separate ordered list rather than folding into habit_sync_ids, since a task and a habit
+    // are resolved/checked-off through two entirely different hooks (useRecurringTasks vs.
+    // useHabits) and mixing their sync_ids into one untyped array would make that resolution
+    // ambiguous. See modules/habits/types.ts's resolveChainTasks.
+    await db.execAsync("ALTER TABLE habit_chains ADD COLUMN task_sync_ids TEXT NOT NULL DEFAULT '[]'");
+
+    currentDbVersion = 70;
+    await db.execAsync(`PRAGMA user_version = 70`);
+  }
+
+  // Future modules land here as `if (currentDbVersion === 70) { ... currentDbVersion = 71; }`
   // — each module owns its own tables; the Analytics Dashboard only ever adds
   // read-only queries against these, never its own tables.
 

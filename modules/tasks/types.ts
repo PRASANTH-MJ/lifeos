@@ -24,6 +24,9 @@ export type Task = {
   period_length_days: number | null;
   created_at: string;
   archived: number;
+  /** Stable cross-device id, used wherever a task is referenced from outside its own row (e.g.
+   * habit_chains.task_sync_ids) — same reasoning as modules/habits/types.ts's Habit.sync_id. */
+  sync_id: string | null;
 };
 
 export type TaskLabel = {

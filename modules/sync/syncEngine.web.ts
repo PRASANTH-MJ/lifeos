@@ -5,7 +5,7 @@ import type { Unsubscribe } from 'firebase/firestore';
 
 import { firestore } from '@/firebase/config';
 import { webDb } from '@/db/webDb';
-import { syncConfigFor, SYNC_TABLES } from './syncSchema';
+import { cursorQueryFloor, syncConfigFor, SYNC_TABLES } from './syncSchema';
 
 /**
  * Web build of the sync engine — same exported names/behavior as syncEngine.ts, translated
@@ -284,8 +284,10 @@ export async function syncIfDue(uid: string, premium: boolean, force = false): P
   await flushOutbox();
 
   const cursor = await getSyncCursor(uid);
+  // cursorQueryFloor widens the bound backward — see its doc comment for the cross-device
+  // clock-skew a tight `>=` on a client-stamped cursor would otherwise silently drop writes to.
   const target = cursor
-    ? query(recordsCollection(uid), where('updatedAt', '>=', cursor))
+    ? query(recordsCollection(uid), where('updatedAt', '>=', cursorQueryFloor(cursor)))
     : recordsCollection(uid);
 
   try {
@@ -316,7 +318,7 @@ export function startRealtimeSync(uid: string): Unsubscribe {
   const attach = async () => {
     const cursor = await getSyncCursor(uid);
     if (unsubscribed) return () => {};
-    const target = cursor ? query(recordsCollection(uid), where('updatedAt', '>=', cursor)) : recordsCollection(uid);
+    const target = cursor ? query(recordsCollection(uid), where('updatedAt', '>=', cursorQueryFloor(cursor))) : recordsCollection(uid);
 
     return onSnapshot(
       target,

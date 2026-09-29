@@ -1,16 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { Chip, EmptyState, ScreenContainer, UpsellModal } from '@/components';
+import { Chip, EmptyState, ImportFormatModal, ScreenContainer, UpsellModal, showAlert, type ImportFieldSpec } from '@/components';
 import { todayKey } from '@/lib/date';
+import { readDocumentText } from '@/lib/readDocumentText';
 import { useCategories } from '@/modules/categories';
 import {
   PRIORITY_ORDER,
   RecurringTaskListItem,
   TaskListItem,
   TaskLogSheet,
+  parseTasksCsv,
   useAllTaskLabelLinks,
   useRecurringTasks,
   useTaskLabels,
@@ -18,6 +21,43 @@ import {
 } from '@/modules/tasks';
 import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
 import { useAppTheme } from '@/theme';
+
+const CSV_MIME_TYPES = ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel', 'text/plain'];
+
+/** Mirrors exactly what modules/tasks/importTasksCsv.ts reads — keep in sync with that file if
+ * its column matching ever changes. */
+const TASKS_IMPORT_FIELDS: ImportFieldSpec[] = [
+  { column: 'title', aliases: ['task'], required: true, format: 'Text.', example: 'Renew passport' },
+  { column: 'notes', aliases: ['description'], required: false, format: 'Text.', example: 'Bring old passport + 2 photos' },
+  { column: 'priority', required: false, format: 'One of: low, medium, high. Defaults to medium.', example: 'high' },
+  { column: 'category', required: false, format: 'Text — must match one of your existing task category names (case-insensitive).', example: 'Errands' },
+  {
+    column: 'duedate',
+    aliases: ['date'],
+    required: false,
+    format: 'YYYY-MM-DD, or any date format JavaScript can parse. One-off tasks only — ignored for recurring rows.',
+    example: '2026-10-05',
+  },
+  {
+    column: 'recurring',
+    required: false,
+    format: 'yes/no. A row is also treated as recurring if it has a valid "frequency" value, even without this column.',
+    example: 'yes',
+  },
+  {
+    column: 'frequency',
+    required: false,
+    format: 'One of: daily, weekly, monthly, periodic. Only used for recurring rows — defaults to daily.',
+    example: 'weekly',
+  },
+  {
+    column: 'days',
+    aliases: ['weekdays'],
+    required: false,
+    format: 'Comma-separated weekday names/abbreviations, e.g. "Mon,Wed,Fri". Only used when frequency is weekly.',
+    example: 'Mon,Wed,Fri',
+  },
+];
 
 type FilterKey = 'all' | number;
 type LabelFilterKey = 'all' | string;
@@ -49,7 +89,7 @@ function sortByDueDate<T extends { completed_at: string | null; due_date: string
 export default function TasksScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { tasks, loading, subtaskCounts, toggleComplete, archiveTask, removeTask, refresh } = useTasks();
+  const { tasks, loading, subtaskCounts, toggleComplete, archiveTask, removeTask, refresh, createTask } = useTasks();
   const {
     tasks: recurringTasks,
     loading: loadingRecurring,
@@ -58,6 +98,7 @@ export default function TasksScreen() {
     moveRecurringTask,
     archiveRecurringTask,
     removeRecurringTask,
+    createRecurringTask,
     refresh: refreshRecurring,
   } = useRecurringTasks();
   const { categories } = useCategories('task');
@@ -71,6 +112,7 @@ export default function TasksScreen() {
   const recurringGate = useFreeTierGate('recurringTasks');
   const taskGate = useFreeTierGate('tasks');
   const [upsellKind, setUpsellKind] = useState<'tasks' | 'recurringTasks' | null>(null);
+  const [formatModalVisible, setFormatModalVisible] = useState(false);
 
   const sheetEntry = recurringTasks.find((entry) => entry.task.id === sheetTaskId);
   const refreshAll = async () => {
@@ -99,6 +141,51 @@ export default function TasksScreen() {
       return;
     }
     router.push({ pathname: '/tasks-new', params: wantsRecurring ? { recurring: '1' } : {} });
+  };
+
+  const onImportCsv = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: CSV_MIME_TYPES, copyToCacheDirectory: true });
+    if (result.canceled || !result.assets[0]) return;
+    const text = await readDocumentText(result.assets[0]);
+    const { oneOffRows, recurringRows, total, skipped } = parseTasksCsv(text, categories);
+    const importCount = oneOffRows.length + recurringRows.length;
+
+    if (importCount === 0) {
+      showAlert('Nothing to import', 'No rows had a "title" column. Check your CSV format.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'View CSV format', onPress: () => setFormatModalVisible(true) },
+      ]);
+      return;
+    }
+
+    showAlert(
+      `Import ${importCount} task${importCount === 1 ? '' : 's'}?`,
+      `${oneOffRows.length} one-off, ${recurringRows.length} recurring.` + (skipped > 0 ? ` ${skipped} of ${total} rows were skipped (missing title).` : ''),
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Import',
+          onPress: async () => {
+            for (const row of oneOffRows) {
+              await createTask(row);
+            }
+            for (const row of recurringRows) {
+              await createRecurringTask(row);
+            }
+            await refreshAll();
+            showAlert('Imported', `Added ${importCount} task${importCount === 1 ? '' : 's'}.`);
+          },
+        },
+      ]
+    );
+  };
+
+  const onMenu = () => {
+    showAlert('Tasks', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'CSV/Excel format', onPress: () => setFormatModalVisible(true) },
+      { text: 'Import CSV', onPress: onImportCsv },
+    ]);
   };
 
   const changeTab = (next: 'single' | 'recurring') => {
@@ -133,9 +220,14 @@ export default function TasksScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Pressable hitSlop={8} onPress={() => onAddTask()}>
-              <Ionicons name="add-circle" size={28} color={theme.colors.moduleTasks} />
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <Pressable hitSlop={8} onPress={onMenu}>
+                <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.textSecondary} />
+              </Pressable>
+              <Pressable hitSlop={8} onPress={() => onAddTask()}>
+                <Ionicons name="add-circle" size={28} color={theme.colors.moduleTasks} />
+              </Pressable>
+            </View>
           ),
         }}
       />
@@ -254,6 +346,14 @@ export default function TasksScreen() {
         resourceLabel={upsellKind ? LIMIT_LABELS[upsellKind] : ''}
         limit={upsellKind === 'tasks' ? taskGate.limit : recurringGate.limit}
         onClose={() => setUpsellKind(null)}
+      />
+
+      <ImportFormatModal
+        visible={formatModalVisible}
+        onClose={() => setFormatModalVisible(false)}
+        title="Tasks CSV format"
+        intro="Header row required. Column names are case-insensitive."
+        fields={TASKS_IMPORT_FIELDS}
       />
     </ScreenContainer>
     </View>

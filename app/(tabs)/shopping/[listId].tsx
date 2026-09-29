@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, Text, View } from 'react-native';
@@ -20,6 +19,7 @@ import {
   showAlert,
   type ImportFieldSpec,
 } from '@/components';
+import { readDocumentText } from '@/lib/readDocumentText';
 import { loadSampleShoppingItems } from '@/lib/sampleData';
 import { formatCurrency, useAccounts } from '@/modules/finance';
 import { parseShoppingCsv, priceLabelForUnit, SHOPPING_UNITS, UNIT_LABELS, useShoppingList, useShoppingLists } from '@/modules/shopping';
@@ -186,8 +186,7 @@ export default function ShoppingListScreen() {
   const onImportCsv = async () => {
     const result = await DocumentPicker.getDocumentAsync({ type: CSV_MIME_TYPES, copyToCacheDirectory: true });
     if (result.canceled || !result.assets[0]) return;
-    const file = new File(result.assets[0].uri);
-    const text = await file.text();
+    const text = await readDocumentText(result.assets[0]);
     const { rows, total, skipped } = parseShoppingCsv(text);
 
     if (rows.length === 0) {

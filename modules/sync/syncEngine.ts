@@ -4,7 +4,7 @@ import type { Unsubscribe } from 'firebase/firestore';
 import type { SQLiteBindValue, SQLiteDatabase } from 'expo-sqlite';
 
 import { firestore } from '@/firebase/config';
-import { syncConfigFor, SYNC_TABLES } from './syncSchema';
+import { cursorQueryFloor, syncConfigFor, SYNC_TABLES } from './syncSchema';
 
 /** Every value that ever flows through this file is whatever SQLite itself stores (string,
  * number, null, boolean) or the JSON round-trip of one via Firestore — never anything more
@@ -406,7 +406,8 @@ async function mergeBatch(db: SQLiteDatabase, records: SyncRecord[]): Promise<vo
  * sync. The cursor uses `>=` (not `>`) so a handful of documents at the exact boundary timestamp
  * may be re-read on the next run — harmless, since mergeRemoteRecord's last-write-wins check
  * already makes reprocessing an unchanged record a no-op — trading a few duplicate reads for never
- * silently skipping a record. */
+ * silently skipping a record. The query bound itself is further widened via cursorQueryFloor — see
+ * its doc comment for the cross-device clock-skew this guards against. */
 export async function syncIfDue(db: SQLiteDatabase, uid: string, premium: boolean, force = false): Promise<void> {
   const intervalMs = SYNC_INTERVAL_MS.daily;
   const now = Date.now();
@@ -419,7 +420,7 @@ export async function syncIfDue(db: SQLiteDatabase, uid: string, premium: boolea
 
   const cursor = await getSyncCursor(uid);
   const target = cursor
-    ? query(recordsCollection(uid), where('updatedAt', '>=', cursor))
+    ? query(recordsCollection(uid), where('updatedAt', '>=', cursorQueryFloor(cursor)))
     : recordsCollection(uid);
 
   try {
@@ -460,7 +461,7 @@ export function startRealtimeSync(db: SQLiteDatabase, uid: string): Unsubscribe 
   const attach = async () => {
     const cursor = await getSyncCursor(uid);
     if (unsubscribed) return () => {};
-    const target = cursor ? query(recordsCollection(uid), where('updatedAt', '>=', cursor)) : recordsCollection(uid);
+    const target = cursor ? query(recordsCollection(uid), where('updatedAt', '>=', cursorQueryFloor(cursor))) : recordsCollection(uid);
 
     return onSnapshot(
       target,

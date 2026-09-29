@@ -138,6 +138,9 @@ export function useTasks() {
         due_time: values.dueTime ?? null,
         reminder_offset_minutes: values.reminderOffsetMinutes ?? null,
         alarm_enabled: values.alarmEnabled ? 1 : 0,
+        is_recurring: 0,
+        recurrence_frequency: null,
+        recurrence_days: '[]',
       }).catch(() => {});
 
       return taskId;

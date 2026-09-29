@@ -17,10 +17,11 @@ export function useHabitChains() {
   const table = useLocalTable<HabitChain>('habit_chains', { orderBy: 'created_at ASC' });
 
   const createChain = useCallback(
-    async (name: string, habitSyncIds: string[]) => {
+    async (name: string, habitSyncIds: string[], taskSyncIds: string[] = []) => {
       return table.insert({
         name,
         habit_sync_ids: JSON.stringify(habitSyncIds),
+        task_sync_ids: JSON.stringify(taskSyncIds),
         created_at: new Date().toISOString(),
       } as Partial<HabitChain>);
     },
@@ -28,10 +29,11 @@ export function useHabitChains() {
   );
 
   const updateChain = useCallback(
-    async (id: number, values: { name?: string; habitSyncIds?: string[] }) => {
+    async (id: number, values: { name?: string; habitSyncIds?: string[]; taskSyncIds?: string[] }) => {
       const columnMap: Partial<HabitChain> = {};
       if (values.name !== undefined) columnMap.name = values.name;
       if (values.habitSyncIds !== undefined) columnMap.habit_sync_ids = JSON.stringify(values.habitSyncIds);
+      if (values.taskSyncIds !== undefined) columnMap.task_sync_ids = JSON.stringify(values.taskSyncIds);
       await table.update(id, columnMap);
     },
     [table]

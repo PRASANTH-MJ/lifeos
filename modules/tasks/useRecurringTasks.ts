@@ -7,6 +7,7 @@ import { todayKey } from '@/lib/date';
 import { computePeriodProgress, isDue } from '@/modules/habits';
 import { useLocalTable } from '@/db';
 import { pushLocalRow, recordDeleteBeforeRemoving } from '@/modules/sync';
+import { syncTaskNotifications } from './scheduleTaskNotifications';
 import { parseRecurrenceDays, type RecurrenceFrequency, type Task, type TaskCompletion, type TaskLogStatus, type TaskPriority } from './types';
 
 export type CreateRecurringTaskInput = {
@@ -19,6 +20,12 @@ export type CreateRecurringTaskInput = {
   recurrenceDays?: number[];
   periodTargetCount?: number | null;
   periodLengthDays?: number | null;
+  /** Time of day ("HH:MM") to remind/alarm at each time this task recurs — see
+   * scheduleTaskNotifications.ts's syncRecurringTaskNotifications for how this differs from a
+   * one-off task's actual due time. */
+  dueTime?: string | null;
+  reminderOffsetMinutes?: number | null;
+  alarmEnabled?: boolean;
 };
 
 export type LogValues = {
@@ -91,15 +98,17 @@ export function useRecurringTasks() {
   );
 
   const createRecurringTask = useCallback(
-    (values: CreateRecurringTaskInput) => {
-      return table.insert({
+    async (values: CreateRecurringTaskInput) => {
+      const taskId = await table.insert({
         title: values.title,
         notes: values.notes ?? null,
         priority: values.priority,
         category_id: values.categoryId ?? null,
         important: values.important ? 1 : 0,
         due_date: null,
-        due_time: null,
+        due_time: values.dueTime ?? null,
+        reminder_offset_minutes: values.reminderOffsetMinutes ?? null,
+        alarm_enabled: values.alarmEnabled ? 1 : 0,
         completed_at: null,
         parent_task_id: null,
         sort_order: table.rows.length ? Math.max(...table.rows.map((t) => t.sort_order)) + 1 : 0,
@@ -111,6 +120,22 @@ export function useRecurringTasks() {
         created_at: new Date().toISOString(),
         archived: 0,
       } as Partial<Task>);
+
+      // Best-effort — scheduling can involve a slow/hanging OS permission prompt, and must never
+      // block or fail the task save itself (same reasoning as useTasks.ts's createTask).
+      syncTaskNotifications({
+        id: taskId,
+        title: values.title,
+        due_date: null,
+        due_time: values.dueTime ?? null,
+        reminder_offset_minutes: values.reminderOffsetMinutes ?? null,
+        alarm_enabled: values.alarmEnabled ? 1 : 0,
+        is_recurring: 1,
+        recurrence_frequency: values.recurrenceFrequency,
+        recurrence_days: JSON.stringify(values.recurrenceDays ?? []),
+      }).catch(() => {});
+
+      return taskId;
     },
     [table]
   );

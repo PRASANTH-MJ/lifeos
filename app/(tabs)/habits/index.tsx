@@ -3,12 +3,30 @@ import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { Card, Chip, EmptyState, FAB_BOTTOM_OFFSET, IconBadge, ProgressBar, ScreenContainer, UpsellModal } from '@/components';
+import * as DocumentPicker from 'expo-document-picker';
+
+import { Card, Chip, EmptyState, FAB_BOTTOM_OFFSET, IconBadge, ImportFormatModal, ProgressBar, ScreenContainer, UpsellModal, showAlert, type ImportFieldSpec } from '@/components';
 import { todayKey } from '@/lib/date';
+import { readDocumentText } from '@/lib/readDocumentText';
 import { useCategories } from '@/modules/categories';
-import { HabitListItem, HabitLogSheet, isDueToday, parseTargetDays, useHabitChains, useHabits } from '@/modules/habits';
+import { HabitListItem, HabitLogSheet, isDueToday, parseHabitsCsv, parseTargetDays, useHabitChains, useHabits } from '@/modules/habits';
 import { LIMIT_LABELS, useFreeTierGate } from '@/modules/premium';
 import { useAppTheme } from '@/theme';
+
+const CSV_MIME_TYPES = ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel', 'text/plain'];
+
+/** Mirrors exactly what modules/habits/importHabitsCsv.ts reads — keep in sync with that file if
+ * its column matching ever changes. */
+const HABITS_IMPORT_FIELDS: ImportFieldSpec[] = [
+  { column: 'name', aliases: ['habit'], required: true, format: 'Text.', example: 'Drink water' },
+  { column: 'icon', required: false, format: 'An Ionicons name (e.g. "water-outline"). Defaults to a generic checkmark icon if blank or unrecognized.', example: 'water-outline' },
+  { column: 'category', required: false, format: 'Text — must match one of your existing habit category names (case-insensitive).', example: 'Health' },
+  { column: 'frequency', required: false, format: 'One of: daily, weekly, monthly, periodic. Defaults to daily.', example: 'weekly' },
+  { column: 'days', aliases: ['weekdays'], required: false, format: 'Comma-separated weekday names/abbreviations, e.g. "Mon,Wed,Fri". Only used when frequency is weekly.', example: 'Mon,Wed,Fri' },
+  { column: 'target', required: false, format: 'A number — if present, the habit becomes numeric (e.g. glasses of water) instead of a plain yes/no check-in.', example: '8' },
+  { column: 'unit', required: false, format: 'Text — the unit for "target", e.g. "glasses" or "km". Ignored if target is blank.', example: 'glasses' },
+  { column: 'group', aliases: ['routinegroup'], required: false, format: 'Free-text grouping label shown as a section on this screen, e.g. "Morning".', example: 'Morning' },
+];
 
 type FilterKey = 'all' | number;
 
@@ -49,13 +67,14 @@ function CompactStatTile({
 export default function HabitsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
-  const { habits, loading, toggleToday, upsertLog, clearLog, moveHabit, archiveHabit, removeHabit, refresh } = useHabits();
+  const { habits, loading, toggleToday, upsertLog, clearLog, moveHabit, archiveHabit, removeHabit, refresh, createHabit } = useHabits();
   const { chains, loading: chainsLoading } = useHabitChains();
   const { categories } = useCategories('habit');
   const [sheetHabitId, setSheetHabitId] = useState<number | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const habitGate = useFreeTierGate('habits');
   const [showUpsell, setShowUpsell] = useState(false);
+  const [formatModalVisible, setFormatModalVisible] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const toggleGroupCollapsed = (group: string) => {
@@ -70,6 +89,47 @@ export default function HabitsScreen() {
   const onAddHabit = () => {
     if (habitGate.allowed) router.push('/habits-new');
     else setShowUpsell(true);
+  };
+
+  const onImportCsv = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: CSV_MIME_TYPES, copyToCacheDirectory: true });
+    if (result.canceled || !result.assets[0]) return;
+    const text = await readDocumentText(result.assets[0]);
+    const { rows, total, skipped } = parseHabitsCsv(text, categories);
+
+    if (rows.length === 0) {
+      showAlert('Nothing to import', 'No rows had a "name" column. Check your CSV format.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'View CSV format', onPress: () => setFormatModalVisible(true) },
+      ]);
+      return;
+    }
+
+    showAlert(
+      `Import ${rows.length} habit${rows.length === 1 ? '' : 's'}?`,
+      skipped > 0 ? `${skipped} of ${total} rows were skipped (missing name).` : `All ${total} rows matched.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Import',
+          onPress: async () => {
+            for (const row of rows) {
+              await createHabit(row);
+            }
+            await refresh();
+            showAlert('Imported', `Added ${rows.length} habit${rows.length === 1 ? '' : 's'}.`);
+          },
+        },
+      ]
+    );
+  };
+
+  const onMenu = () => {
+    showAlert('Habits', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'CSV/Excel format', onPress: () => setFormatModalVisible(true) },
+      { text: 'Import CSV', onPress: onImportCsv },
+    ]);
   };
 
   // Modal renders as a top-level overlay regardless of which tab is focused, so a sheet left
@@ -107,13 +167,18 @@ export default function HabitsScreen() {
     <View style={{ flex: 1 }}>
       <ScreenContainer onRefresh={refresh} edges={['top', 'bottom']}>
         <View style={{ gap: theme.spacing.xl }}>
-          <View>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>
-              Habits
-            </Text>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm, marginTop: 2 }}>
-              {habits.length === 0 ? 'Build your first routine' : `${doneTodayCount} of ${dueTodayHabits.length} done today`}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <View>
+              <Text style={{ color: theme.colors.textPrimary, fontSize: theme.typography.size['3xl'], fontWeight: theme.typography.weight.bold }}>
+                Habits
+              </Text>
+              <Text style={{ color: theme.colors.textTertiary, fontSize: theme.typography.size.sm, marginTop: 2 }}>
+                {habits.length === 0 ? 'Build your first routine' : `${doneTodayCount} of ${dueTodayHabits.length} done today`}
+              </Text>
+            </View>
+            <Pressable hitSlop={8} onPress={onMenu} style={{ paddingTop: theme.spacing.xs }}>
+              <Ionicons name="ellipsis-horizontal" size={22} color={theme.colors.textSecondary} />
+            </Pressable>
           </View>
 
           {!loading && habits.length === 0 ? (
@@ -228,13 +293,13 @@ export default function HabitsScreen() {
               <View style={{ gap: theme.spacing.sm }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Text style={{ flex: 1, color: theme.colors.textSecondary, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
-                    Chains
+                    Routines
                   </Text>
                   <Link href="/habits/chain-new" asChild>
-                    <Pressable accessibilityLabel="New chain" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Pressable accessibilityLabel="New routine" style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Ionicons name="add-circle-outline" size={16} color={theme.colors.moduleHabits} />
                       <Text style={{ color: theme.colors.moduleHabits, fontSize: theme.typography.size.sm, fontWeight: theme.typography.weight.medium }}>
-                        New chain
+                        New routine
                       </Text>
                     </Pressable>
                   </Link>
@@ -301,6 +366,14 @@ export default function HabitsScreen() {
         resourceLabel={LIMIT_LABELS.habits}
         limit={habitGate.limit}
         onClose={() => setShowUpsell(false)}
+      />
+
+      <ImportFormatModal
+        visible={formatModalVisible}
+        onClose={() => setFormatModalVisible(false)}
+        title="Habits CSV format"
+        intro="Header row required. Column names are case-insensitive."
+        fields={HABITS_IMPORT_FIELDS}
       />
     </View>
   );

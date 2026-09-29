@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
 import { Link, Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { Card, Chip, EmptyState, IconBadge, ImportFormatModal, LoadingState, ScreenContainer, showAlert, type ImportFieldSpec } from '@/components';
 import { formatDisplayDate } from '@/lib/date';
+import { readDocumentText } from '@/lib/readDocumentText';
 import { loadSampleTransactions } from '@/lib/sampleData';
 import {
   formatCurrency,
@@ -100,8 +100,7 @@ export default function RecordsScreen() {
   const onImportCsv = async () => {
     const result = await DocumentPicker.getDocumentAsync({ type: CSV_MIME_TYPES, copyToCacheDirectory: true });
     if (result.canceled || !result.assets[0]) return;
-    const file = new File(result.assets[0].uri);
-    const text = await file.text();
+    const text = await readDocumentText(result.assets[0]);
     const { rows, total, skipped } = parseTransactionsCsv(text, accounts, categories);
 
     if (rows.length === 0) {

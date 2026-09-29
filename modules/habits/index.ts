@@ -1,4 +1,5 @@
 export { useHabits, type CreateHabitInput, type LogValues } from './useHabits';
+export { parseHabitsCsv, type ImportHabitsResult } from './importHabitsCsv';
 export { useHabitDetail } from './useHabitDetail';
 export { useHabitChains, resolveChainHabits, type ChainHabitEntry } from './useHabitChains';
 export { computeStreak, computeLongestStreak, computePeriodProgress, isDue, isDueToday } from './streak';
@@ -19,6 +20,7 @@ export {
   parseChecklistItems,
   parseChecklistChecked,
   parseChainHabitSyncIds,
+  parseChainTaskSyncIds,
   type Habit,
   type HabitFrequency,
   type HabitLog,

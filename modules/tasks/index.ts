@@ -1,5 +1,6 @@
 export { useTasks, type CreateTaskInput } from './useTasks';
 export { useRecurringTasks, type CreateRecurringTaskInput, type LogValues as RecurringLogValues } from './useRecurringTasks';
+export { parseTasksCsv, type ImportTasksResult } from './importTasksCsv';
 export { useTaskDetail } from './useTaskDetail';
 export { TaskListItem } from './TaskListItem';
 export { RecurringTaskListItem } from './RecurringTaskListItem';

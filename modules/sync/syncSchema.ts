@@ -1,5 +1,26 @@
 export type SyncForeignKey = { column: string; referencesTable: string };
 
+/** How far back from the persisted sync cursor a pull query's `where('updatedAt', '>=', ...)`
+ * bound is deliberately widened — a real bug, not a hypothetical: the cursor and every record's
+ * `updatedAt` are both stamped from each DEVICE'S OWN clock (there's no Firestore server
+ * timestamp in the loop), so a write made on a device whose clock reads even a few minutes
+ * behind another device's already-advanced cursor would otherwise fail the `>=` comparison and
+ * never be pulled down — permanently and silently, since the cursor only ever advances forward.
+ * Re-processing a handful of already-merged records inside this window is harmless: mergeBatch's
+ * last-write-wins check (`existingUpdatedAt >= updatedAt`) already makes re-merging idempotent. */
+export const SYNC_CURSOR_SAFETY_MARGIN_MS = 15 * 60 * 1000;
+
+/** Widens a persisted sync cursor backward by SYNC_CURSOR_SAFETY_MARGIN_MS before using it as a
+ * pull query's lower bound — null (no cursor yet, e.g. a device's first-ever sync) passes through
+ * unchanged, since there's nothing to widen and the caller already falls back to an unfiltered
+ * full read in that case. */
+export function cursorQueryFloor(cursor: string | null): string | null {
+  if (!cursor) return cursor;
+  const parsed = Date.parse(cursor);
+  if (Number.isNaN(parsed)) return cursor;
+  return new Date(parsed - SYNC_CURSOR_SAFETY_MARGIN_MS).toISOString();
+}
+
 export type SyncTableConfig = {
   table: string;
   foreignKeys?: SyncForeignKey[];
